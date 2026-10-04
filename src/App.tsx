@@ -1,10 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient, type Session } from "@supabase/supabase-js";
 import catalog from "./catalog.json";
+import AuthPanel from "./AuthPanel";
+import {
+  roles,
+  normalizeRole,
+  roleHome,
+  canAccess,
+  roleLabels,
+} from "./roles.js";
+type Role = "client" | "staff" | "admin" | "accountant" | "it_support";
 import { availableSlots } from "./availability.js";
 type Treatment = (typeof catalog)[number];
 type Staff = { id: number; name: string };
 type Appointment = {
+  user_id?: string;
   id: string;
   staff_id: number;
   start_minute: number;
@@ -84,12 +94,24 @@ const sample: Appointment[] = [
   },
 ];
 export default function App() {
-  const [live, setLive] = useState(false),
-    [view, setView] = useState("book"),
+  const [live, setLive] = useState(!!db),
+    [view, setView] = useState("login"),
     [treatments, setTreatments] = useState<Treatment[]>(catalog),
     [staff, setStaff] = useState<Staff[]>(initialStaff),
     [session, setSession] = useState<Session | null>(null),
-    [staffAccess, setStaffAccess] = useState(false);
+    [role, setRole] = useState<Role | null>(null);
+  const [localRole, setLocalRole] = useState<Role | null>(null),
+    [roleLoading, setRoleLoading] = useState(!!db),
+    [myBookings, setMyBookings] = useState<Appointment[]>([]);
+  const requestVersion = useRef(0);
+  const authUser = useRef<string | null>(null);
+  const activeRole = live ? role : localRole;
+  const staffAccess = ["staff", "admin", "it_support"].includes(
+    activeRole || "",
+  );
+  const reportAccess = ["admin", "accountant", "it_support"].includes(
+    activeRole || "",
+  );
   const [local, setLocal] = useState<Appointment[]>(() => {
       try {
         return (
@@ -111,15 +133,16 @@ export default function App() {
     [step, setStep] = useState(1),
     [confirmation, setConfirmation] = useState<Appointment | null>(null);
   const [name, setName] = useState(""),
-    [email, setEmail] = useState(""),
     [phone, setPhone] = useState(""),
-    [password, setPassword] = useState(""),
-    [signUp, setSignUp] = useState(false),
     [consent, setConsent] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [selected, setSelected] = useState<Appointment | null>(null);
-  const appointments = live ? remote : local;
+  const appointments = live
+    ? remote
+    : activeRole === "accountant"
+      ? local.filter((a) => a.status === "completed")
+      : local;
   const breaks = staff.map((s) => ({
     staff_id: s.id,
     start_minute: 780,
@@ -130,8 +153,40 @@ export default function App() {
   }, [local]);
   useEffect(() => {
     if (!db) return;
-    db.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = db.auth.onAuthStateChange((_e, s) => setSession(s));
+    db.auth.getSession().then(({ data, error }) => {
+      authUser.current = data.session?.user.id || null;
+      setSession(data.session);
+      if (error) {
+        setError(error.message);
+        setRoleLoading(false);
+      } else if (!data.session) setRoleLoading(false);
+    });
+    const { data } = db.auth.onAuthStateChange((event, nextSession) => {
+      requestVersion.current++;
+      if (authUser.current !== (nextSession?.user.id || null)) {
+        setRole(null);
+        setRemote([]);
+        setMyBookings([]);
+        setSelected(null);
+        setConfirmation(null);
+        setRoleLoading(!!nextSession);
+        authUser.current = nextSession?.user.id || null;
+      }
+      setSession(nextSession);
+      if (event === "PASSWORD_RECOVERY") setView("recovery");
+      if (event === "SIGNED_OUT") {
+        setRole(null);
+        setRemote([]);
+        setMyBookings([]);
+        setSelected(null);
+        setConfirmation(null);
+        setName("");
+        setPhone("");
+        setStep(1);
+        setView("login");
+        setRoleLoading(false);
+      }
+    });
     return () => data.subscription.unsubscribe();
   }, []);
   useEffect(() => {
@@ -158,32 +213,127 @@ export default function App() {
     };
   }, [live]);
   async function refresh() {
-    if (!live || !db) return;
-    const { data, error } = await db
-      .from("appointments")
-      .select("*")
-      .eq("appointment_date", date)
-      .order("start_minute");
-    if (error) setError(error.message);
-    else setRemote(data as Appointment[]);
+    if (!live || !db || !session || roleLoading) return;
+    const version = ++requestVersion.current;
+    const result =
+      activeRole === "accountant"
+        ? await db.rpc("get_daily_report", { p_date: date })
+        : staffAccess
+          ? await db
+              .from("appointments")
+              .select("*")
+              .eq("appointment_date", date)
+              .order("start_minute")
+          : null;
+    if (result && version === requestVersion.current) {
+      if (result.error) setError(result.error.message);
+      else setRemote(result.data as Appointment[]);
+    }
   }
   useEffect(() => {
-    setStaffAccess(false);
-    if (!live || !db || !session) return;
+    let cancelled = false;
+    requestVersion.current++;
+    setRole(null);
+    setRemote([]);
+    setMyBookings([]);
+    setSelected(null);
+    if (!live || !db || !session) {
+      setRoleLoading(false);
+      return;
+    }
+    setRoleLoading(true);
     db.from("staff_users")
-      .select("user_id")
+      .select("role")
       .eq("user_id", session.user.id)
-      .then(({ data }) => setStaffAccess(!!data?.length));
-  }, [session, live]);
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setError(
+            "Unable to load your access permissions. Please retry signing in.",
+          );
+          setRoleLoading(false);
+          return;
+        }
+        const next = data ? normalizeRole(data.role) : "client";
+        if (!next) {
+          setError(
+            "This account has an unrecognised role. Contact the salon owner.",
+          );
+          setRoleLoading(false);
+          return;
+        }
+        setRole(next as Role);
+        setRoleLoading(false);
+        setName(session.user.user_metadata.full_name || "");
+        setPhone(session.user.user_metadata.mobile || "");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id, live]);
+  useEffect(() => {
+    if (roleLoading || !activeRole || view === "recovery") return;
+    if (view === "login" || !canAccess(activeRole, view))
+      setView(roleHome(activeRole));
+  }, [activeRole, roleLoading, view]);
   useEffect(() => {
     void refresh();
-  }, [live, session, date]);
+  }, [live, session?.user.id, date, activeRole, roleLoading]);
+  useEffect(() => {
+    if (!live || !db || !session || activeRole !== "client") {
+      setMyBookings([]);
+      return;
+    }
+    let cancelled = false;
+    db.from("appointments")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .order("appointment_date", { ascending: false })
+      .order("start_minute")
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) setError(error.message);
+        else setMyBookings(data || []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [live, session?.user.id, activeRole, view, confirmation]);
+  async function signOut() {
+    setBusy(true);
+    setError("");
+    if (db && session) {
+      const { error } = await db.auth.signOut({ scope: "local" });
+      if (error) {
+        setError(error.message);
+        setBusy(false);
+        return;
+      }
+    }
+    requestVersion.current++;
+    setSession(null);
+    setRole(null);
+    setLocalRole(null);
+    setRemote([]);
+    setMyBookings([]);
+    setSelected(null);
+    setConfirmation(null);
+    setTreatment(null);
+    setSlot(null);
+    setName("");
+    setPhone("");
+    setStep(1);
+    setRoleLoading(false);
+    setView("login");
+    setBusy(false);
+  }
   useEffect(() => {
     let cancelled = false;
     setSlot(null);
     setSlots([]);
     if (!treatment) return;
-    if (live && db) {
+    if (db && session) {
       db.rpc("get_available_slots", {
         p_treatment_id: treatment.id,
         p_date: date,
@@ -210,29 +360,6 @@ export default function App() {
       cancelled = true;
     };
   }, [treatment, date, staffChoice, live, local, staff]);
-  async function authenticate(createAccount = signUp) {
-    if (!db) return;
-    setBusy(true);
-    setError("");
-    try {
-      const r = createAccount
-        ? await db.auth.signUp({
-            email,
-            password,
-            options: { data: { full_name: name, mobile: phone } },
-          })
-        : await db.auth.signInWithPassword({ email, password });
-      if (r.error) throw r.error;
-      if (createAccount && !r.data.session)
-        setError(
-          "Account created. Check your email to confirm it, then sign in.",
-        );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   async function book() {
     if (!treatment || !slot) return;
     setBusy(true);
@@ -265,6 +392,7 @@ export default function App() {
           throw Error("That time is no longer available. Choose another.");
         a = {
           id: crypto.randomUUID(),
+          user_id: "local-client",
           staff_id: slot.staff_id,
           start_minute: slot.start_minute,
           duration: treatment.duration,
@@ -275,6 +403,7 @@ export default function App() {
           appointment_date: date,
         };
         setLocal((prev) => [...prev, a]);
+        if (!localRole) setLocalRole("client");
       }
       setConfirmation(a);
       setStep(4);
@@ -331,12 +460,19 @@ export default function App() {
         PROOF OF CONCEPT · Fictional clients · No real payments{" "}
         <button
           onClick={() => {
+            requestVersion.current++;
             setLive(!live);
+            setRole(null);
+            setLocalRole(null);
+            setRemote([]);
+            setMyBookings([]);
+            setName("");
+            setPhone("");
             setTreatment(null);
             setConfirmation(null);
             setStep(1);
             setSelected(null);
-            setView("book");
+            setView("login");
             setError("");
             setTreatments(catalog);
             setStaff(initialStaff);
@@ -351,34 +487,63 @@ export default function App() {
           SCULPTED<span>BY AOIFE CLAIRE</span>
         </a>
         <nav>
-          <button
-            className={view === "book" ? "active" : ""}
-            onClick={() => setView("book")}
-          >
-            Book a treatment
-          </button>
-          <button
-            className={view === "diary" ? "active" : ""}
-            onClick={() => setView("diary")}
-          >
-            Salon diary
-          </button>
-          <button
-            className={view === "report" ? "active" : ""}
-            onClick={() => setView("report")}
-          >
-            Daily overview
-          </button>
-          {live && (
+          {canAccess(activeRole, "book") && (
             <button
-              onClick={() => {
-                if (session) void db?.auth.signOut();
-                else setView("login");
-              }}
+              className={view === "book" ? "active" : ""}
+              onClick={() => setView("book")}
             >
-              {session ? "Sign out" : "Sign in"}
+              Book a treatment
             </button>
           )}
+          {activeRole === "client" && (
+            <button
+              className={view === "my-bookings" ? "active" : ""}
+              onClick={() => setView("my-bookings")}
+            >
+              My appointments
+            </button>
+          )}
+          {staffAccess && (
+            <button
+              className={view === "diary" ? "active" : ""}
+              onClick={() => setView("diary")}
+            >
+              Salon diary
+            </button>
+          )}
+          {reportAccess && (
+            <button
+              className={view === "report" ? "active" : ""}
+              onClick={() => setView("report")}
+            >
+              Reports
+            </button>
+          )}
+          {["admin", "it_support"].includes(activeRole || "") && (
+            <button
+              className={view === "workspace" ? "active" : ""}
+              onClick={() => setView("workspace")}
+            >
+              {activeRole === "it_support"
+                ? "Support workspace"
+                : "Administration"}
+            </button>
+          )}
+          {activeRole && (
+            <span className="role-badge">
+              {roleLabels[activeRole]}
+              {!live ? " · preview" : ""}
+            </span>
+          )}
+          <button
+            disabled={busy}
+            onClick={() => {
+              if (activeRole || session) void signOut();
+              else setView("login");
+            }}
+          >
+            {activeRole || session ? "Sign out / lock" : "Sign in"}
+          </button>
         </nav>
       </header>
       {error && (
@@ -388,7 +553,11 @@ export default function App() {
         </div>
       )}
       <main>
-        {view === "book" ? (
+        {roleLoading && live ? (
+          <section className="panel login" role="status">
+            <h2>Opening your workspace…</h2>
+          </section>
+        ) : view === "book" ? (
           <>
             <div className="intro">
               <p className="eyebrow">A LITTLE TIME FOR YOU</p>
@@ -566,45 +735,12 @@ export default function App() {
                       onChange={(e) => setPhone(e.target.value)}
                     />
                   </label>
-                  {live && !session && (
-                    <>
-                      <label>
-                        Email
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                        />
-                      </label>
-                      <label>
-                        Password
-                        <input
-                          type="password"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                        />
-                      </label>
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          checked={signUp}
-                          onChange={(e) => setSignUp(e.target.checked)}
-                        />
-                        Create a new account
-                      </label>
-                      <button
-                        className="secondary"
-                        disabled={
-                          busy ||
-                          !email ||
-                          !password ||
-                          (signUp && (!name.trim() || !phone.trim()))
-                        }
-                        onClick={() => void authenticate()}
-                      >
-                        {signUp ? "Create account" : "Sign in"}
-                      </button>
-                    </>
+                  {live && !session && db && (
+                    <AuthPanel
+                      db={db}
+                      onComplete={() => {}}
+                      onBrowse={() => setStep(1)}
+                    />
                   )}
                   {live && session && (
                     <p className="small">Signed in as {session.user.email}</p>
@@ -664,11 +800,11 @@ export default function App() {
                 <button
                   className="primary"
                   onClick={() => {
-                    setView("diary");
+                    setView("my-bookings");
                     setStep(1);
                   }}
                 >
-                  View in salon diary
+                  View my appointments
                 </button>
                 <button
                   className="back"
@@ -682,49 +818,147 @@ export default function App() {
               </section>
             ) : null}
           </>
-        ) : view === "login" ? (
-          <section className="panel login">
-            <p className="eyebrow">SALON ACCESS</p>
-            <h1>Welcome back.</h1>
-            <label>
-              Email
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-            <label>
-              Password
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
+        ) : view === "login" || view === "recovery" ? (
+          live && db ? (
+            <AuthPanel
+              db={db}
+              recovery={view === "recovery"}
+              onComplete={() => {
+                if (view === "recovery") setView("login");
+              }}
+              onBrowse={() => setView("book")}
+            />
+          ) : (
+            <section className="panel login">
+              <p className="eyebrow">LOCAL DEMO · ROLE PREVIEW</p>
+              <h1>Explore each workspace.</h1>
+              <p>
+                No account is created in this preview. Choose a role to see its
+                experience.
+              </p>
+              <div className="role-options">
+                {roles.map((r) => (
+                  <button
+                    key={r}
+                    className="secondary"
+                    onClick={() => {
+                      setLocalRole(r as Role);
+                      setView(roleHome(r));
+                    }}
+                  >
+                    {roleLabels[r as Role]}
+                  </button>
+                ))}
+              </div>
+              <p className="small">
+                For real sign-in, switch to Supabase connected mode above.
+              </p>
+            </section>
+          )
+        ) : view === "my-bookings" && activeRole === "client" ? (
+          <section className="panel client-workspace">
+            <p className="eyebrow">YOUR SCULPTED ACCOUNT</p>
+            <h1>Your appointments.</h1>
+            <p>{live ? session?.user.email : "Fictional client preview"}</p>
             <button
               className="primary"
-              disabled={busy}
               onClick={() => {
-                setSignUp(false);
-                void authenticate(false);
+                setStep(1);
+                setView("book");
               }}
             >
-              Sign in
+              Book a treatment →
             </button>
-            {session && (
-              <button onClick={() => setView("diary")}>Open diary →</button>
+            <div className="booking-history">
+              {(live
+                ? myBookings
+                : local.filter((a) => a.user_id === "local-client")
+              ).map((a) => (
+                <article className="history-card" key={a.id}>
+                  <div>
+                    <h3>{a.treatment_name}</h3>
+                    <p>
+                      {a.appointment_date} · {time(a.start_minute)} ·{" "}
+                      {staff.find((s) => s.id === a.staff_id)?.name}
+                    </p>
+                  </div>
+                  <div>
+                    <strong>{money(a.price)}</strong>
+                    <p className="status">{a.status.replace("_", " ")}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+            {!(
+              live
+                ? myBookings
+                : local.filter((a) => a.user_id === "local-client")
+            ).length && (
+              <p>No appointments yet. Your bookings will appear here.</p>
             )}
-          </section>
-        ) : live && !staffAccess ? (
-          <section className="panel">
-            <h2>Staff access required</h2>
-            <p>
-              Sign in with an account assigned to the salon staff list. Customer
-              accounts cannot access the salon diary or reports.
+            <p className="small">
+              Cancellation and rescheduling will be added when the salon policy
+              is confirmed.
             </p>
+          </section>
+        ) : view === "workspace" &&
+          ["admin", "it_support"].includes(activeRole || "") ? (
+          <section className="owner-workspace">
+            <p className="eyebrow">
+              {activeRole === "it_support"
+                ? "IT SUPPORT · SEPARATE AUDIT IDENTITY"
+                : "OWNER & ADMINISTRATION"}
+            </p>
+            <h1>
+              {activeRole === "it_support"
+                ? "Your support workspace."
+                : "Your salon, in one place."}
+            </h1>
+            <p>
+              {activeRole === "it_support"
+                ? "You have the owner’s operational access. Actions remain attributed to your individual account."
+                : "Manage the day and review the salon’s recorded takings."}
+            </p>
+            <div className="workspace-grid">
+              <button
+                className="panel workspace-card"
+                onClick={() => setView("diary")}
+              >
+                <h2>Salon diary</h2>
+                <p>Appointments, check-in and checkout.</p>
+                <span>Open diary →</span>
+              </button>
+              <button
+                className="panel workspace-card"
+                onClick={() => setView("report")}
+              >
+                <h2>Reports</h2>
+                <p>Completed treatments and payment methods.</p>
+                <span>Open reports →</span>
+              </button>
+              <div className="panel">
+                <h2>Accounts & permissions</h2>
+                <p>Individual accounts with salon-assigned roles.</p>
+                <p className="small">
+                  Account provisioning is currently managed in Supabase. Client
+                  registrations cannot choose a staff role.
+                </p>
+              </div>
+              <div className="panel">
+                <h2>Coming next</h2>
+                <p>Staff, rotas, treatment administration and HR reporting.</p>
+                <p className="small">
+                  These administration tools are not yet available in this demo.
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : !canAccess(activeRole, view) ? (
+          <section className="panel login">
+            <h2>Sign in to continue.</h2>
+            <p>Your account determines which salon features you can access.</p>
             <button className="primary" onClick={() => setView("login")}>
-              Staff sign in
+              Sign in
             </button>
           </section>
         ) : (
@@ -753,7 +987,11 @@ export default function App() {
             </div>
             <div className="metrics">
               <div>
-                <span>Appointments</span>
+                <span>
+                  {activeRole === "accountant"
+                    ? "Completed records"
+                    : "Appointments"}
+                </span>
                 <strong>
                   {
                     dayAppointments.filter((a) => a.status !== "cancelled")
@@ -888,7 +1126,7 @@ export default function App() {
       <footer>
         SCULPTED BY AOIFE CLAIRE <span>Salon system · Proof of concept</span>
       </footer>
-      {selected && (
+      {selected && staffAccess && (
         <div className="modal-backdrop">
           <section
             className="modal panel"

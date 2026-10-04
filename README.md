@@ -2,6 +2,42 @@
 
 React + TypeScript + Vite, with optional Supabase authentication and PostgreSQL persistence. This repository is the development proof of concept, not a live salon replacement.
 
+## Role-aware login update
+
+Existing installations: run ONLY `supabase/003_roles.sql` in the SQL Editor. Do not rerun `001_schema.sql`. New installations run 001, 002, then 003.
+
+The published app now starts in connected mode with a sign-in page. Public treatment browsing remains available. Existing confirmed accounts still work; existing staff role assignments are preserved. Client sign-up, email confirmation, password reset and role-based landing pages are implemented. Configure the exact deployed URL under Authentication → URL Configuration, both as Site URL and an allowed Redirect URL, before using confirmation/reset emails. Do not disable email confirmation to work around delivery issues.
+
+| Role          | Landing page      | Available experience                                                     |
+| ------------- | ----------------- | ------------------------------------------------------------------------ |
+| Client        | My appointments   | Book treatments and view own booking history                             |
+| Staff         | Salon diary       | Check in, complete and cancel appointments                               |
+| Owner / Admin | Administration    | Diary, reports and administration overview                               |
+| Accountant    | Reports           | Completed-treatment report only; no operational diary or booking writes  |
+| IT Support    | Support workspace | Same current operational access as owner, separate account/role identity and audit role snapshot |
+
+Admin screens beyond the overview are still future work. No role can manage users from the application yet. Access comes from `staff_users`, never editable client metadata or a live role selector. Accounts with no staff membership are clients. Invalid roles and permission-loading failures do not open a staff workspace.
+
+### Provision staff and privileged demo accounts
+
+Create each account using Supabase Authentication → Users (Add user / send invitation, depending on your dashboard). The person sets their own password or uses Forgot password with their email. Alternatively, have the person create and confirm a client account first, then assign their salon role. Do not share passwords in chat or put them into SQL.
+
+Use the Auth user's UUID to assign ONE appropriate role in SQL:
+
+```sql
+insert into public.staff_users(user_id,role)
+values ('AUTH-USER-UUID', 'admin')
+on conflict (user_id) do update set role=excluded.role;
+```
+
+Replace `admin` with `staff`, `accountant`, or `it_support` as appropriate. Remove a membership to return an account to client permissions. Role changes should be followed by sign-out and sign-in to reload the workspace. Never let customers submit this SQL or choose their own privileged role. Account-level authorisation changes take effect in database checks even before the old UI refreshes.
+
+On a shared computer, use **Sign out / lock** before changing staff. This ends the browser's session and clears the visible client/diary state. It is full sign-out, not a PIN-based account switch. Local role preview remains available through the mode toggle; it uses fictional browser-local data and never changes Supabase permissions.
+
+### Verify the role update
+
+Use separate accounts for each role: confirm client access to own bookings only; staff diary access without report navigation; accountant completed reports with diary/status-change/booking API denial; owner and IT access to diary/reports; sign-out removes the session and visible records; recovery links allow password change and require fresh sign-in afterwards. Client registration must not create a `staff_users` row. Automated tests cover the frontend access matrix; hosted authentication/RLS/recovery checks must be performed after applying 003.
+
 ## What works
 
 - All 111 publicly listed services in 10 categories, with exact displayed prices and “From” indicators.
@@ -31,7 +67,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-On Windows you can copy `.env.example` to `.env.local` in File Explorer instead. Open the local URL Vite prints. Without `.env.local`, local demo mode still works and the Supabase toggle is disabled. With it, the toggle is available but local mode remains the default until selected.
+On Windows you can copy `.env.example` to `.env.local` in File Explorer instead. Open the local URL Vite prints. Without `.env.local`, local demo mode still works and the Supabase toggle is disabled. With it, the toggle is available and connected sign-in mode is the default.
 
 The configured project URL and publishable key are browser-safe identifiers. NEVER put a database password, Supabase secret key or service-role key in `VITE_*`, source code, GitHub or the browser.
 
@@ -39,7 +75,7 @@ The configured project URL and publishable key are browser-safe identifiers. NEV
 
 1. Open the `salon-system` development project in Supabase and go to **SQL Editor**.
 2. Run `supabase/001_schema.sql` once in the new empty project. It is transactional and is not a repeatable reset script.
-3. Run `supabase/002_seed.sql`. It imports the services and fictional schedules/skills, with conflict guards.
+3. Run `supabase/002_seed.sql`, then `supabase/003_roles.sql`. It imports the services and fictional schedules/skills, with conflict guards.
 4. In **Authentication → URL Configuration**, set Site URL to the local app URL initially, or the exact published GitHub Pages URL once available. Add both your local URL and the published URL to allowed redirect URLs for email confirmations. Keep email confirmation enabled.
 5. Use Supabase mode in the app to create an account through the booking confirmation screen. Confirm its email, then sign in.
 6. To give YOUR account staff access, find its UUID in **Authentication → Users**. Run this in the SQL Editor, substituting that UUID:
@@ -49,7 +85,7 @@ insert into public.staff_users(user_id,role)
 values ('YOUR-AUTH-USER-UUID', 'admin');
 ```
 
-Ordinary customer accounts must not be added here. Membership is only editable through trusted database administration in this first slice; customers cannot assign themselves roles. Sign out and back in after adding membership. Staff/admin/IT Support share the limited first-slice staff capabilities; full differentiated permissions and accountant reporting access are not yet implemented.
+Ordinary customer accounts must not be added here. Membership is only editable through trusted database administration in this first slice; customers cannot assign themselves roles. Sign out and back in after adding membership. Staff/admin/IT Support share the first-slice diary actions. Apply 003 for differentiated navigation and accountant reporting access.
 
 No client-side direct INSERT/UPDATE/DELETE grants are provided. Bookings and lifecycle changes use guarded database functions. Availability returns staff/time slots without other clients' details. Customers can read their own appointments; only staff can read the full diary. Tables explicitly have RLS and select grants so this works with “Automatically expose new tables” disabled.
 
