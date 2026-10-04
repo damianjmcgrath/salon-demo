@@ -1,0 +1,1001 @@
+[
+  {
+    "id": 1,
+    "name": "Debs Special",
+    "category": "Combo Offers",
+    "price": 100.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 2,
+    "name": "EXCLUSIVE PACKAGE 1",
+    "category": "Combo Offers",
+    "price": 99.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 3,
+    "name": "EXCLUSIVE PACKAGE 2",
+    "category": "Combo Offers",
+    "price": 99.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 4,
+    "name": "EXCLUSIVE PACKAGE 3",
+    "category": "Combo Offers",
+    "price": 99.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 5,
+    "name": "Gel Polish Hands & Toes",
+    "category": "Combo Offers",
+    "price": 55.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 6,
+    "name": "Glam Package",
+    "category": "Combo Offers",
+    "price": 99.0,
+    "price_type": "From",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 7,
+    "name": "Glamour Special",
+    "category": "Combo Offers",
+    "price": 99.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 8,
+    "name": "Hybrid Eye Trio",
+    "category": "Combo Offers",
+    "price": 40.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 9,
+    "name": "Lash Lift & Brow Lamination Combo",
+    "category": "Combo Offers",
+    "price": 80.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 10,
+    "name": "Lash Lift & Hybrid Brows",
+    "category": "Combo Offers",
+    "price": 80.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 11,
+    "name": "Lashlift & Brow Lamination",
+    "category": "Combo Offers",
+    "price": 85.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 12,
+    "name": "Lux Package",
+    "category": "Combo Offers",
+    "price": 105.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 13,
+    "name": "Weekend Package",
+    "category": "Combo Offers",
+    "price": 60.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 14,
+    "name": "Lashlift & Hybrid Brows",
+    "category": "Combo Offers",
+    "price": 70.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 15,
+    "name": "Brow Lamination",
+    "category": "Eyebrows",
+    "price": 45.0,
+    "price_type": "From",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 16,
+    "name": "Brow Lamination with Hybrid Tint",
+    "category": "Eyebrows",
+    "price": 50.0,
+    "price_type": "From",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 17,
+    "name": "Brow Wax & Tint",
+    "category": "Eyebrows",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 18,
+    "name": "Eye Trio with Hybrid tint",
+    "category": "Eyebrows",
+    "price": 40.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 19,
+    "name": "Eyebrow Wax",
+    "category": "Eyebrows",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 20,
+    "name": "HD Brows",
+    "category": "Eyebrows",
+    "price": 35.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 21,
+    "name": "Hybrid Tint",
+    "category": "Eyebrows",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 22,
+    "name": "Hybrid Tint & Thread",
+    "category": "Eyebrows",
+    "price": 35.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 23,
+    "name": "Hybrid Tint & Wax",
+    "category": "Eyebrows",
+    "price": 35.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 24,
+    "name": "Brow Thread",
+    "category": "Eyebrows",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 25,
+    "name": "Brow Thread & Tint",
+    "category": "Eyebrows",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 26,
+    "name": "Brow Tint",
+    "category": "Eyebrows",
+    "price": 10.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 27,
+    "name": "Eye Trio",
+    "category": "Eyebrows",
+    "price": 25.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 28,
+    "name": "Lamination Maintenance",
+    "category": "Eyebrows",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 29,
+    "name": "Lash Lift & Brow Lamination Combo with Hybrid Tint",
+    "category": "Eyebrows",
+    "price": 85.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 30,
+    "name": "Classic Extensions",
+    "category": "Eyelashes",
+    "price": 55.0,
+    "price_type": "From",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 31,
+    "name": "Classic Extensions Refills",
+    "category": "Eyelashes",
+    "price": 50.0,
+    "price_type": "From",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 32,
+    "name": "Hybrid Extension Refills",
+    "category": "Eyelashes",
+    "price": 60.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 33,
+    "name": "Hybrid Extensions",
+    "category": "Eyelashes",
+    "price": 65.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 34,
+    "name": "Lash Extension add on Colour",
+    "category": "Eyelashes",
+    "price": 5.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 35,
+    "name": "Lash Extensions Removal",
+    "category": "Eyelashes",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 36,
+    "name": "Lash Lift",
+    "category": "Eyelashes",
+    "price": 48.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 37,
+    "name": "Lash Lift inc. Tint",
+    "category": "Eyelashes",
+    "price": 52.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 38,
+    "name": "Lash Removal",
+    "category": "Eyelashes",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 39,
+    "name": "Lash Tint",
+    "category": "Eyelashes",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 40,
+    "name": "Volume Lashes",
+    "category": "Eyelashes",
+    "price": 70.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 41,
+    "name": "Volume Lashes Refills",
+    "category": "Eyelashes",
+    "price": 60.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 42,
+    "name": "YY Fan Refills",
+    "category": "Eyelashes",
+    "price": 60.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 43,
+    "name": "YY Fans",
+    "category": "Eyelashes",
+    "price": 60.0,
+    "price_type": "Fixed",
+    "duration": 45,
+    "patch_required": false
+  },
+  {
+    "id": 44,
+    "name": "Acrylic / Acrylic Refill",
+    "category": "Nails",
+    "price": 50.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 45,
+    "name": "Acrylic Ombré/French",
+    "category": "Nails",
+    "price": 57.5,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 46,
+    "name": "Acrylic Removal",
+    "category": "Nails",
+    "price": 25.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 47,
+    "name": "Acrylic Toe Nail Reconstruction",
+    "category": "Nails",
+    "price": 10.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 48,
+    "name": "Add on Nail Art Tier 1",
+    "category": "Nails",
+    "price": 5.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 49,
+    "name": "Add on Nail Art Tier 2",
+    "category": "Nails",
+    "price": 7.5,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 50,
+    "name": "Add on Nail Art Tier 3",
+    "category": "Nails",
+    "price": 12.5,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 51,
+    "name": "BIAB / BIAB Refill",
+    "category": "Nails",
+    "price": 45.0,
+    "price_type": "From",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 52,
+    "name": "BIAB incl. Extension",
+    "category": "Nails",
+    "price": 47.5,
+    "price_type": "From",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 53,
+    "name": "BIAB Removal",
+    "category": "Nails",
+    "price": 18.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 54,
+    "name": "Chrome Add On",
+    "category": "Nails",
+    "price": 2.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 55,
+    "name": "Dry manicure",
+    "category": "Nails",
+    "price": 10.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 56,
+    "name": "E-File Course",
+    "category": "Nails",
+    "price": 180.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 57,
+    "name": "File & Paint",
+    "category": "Nails",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 58,
+    "name": "Gel Extensions / Gel Refill",
+    "category": "Nails",
+    "price": 55.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 59,
+    "name": "Gel Polish",
+    "category": "Nails",
+    "price": 32.0,
+    "price_type": "From",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 60,
+    "name": "Gel Polish Removal",
+    "category": "Nails",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 61,
+    "name": "Gel Polish Removal & Reapplied",
+    "category": "Nails",
+    "price": 40.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 62,
+    "name": "Kids File & Paint",
+    "category": "Nails",
+    "price": 12.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 63,
+    "name": "Manicure No Polish",
+    "category": "Nails",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 64,
+    "name": "Manicure with file & Paint",
+    "category": "Nails",
+    "price": 25.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 65,
+    "name": "Manicure with Gel Polish",
+    "category": "Nails",
+    "price": 45.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 66,
+    "name": "Nail Fix",
+    "category": "Nails",
+    "price": 5.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 67,
+    "name": "Polygel incl. Extension",
+    "category": "Nails",
+    "price": 47.5,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 68,
+    "name": "Polygel Overlays",
+    "category": "Nails",
+    "price": 42.5,
+    "price_type": "From",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 69,
+    "name": "PATCH TEST",
+    "category": "PATCH TEST",
+    "price": 0.0,
+    "price_type": "Fixed",
+    "duration": 5,
+    "patch_required": false
+  },
+  {
+    "id": 70,
+    "name": "Bellamianta",
+    "category": "Tan",
+    "price": 25.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 71,
+    "name": "Bronze Express",
+    "category": "Tan",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 72,
+    "name": "Cocktail",
+    "category": "Tan",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 73,
+    "name": "Elite",
+    "category": "Tan",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 74,
+    "name": "Tanning Thursday",
+    "category": "Tan",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 75,
+    "name": "Vita Librata",
+    "category": "Tan",
+    "price": 25.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 76,
+    "name": "Brow Threading",
+    "category": "Threading",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 77,
+    "name": "Chin Thread",
+    "category": "Threading",
+    "price": 10.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 78,
+    "name": "Eye Thread Trio",
+    "category": "Threading",
+    "price": 25.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 79,
+    "name": "Side of Face",
+    "category": "Threading",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 80,
+    "name": "Upper Lip Thread",
+    "category": "Threading",
+    "price": 10.0,
+    "price_type": "Fixed",
+    "duration": 15,
+    "patch_required": false
+  },
+  {
+    "id": 81,
+    "name": "Add On French",
+    "category": "Toes / Pedicures",
+    "price": 5.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 82,
+    "name": "File & Paint Toes",
+    "category": "Toes / Pedicures",
+    "price": 18.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 83,
+    "name": "Gel Polish Removal & Reapply Toes",
+    "category": "Toes / Pedicures",
+    "price": 40.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 84,
+    "name": "Gel Polish Toes",
+    "category": "Toes / Pedicures",
+    "price": 28.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 85,
+    "name": "Lyco Pedi incl. Callus Removal",
+    "category": "Toes / Pedicures",
+    "price": 65.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 86,
+    "name": "Mini Pedicure",
+    "category": "Toes / Pedicures",
+    "price": 35.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 87,
+    "name": "Mini pedicure with Gel Polish",
+    "category": "Toes / Pedicures",
+    "price": 42.5,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 88,
+    "name": "Pedicure with File and paint",
+    "category": "Toes / Pedicures",
+    "price": 45.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 89,
+    "name": "Pedicure with Gel Polish",
+    "category": "Toes / Pedicures",
+    "price": 50.0,
+    "price_type": "Fixed",
+    "duration": 60,
+    "patch_required": false
+  },
+  {
+    "id": 90,
+    "name": "Back Wax",
+    "category": "Waxing",
+    "price": 40.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 91,
+    "name": "Brow Wax",
+    "category": "Waxing",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 92,
+    "name": "Californian Bikini",
+    "category": "Waxing",
+    "price": 30.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 93,
+    "name": "Chest",
+    "category": "Waxing",
+    "price": 20.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 94,
+    "name": "Chest & Abdomen",
+    "category": "Waxing",
+    "price": 35.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 95,
+    "name": "Chin Wax",
+    "category": "Waxing",
+    "price": 10.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 96,
+    "name": "Forearms",
+    "category": "Waxing",
+    "price": 17.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 97,
+    "name": "Full Arms",
+    "category": "Waxing",
+    "price": 25.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 98,
+    "name": "Full Leg",
+    "category": "Waxing",
+    "price": 40.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 99,
+    "name": "Full Leg & Bikini Line",
+    "category": "Waxing",
+    "price": 50.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 100,
+    "name": "Full Leg & Hollywood",
+    "category": "Waxing",
+    "price": 65.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 101,
+    "name": "Full Leg and Californian",
+    "category": "Waxing",
+    "price": 55.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 102,
+    "name": "Half Leg",
+    "category": "Waxing",
+    "price": 25.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 103,
+    "name": "Hollywood",
+    "category": "Waxing",
+    "price": 45.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 104,
+    "name": "Nasel",
+    "category": "Waxing",
+    "price": 15.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 105,
+    "name": "Sides of Face",
+    "category": "Waxing",
+    "price": 14.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 106,
+    "name": "Standard Bikini Line",
+    "category": "Waxing",
+    "price": 18.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 107,
+    "name": "Thighs",
+    "category": "Waxing",
+    "price": 26.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 108,
+    "name": "Underarms",
+    "category": "Waxing",
+    "price": 17.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 109,
+    "name": "Upper Lip Wax",
+    "category": "Waxing",
+    "price": 10.0,
+    "price_type": "Fixed",
+    "duration": 20,
+    "patch_required": false
+  },
+  {
+    "id": 110,
+    "name": "23rd FEB Classic Lash Extension Course",
+    "category": "Training Academy",
+    "price": 250.0,
+    "price_type": "Fixed",
+    "duration": 90,
+    "patch_required": false
+  },
+  {
+    "id": 111,
+    "name": "Pro Pess Soft Gel Tips",
+    "category": "Training Academy",
+    "price": 275.0,
+    "price_type": "Fixed",
+    "duration": 90,
+    "patch_required": false
+  }
+]
