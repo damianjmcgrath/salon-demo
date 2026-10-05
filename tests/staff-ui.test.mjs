@@ -805,3 +805,19 @@ test("UI: appointment sections separate history and rebook directly into time se
     window.history.replaceState({}, "", "?portal=staff");
   }
 });
+
+test("UI: admin can select Leah for a break and edit Leah's lunch", async () => {
+  await login(/Aoife/);
+  fireEvent.click(screen.getByRole("button", { name: /Staff Diary Today/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Add break time/i }));
+  fireEvent.change(screen.getByLabelText("Staff member"), { target: { value: "2" } });
+  fireEvent.change(screen.getByLabelText("Start", { exact: true }), { target: { value: "14:00" } });
+  fireEvent.change(screen.getByLabelText("End", { exact: true }), { target: { value: "14:15" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save break time" }));
+  assert.equal(JSON.parse(localStorage.getItem("sculpted-staff-data-v1")).breaks[0].staff_id, 2);
+  const column = document.querySelectorAll(".staff-column")[1];
+  const lunch = Array.from(column.querySelectorAll("button")).find(b => b.textContent.includes("Lunch"));
+  assert.equal(lunch.disabled, false);
+  fireEvent.click(lunch);
+  assert.equal(screen.getByLabelText("Staff member").value, "2");
+});

@@ -430,13 +430,13 @@ export default function App() {
   function openBreak(b?: DiaryBreak) {
     const draft = b || {
       id: null,
-      staff_id: ownStaffId || 0,
+      staff_id: ownStaffId || (activeRole === "admin" ? staff[0]?.id : 0) || 0,
       kind: "break",
       start_minute: 840,
       duration: 15,
       revision: 0,
     };
-    if (draft.staff_id !== ownStaffId) {
+    if (activeRole !== "admin" && draft.staff_id !== ownStaffId) {
       setError("You can only change your own breaks.");
       return;
     }
@@ -458,20 +458,28 @@ export default function App() {
       end = minute(breakEnd);
     try {
       if (live && db) {
-        const r = await db.rpc("save_staff_break", {
-          p_date: date,
-          p_start: start,
-          p_end: end,
-          p_kind: breakDraft.kind,
-          p_id: breakDraft.id,
-          p_revision: breakDraft.revision,
-        });
+        const r = await db.rpc(
+          activeRole === "admin"
+            ? "admin_save_staff_break"
+            : "save_staff_break",
+          {
+            ...(activeRole === "admin"
+              ? { p_staff_id: breakDraft.staff_id }
+              : {}),
+            p_date: date,
+            p_start: start,
+            p_end: end,
+            p_kind: breakDraft.kind,
+            p_id: breakDraft.id,
+            p_revision: breakDraft.revision,
+          },
+        );
         if (r.error) throw r.error;
         if (operation !== identityVersion.current) return;
         await refresh();
       } else {
         validateBreak({
-          staffId: ownStaffId,
+          staffId: breakDraft.staff_id,
           date,
           start,
           end,
@@ -2404,7 +2412,9 @@ export default function App() {
                   <span>▧ Break / unavailable</span>
                   <button
                     className="secondary"
-                    disabled={!ownStaffId}
+                    disabled={
+                      activeRole === "admin" ? !staff.length : !ownStaffId
+                    }
                     onClick={() => openBreak()}
                   >
                     Add break time
@@ -2463,7 +2473,10 @@ export default function App() {
                                   <button
                                     key={b.id || `lunch-${s.id}-${i}`}
                                     className="break-block"
-                                    disabled={b.staff_id !== ownStaffId}
+                                    disabled={
+                                      activeRole !== "admin" &&
+                                      b.staff_id !== ownStaffId
+                                    }
                                     onClick={() => openBreak(b)}
                                     style={{
                                       top: (b.start_minute - diaryStart) * 1.6,
@@ -2576,10 +2589,10 @@ export default function App() {
               </p>
             )}
             <h2>
-              {breakDraft.kind === "lunch" ? "Your lunch" : "Add break time"}
+              {breakDraft.kind === "lunch" ? "Lunch time" : "Add break time"}
             </h2>
             <p>
-              {actorName} · {date}
+              {staff.find((s) => s.id === breakDraft.staff_id)?.name} · {date}
             </p>
             <form
               onSubmit={(e) => {
@@ -2587,6 +2600,27 @@ export default function App() {
                 void saveBreak();
               }}
             >
+              {activeRole === "admin" && (
+                <label>
+                  Staff member
+                  <select
+                    value={breakDraft.staff_id}
+                    disabled={!!breakDraft.id || breakDraft.kind === "lunch"}
+                    onChange={(e) =>
+                      setBreakDraft({
+                        ...breakDraft,
+                        staff_id: Number(e.target.value),
+                      })
+                    }
+                  >
+                    {staff.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label>
                 Start
                 <input

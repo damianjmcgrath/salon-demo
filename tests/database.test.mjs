@@ -103,6 +103,7 @@ before(async () => {
       "utf8",
     ),
   );
+  await pg.exec(await readFile(new URL("../supabase/009_admin_breaks.sql", import.meta.url), "utf8"));
   clientId = (
     await one("select id from clients where auth_user_id=$1", [clientUser])
   ).id;
@@ -897,4 +898,21 @@ test("database: an unconfirmed email cannot claim recipient vouchers", async () 
   );
   await as(uid);
   assert.deepEqual((await one("select get_my_vouchers()")).get_my_vouchers, []);
+});
+
+test("database: admin manages another staff break; staff and accountant are denied", async () => {
+  await as(staffB);
+  await assert.rejects(pg.query("select admin_save_staff_break(1,current_date+30,840,855,'break',null,0)"), /Admin access/);
+  await as(accountant);
+  await assert.rejects(pg.query("select admin_save_staff_break(1,current_date+30,840,855,'break',null,0)"), /Admin access/);
+  await pg.exec("reset role");
+  await pg.query("update staff_users set role='admin',active=true where user_id=$1", [staffA]);
+  const dt = (await one("select (current_date+30 + ((8-extract(dow from current_date+30)::integer)%7))::text as date")).date;
+  await pg.query("insert into staff_day_shifts(staff_id,shift_date,start_minute,end_minute) values(2,$1,480,1200) on conflict(staff_id,shift_date) do update set start_minute=480,end_minute=1200", [dt]);
+  await as(staffA);
+  const b = await one("select * from admin_save_staff_break(2,$1,1080,1095,'break',null,0)", [dt]);
+  assert.equal(b.staff_id, 2);
+  const changed = await one("select * from admin_save_staff_break(2,$1,1095,1110,'break',$2,$3)", [dt,b.id,b.revision]);
+  assert.equal(changed.start_minute, 1095);
+  await assert.rejects(pg.query("select admin_save_staff_break(1,$1,1095,1110,'break',$2,$3)",[dt,b.id,changed.revision]), /selected staff/);
 });
