@@ -51,10 +51,12 @@ test("duration aligns starts to hour, half hour or quarter hour", () => {
 });
 test("period is mandatory and midday belongs to afternoon", async () => {
   const { periodSlots } = await import("../src/availability.js");
-  const slots = [479, 480, 719, 720, 780].map((start_minute) => ({
-    start_minute,
-    staff_id: 1,
-  }));
+  const slots = [479, 480, 719, 720, 780, 959, 960, 1019, 1020, 1199, 1200].map(
+    (start_minute) => ({
+      start_minute,
+      staff_id: 1,
+    }),
+  );
   assert.deepEqual(periodSlots(slots, ""), []);
   assert.deepEqual(
     periodSlots(slots, "morning").map((s) => s.start_minute),
@@ -62,7 +64,11 @@ test("period is mandatory and midday belongs to afternoon", async () => {
   );
   assert.deepEqual(
     periodSlots(slots, "afternoon").map((s) => s.start_minute),
-    [720, 780],
+    [720, 780, 959],
+  );
+  assert.deepEqual(
+    periodSlots(slots, "evening").map((s) => s.start_minute),
+    [1020, 1199],
   );
 });
 test("previous treatments include only attended self bookings and deduplicate", async () => {

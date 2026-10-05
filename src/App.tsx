@@ -1719,8 +1719,8 @@ export default function App() {
                     13:00–13:30.
                   </p>
                   <fieldset className="period-choice">
-                    <legend>Morning or afternoon?</legend>
-                    {["morning", "afternoon"].map((p) => (
+                    <legend>Choose a time of day</legend>
+                    {["morning", "afternoon", "evening"].map((p) => (
                       <button
                         key={p}
                         className={period === p ? "chosen" : "secondary"}
@@ -1731,13 +1731,16 @@ export default function App() {
                       >
                         {p === "morning"
                           ? "Morning · 08:00–12:00"
-                          : "Afternoon · from 12:00"}
+                          : p === "afternoon"
+                            ? "Afternoon · 12:00–16:00"
+                            : "Evening · 17:00–20:00"}
                       </button>
                     ))}
                   </fieldset>
                   {!period && (
                     <p className="small">
-                      Choose morning or afternoon to see available times.
+                      Choose morning, afternoon or evening to see available
+                      times.
                     </p>
                   )}
                   <div className="slots">
