@@ -5,7 +5,7 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!key) throw new Error('Set SUPABASE_SERVICE_ROLE_KEY locally; never commit or share it.');
 if (url !== 'https://xmvujvwyfxawtazjiymd.supabase.co') throw new Error('This script is restricted to the salon test project.');
 const db = createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
-const password = process.env.SALON_TEST_PASSWORD || '1234';
+const password = process.env.SALON_TEST_PASSWORD || '123456';
 const clients = [
  ['jacqui@example.com','Jacqui Durnin','+353 879 942 716'],
  ['aoife@example.com','Aoife Durnin','+353 111 111 111'],
@@ -27,7 +27,7 @@ for(const [email,name,phone] of clients) {
  }
  const payload={password,email_confirm:true,user_metadata:{full_name:name,mobile:phone}};
  const result=existing ? await db.auth.admin.updateUserById(existing.id,payload) : await db.auth.admin.createUser({email,...payload});
- if(result.error) throw new Error(`${email}: ${result.error.message}. If the password policy rejects 1234, set SALON_TEST_PASSWORD to a permitted password and rerun.`);
+ if(result.error) throw new Error(`${email}: ${result.error.message}. If the password policy rejects 123456, set SALON_TEST_PASSWORD to a permitted password and rerun.`);
  const {error}=await db.from('clients').upsert({auth_user_id:result.data.user.id,name,email,phone},{onConflict:'auth_user_id'});
  if(error) throw error;
  console.log(`Ready: ${email}`);
