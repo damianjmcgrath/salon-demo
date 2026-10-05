@@ -23,7 +23,7 @@ async function one(sql, args = []) {
 }
 before(async () => {
   await pg.exec(
-    `create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',raw_app_meta_data jsonb default '{}');create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid; $$;grant usage on schema auth to anon,authenticated,service_role;grant execute on function auth.uid() to anon,authenticated,service_role;`,
+    `create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz default now(),raw_user_meta_data jsonb default '{}',raw_app_meta_data jsonb default '{}');create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid; $$;grant usage on schema auth to anon,authenticated,service_role;grant execute on function auth.uid() to anon,authenticated,service_role;`,
   );
   for (const [id, email, name] of [
     [staffA, "a@example.com", "Staff A"],
@@ -92,6 +92,15 @@ before(async () => {
     ).replace(
       "create extension if not exists pgcrypto with schema extensions;",
       "",
+    ),
+  );
+  await pg.exec(
+    await readFile(
+      new URL(
+        "../supabase/008_client_profiles_voucher_purchase.sql",
+        import.meta.url,
+      ),
+      "utf8",
     ),
   );
   clientId = (
@@ -738,4 +747,154 @@ test("database: archiving retains private history but removes profile and availa
     ).rows.length,
     0,
   );
+});
+let purchased;
+test("database: client profile changes are scoped to the caller and marketing is opt-in", async () => {
+  await pg.exec("reset role");
+  await pg.query("update auth.users set raw_app_meta_data='{}' where id=$1", [
+    clientUser,
+  ]);
+  await as(clientUser);
+  const p = await one("select * from get_my_profile()");
+  assert.equal(p.marketing_email, false);
+  const changed = await one(
+    "select * from update_my_profile($1,$2,true,false,true,$3)",
+    ["Updated Client", "0800000077", p.revision],
+  );
+  assert.equal(changed.name, "Updated Client");
+  assert.equal(changed.marketing_email, true);
+  assert.equal(changed.marketing_sms, false);
+  assert.equal(changed.marketing_whatsapp, true);
+  await assert.rejects(
+    pg.query("select update_my_profile($1,$2,false,false,false,$3)", [
+      "Old",
+      "0800000000",
+      p.revision,
+    ]),
+    /changed/,
+  );
+  await as(staffB);
+  await assert.rejects(pg.query("select get_my_profile()"), /Client sign-in/);
+  await as(accountant);
+  await assert.rejects(
+    pg.query("select update_my_profile($1,$2,false,false,false,0)", [
+      "Other",
+      "0800000000",
+    ]),
+    /Client sign-in/,
+  );
+});
+test("database: demo purchases use server prices and idempotency, with no raw card storage", async () => {
+  await as(clientUser);
+  const request = "30000000-0000-0000-0000-000000000001";
+  const first = await one(
+    "select purchase_demo_voucher($1,$2,true,$3,$4,$5,true,$6)",
+    [
+      "treatment",
+      treatmentId,
+      "Ignored",
+      "ignored@example.com",
+      "saved_demo",
+      request,
+    ],
+  );
+  purchased = first.purchase_demo_voucher;
+  const t = await one("select price from treatments where id=$1", [
+    treatmentId,
+  ]);
+  assert.equal(Number(purchased.original_amount), Number(t.price));
+  assert.equal(purchased.recipient_email, "client@example.com");
+  assert.equal(purchased.demo_purchase, true);
+  const again = await one(
+    "select purchase_demo_voucher($1,null,true,$2,$3,$4,true,$5)",
+    ["25", "", "", "saved_demo", request],
+  );
+  assert.equal(again.purchase_demo_voucher.id, purchased.id);
+  assert.equal(
+    (
+      await pg.query("select * from demo_voucher_orders where request_id=$1", [
+        request,
+      ])
+    ).rows.length,
+    1,
+  );
+  assert.equal(purchased.card_number, undefined);
+  await assert.rejects(
+    pg.query(
+      "select purchase_demo_voucher('1000',null,true,'','','saved_demo',true,gen_random_uuid())",
+    ),
+    /amount/,
+  );
+  const mine = (await one("select get_my_vouchers()")).get_my_vouchers;
+  assert(mine.some((v) => v.id === purchased.id));
+  await as(accountant);
+  await assert.rejects(
+    pg.query(
+      "select purchase_demo_voucher('25',null,true,'','','saved_demo',true,gen_random_uuid())",
+    ),
+    /Client sign-in/,
+  );
+  await assert.rejects(pg.query("select get_my_vouchers()"), /Client sign-in/);
+});
+test("database: gift vouchers are visible only to the assigned verified email and transfers update ownership", async () => {
+  await as(clientUser);
+  const r = await one(
+    "select purchase_demo_voucher('50',null,false,'Gift Friend','friend@example.com','new_demo',true,gen_random_uuid())",
+  );
+  const gift = r.purchase_demo_voucher;
+  assert(
+    !(await one("select get_my_vouchers()")).get_my_vouchers.some(
+      (v) => v.id === gift.id,
+    ),
+  );
+  await pg.exec("reset role");
+  const friend = "30000000-0000-0000-0000-000000000002";
+  await pg.query(
+    "insert into auth.users(id,email) values($1,'friend@example.com')",
+    [friend],
+  );
+  await as(friend);
+  assert(
+    (await one("select get_my_vouchers()")).get_my_vouchers.some(
+      (v) => v.id === gift.id,
+    ),
+  );
+  await assert.rejects(
+    pg.query("select simulate_voucher_email($1,$2)", [gift.id, "self"]),
+    /not found/,
+  );
+  await as(clientUser);
+  assert.equal(
+    (await one("select simulate_voucher_email($1,$2)", [gift.id, "recipient"]))
+      .simulate_voucher_email,
+    "friend@example.com",
+  );
+  await as(staffA);
+  await pg.query("select reassign_voucher($1,$2,$3)", [
+    gift.id,
+    clientId,
+    gift.revision,
+  ]);
+  await as(friend);
+  assert(
+    !(await one("select get_my_vouchers()")).get_my_vouchers.some(
+      (v) => v.id === gift.id,
+    ),
+  );
+  await as(clientUser);
+  assert(
+    (await one("select get_my_vouchers()")).get_my_vouchers.some(
+      (v) => v.id === gift.id,
+    ),
+  );
+});
+test("database: an unconfirmed email cannot claim recipient vouchers", async () => {
+  await pg.exec("reset role");
+  const uid = "30000000-0000-0000-0000-000000000003";
+  await pg.query(
+    "insert into auth.users(id,email,email_confirmed_at) values($1,'client@example.com',null)",
+    [uid],
+  );
+  await as(uid);
+  assert.deepEqual((await one("select get_my_vouchers()")).get_my_vouchers, []);
 });

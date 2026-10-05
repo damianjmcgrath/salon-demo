@@ -106,7 +106,8 @@ export default function VoucherManagement({
           s.toUpperCase().replace(/[^A-Z0-9]/g, "");
         found = (data.vouchers || []).filter((v) =>
           client
-            ? v.client_id === client.id
+            ? v.client_id === client.id ||
+              v.recipient_email?.toLowerCase() === client.email.toLowerCase()
             : normalize(v.code) === normalize(code),
         );
       }
@@ -182,6 +183,7 @@ export default function VoucherManagement({
           expires_on: expiry,
           client_id: recipient?.id || null,
           assigned_client_name: recipient?.name || null,
+          recipient_email: recipient?.email,
           revision: 0,
           created_at: new Date().toISOString(),
         };
@@ -247,6 +249,7 @@ export default function VoucherManagement({
           ...current,
           client_id: recipient.id,
           assigned_client_name: recipient.name,
+          recipient_email: recipient.email,
           revision: current.revision + 1,
         };
         setData((d) => ({

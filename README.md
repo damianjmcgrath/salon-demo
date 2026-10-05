@@ -140,3 +140,15 @@ PINs are bcrypt hashed server-side and never returned in HR responses or audit p
 Local demo mode stores fictional staff records and PINs in browser storage, as before; default Aoife and Leah PINs are `1234`. New fictional staff use the PIN entered in their creation form. Connected mode uses only the server-side PIN verifier.
 
 Validation: real PostgreSQL function/RLS tests run in PGlite, plus React DOM workflows. PGlite lacks pgcrypto, so its test harness substitutes only the hashing primitive; production migration 007 uses Supabase’s pgcrypto bcrypt implementation. The Edge Function has been checked for syntax but requires deployment and a connected-mode smoke test in your Supabase project.
+
+## Client profile and demo voucher purchases (migration 008)
+
+Apply `supabase/008_client_profiles_voucher_purchase.sql` once after migration 007. No new Edge Function deployment is required for this update.
+
+The client booking home now includes **Buy a Voucher**, **My Profile**, and a **You and Other People (multiple bookings)** placeholder. Client sign-out reads **Sign Out**. Self bookings default to Previous Bookings when attended self bookings exist, with **Rebook Treatment** on previously attended treatments; otherwise they show All treatments. Booking for someone else never uses the purchaser’s previous bookings.
+
+Voucher purchase offers €25, €50 or the selected treatment’s current listed price. Choose yourself or enter a gift recipient’s name/email, choose a saved demo card or complete the example new-card form, and confirm the simulated purchase. Confirmation includes a unique voucher code, five-year demo expiry, print layout and buttons to simulate email to the recipient or purchaser. **No payment is taken and no email is sent.** Card numbers/security codes are not passed to the database, stored in browser storage or placed in audit records. Real Revolut Business checkout and email delivery remain for a later iteration.
+
+Connected purchases derive the value from the server catalogue and use a request ID to avoid duplicate issuance on retries. They share the staff voucher ledger and can be found/reassigned through Voucher Management. Reassignment changes the recipient email, so a voucher moves between client profiles. Purchase confirmations retain the original purchase recipient independently of later transfers.
+
+My Profile lets clients update their name and phone and choose independent email, SMS and WhatsApp marketing preferences, initially off. Profile edits retain an audit trail. Email is read-only. My Vouchers shows vouchers matching the signed-in account’s confirmed email, including staff-issued vouchers, while hiding gifts assigned to a different email. Appointment confirmations are separate from marketing preferences.

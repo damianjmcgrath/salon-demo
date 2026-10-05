@@ -1,7 +1,7 @@
 // Offline DOM interaction tests: actual React screens and forms, without a browser or network.
 import { before, after, beforeEach, afterEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { JSDOM } from "jsdom";
@@ -563,4 +563,209 @@ test("UI: admin can add and amend missed clock entries with a retained audit tra
   const log = d.activity.filter((a) => a.action === "staff_clock_corrected");
   assert.equal(log.length, 2);
   assert.equal(log[1].details.before.clocked_in_at, "2026-10-04T08:00:00.000Z");
+});
+async function clientScreen(tag) {
+  cleanup();
+  window.history.replaceState({}, "", "/");
+  const ClientApp = (
+    await import(pathToFileURL(buildDir + "/app.mjs").href + "?" + tag)
+  ).default;
+  render(React.createElement(ClientApp));
+  fireEvent.click(screen.getByRole("button", { name: "Client", exact: true }));
+  return ClientApp;
+}
+test("UI: client profile, voucher purchase, print and simulated email work together", async () => {
+  try {
+    await clientScreen("voucher-profile");
+    assert(screen.getByRole("button", { name: "Sign Out", exact: true }));
+    assert(screen.getByRole("button", { name: /You and Other People/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /You and Other People/ }),
+    );
+    assert(screen.getByText("Multiple bookings are coming soon."));
+    fireEvent.click(screen.getByRole("button", { name: /Booking home/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "My Profile", exact: true }),
+    );
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Updated Demo Client" },
+    });
+    fireEvent.change(screen.getByLabelText("Phone number"), {
+      target: { value: "0800000099" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Email", exact: true }),
+    );
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "WhatsApp", exact: true }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save my profile" }));
+    await screen.findByText("Your profile has been saved.");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Buy a Voucher", exact: true }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "€50", exact: true }));
+    fireEvent.change(screen.getByLabelText("Card for your voucher"), {
+      target: { value: "saved_demo" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I understand this is a demo purchase.",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Confirm demo purchase/ }),
+    );
+    assert(
+      await screen.findByRole("heading", {
+        name: "Your voucher is confirmed.",
+      }),
+    );
+    assert(
+      document
+        .querySelector(".voucher-print-area")
+        .textContent.includes("Updated Demo Client"),
+    );
+    let prints = 0;
+    window.print = () => prints++;
+    fireEvent.click(screen.getByRole("button", { name: "Print voucher" }));
+    assert.equal(prints, 1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Email voucher to recipient" }),
+    );
+    await screen.findByText(
+      "Demo email prepared for client@example.com. No email has been sent.",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /View My Profile and vouchers/ }),
+    );
+    assert(await screen.findByText(/€50.00 remaining/));
+    const d = JSON.parse(localStorage.getItem("sculpted-staff-data-v1"));
+    const c = d.clients.find((c) => c.auth_user_id === "local-client");
+    assert(c.marketing_email);
+    assert(c.marketing_whatsapp);
+    assert(!c.marketing_sms);
+    assert.equal(c.phone, "0800000099");
+    assert.equal(d.vouchers[0].original_amount, 50);
+    assert.equal(d.vouchers[0].card_number, undefined);
+  } finally {
+    cleanup();
+    window.history.replaceState({}, "", "?portal=staff");
+  }
+});
+test("UI: treatment-priced gift vouchers use the selected price and recipient details", async () => {
+  try {
+    await clientScreen("gift-voucher");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Buy a Voucher", exact: true }),
+    );
+    fireEvent.click(
+      screen.getByRole("radio", { name: "Full-treatment-price" }),
+    );
+    const catalog = JSON.parse(
+      await readFile(new URL("../src/catalog.json", import.meta.url), "utf8"),
+    );
+    const t = catalog.find((t) => t.name === "EXCLUSIVE PACKAGE 1");
+    fireEvent.change(screen.getByLabelText("Treatment"), {
+      target: { value: String(t.id) },
+    });
+    fireEvent.click(
+      screen.getByRole("radio", { name: "Someone Else", exact: true }),
+    );
+    fireEvent.change(screen.getByLabelText("Recipient name"), {
+      target: { value: "Gift Friend" },
+    });
+    fireEvent.change(screen.getByLabelText("Recipient email address"), {
+      target: { value: "gift@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Card for your voucher"), {
+      target: { value: "new_demo" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I understand this is a demo purchase.",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Confirm demo purchase/ }),
+    );
+    await screen.findByRole("heading", { name: "Your voucher is confirmed." });
+    const d = JSON.parse(localStorage.getItem("sculpted-staff-data-v1"));
+    assert.equal(d.vouchers[0].original_amount, t.price);
+    assert.equal(d.vouchers[0].recipient_email, "gift@example.com");
+    assert.equal(d.vouchers[0].assigned_client_name, "Gift Friend");
+    fireEvent.click(
+      screen.getByRole("button", { name: /View My Profile and vouchers/ }),
+    );
+    assert(
+      await screen.findByText("You don’t have any assigned vouchers yet."),
+    );
+  } finally {
+    cleanup();
+    window.history.replaceState({}, "", "?portal=staff");
+  }
+});
+test("UI: attended self bookings default to Previous Bookings and say Rebook Treatment", async () => {
+  try {
+    cleanup();
+    const catalog = JSON.parse(
+      await readFile(new URL("../src/catalog.json", import.meta.url), "utf8"),
+    );
+    const t = catalog.find((t) => t.name === "Glamour Special");
+    localStorage.setItem(
+      "sculpted-demo-v1",
+      JSON.stringify([
+        {
+          id: "past-self",
+          user_id: "local-client",
+          staff_id: 1,
+          treatment_id: t.id,
+          start_minute: 540,
+          duration: t.duration,
+          appointment_date: "2026-10-04",
+          status: "completed",
+          client_name: "Demo Client",
+          treatment_name: t.name,
+          price: t.price,
+          booked_for_self: true,
+        },
+      ]),
+    );
+    await clientScreen("rebooking");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Yourself", exact: true }),
+    );
+    assert(
+      screen.getByRole("heading", { name: "Previous Bookings", exact: true }),
+    );
+    assert(
+      screen.getByRole("button", { name: /Glamour Special.*Rebook Treatment/ }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Booking recipient/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Someone Else", exact: true }),
+    );
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Other Person" },
+    });
+    fireEvent.change(screen.getByLabelText("Email address"), {
+      target: { value: "other@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Phone number"), {
+      target: { value: "0800000000" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Continue to treatments/ }),
+    );
+    assert(
+      screen.getByRole("heading", { name: "All treatments", exact: true }),
+    );
+    assert.equal(
+      screen.queryByRole("button", { name: /Previous Bookings/ }),
+      null,
+    );
+  } finally {
+    cleanup();
+    window.history.replaceState({}, "", "?portal=staff");
+  }
 });

@@ -32,3 +32,10 @@ test("retired IT Support has no access", () => {
   assert.equal(normalizeRole("it_support"), null);
   assert.equal(canAccess("it_support", "diary"), false);
 });
+test("profile and voucher purchase screens are client-only", () => {
+  for (const view of ["my-profile", "voucher-purchase", "multiple-bookings"]) {
+    assert(canAccess("client", view));
+    for (const role of ["staff", "admin", "accountant", null])
+      assert.equal(canAccess(role, view), false);
+  }
+});

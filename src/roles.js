@@ -14,7 +14,15 @@ export function canAccess(role, view) {
   if (view === "book") return ["client", "staff", "admin"].includes(role);
   if (["staff-workspace", "diary"].includes(view))
     return ["staff", "admin"].includes(role);
-  if (view === "my-bookings") return role === "client";
+  if (
+    [
+      "my-bookings",
+      "my-profile",
+      "voucher-purchase",
+      "multiple-bookings",
+    ].includes(view)
+  )
+    return role === "client";
   if (["report", "reporting-home", "reporting-placeholder"].includes(view))
     return ["admin", "accountant"].includes(role);
   if (view === "staff-admin") return role === "admin";

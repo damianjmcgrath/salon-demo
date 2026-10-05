@@ -1,3 +1,6 @@
+import ClientProfile from "./ClientProfile";
+import VoucherPurchase from "./VoucherPurchase";
+import { localClient } from "./clientModel";
 import StaffAdministration from "./StaffAdministration";
 import { seedStaffRecords, localShift } from "./staffAdminModel";
 import ClockControls from "./ClockControls";
@@ -198,6 +201,8 @@ export default function App() {
           .map((r) => ({ id: r.id, name: r.name, photo_url: r.photo_url })),
       );
   }, [live, staffData.staffRecords]);
+  const [bookingHistoryLoaded, setBookingHistoryLoaded] = useState(!live);
+  const defaultPrevious = useRef(false);
   const [remoteBreaks, setRemoteBreaks] = useState<DiaryBreak[]>([]),
     [breakDraft, setBreakDraft] = useState<DiaryBreak | null>(null),
     [breakStart, setBreakStart] = useState("13:00"),
@@ -258,18 +263,27 @@ export default function App() {
   }
   function chooseRecipient(self: boolean) {
     setForSelf(self);
-    setCategory("All treatments");
+    defaultPrevious.current = self;
+    setCategory(
+      self &&
+        attendedTreatmentIds(
+          live ? myBookings : local.filter((a) => a.user_id === "local-client"),
+        ).length
+        ? "Previous Bookings"
+        : "All treatments",
+    );
     setSearch("");
+    const profile = live ? ownClient : localClient(staffData);
     setName(
       self
-        ? ownClient?.name ||
+        ? profile?.name ||
             session?.user.user_metadata.full_name ||
             (live ? "" : "Demo Client")
         : "",
     );
     setPhone(
       self
-        ? ownClient?.phone ||
+        ? profile?.phone ||
             session?.user.user_metadata.mobile ||
             (live ? "" : "0800000000")
         : "",
@@ -278,8 +292,8 @@ export default function App() {
     setStep(
       self &&
         (!live ||
-          ((ownClient?.name || session?.user.user_metadata.full_name) &&
-            (ownClient?.phone || session?.user.user_metadata.mobile)))
+          ((profile?.name || session?.user.user_metadata.full_name) &&
+            (profile?.phone || session?.user.user_metadata.mobile)))
         ? 1
         : -1,
     );
@@ -702,6 +716,7 @@ export default function App() {
       return;
     }
     let cancelled = false;
+    setBookingHistoryLoaded(false);
     db.from("appointments")
       .select("*")
       .eq("user_id", session.user.id)
@@ -710,7 +725,10 @@ export default function App() {
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) setError(error.message);
-        else setMyBookings(data || []);
+        else {
+          setMyBookings(data || []);
+          setBookingHistoryLoaded(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -1113,6 +1131,18 @@ export default function App() {
   const previousIds = attendedTreatmentIds(
     live ? myBookings : local.filter((a) => a.user_id === "local-client"),
   );
+  useEffect(() => {
+    if (
+      defaultPrevious.current &&
+      forSelf &&
+      !staffClient &&
+      step === 1 &&
+      (!live || bookingHistoryLoaded)
+    ) {
+      setCategory(previousIds.length ? "Previous Bookings" : "All treatments");
+      defaultPrevious.current = false;
+    }
+  }, [step, forSelf, staffClient, live, bookingHistoryLoaded, myBookings]);
   const visibleSlots: Slot[] = periodSlots(slots, period);
   const categories = [
     ...(forSelf && !staffClient ? ["Previous Bookings"] : []),
@@ -1236,6 +1266,14 @@ export default function App() {
               My appointments
             </button>
           )}
+          {activeRole === "client" && (
+            <button
+              className={view === "my-profile" ? "active" : ""}
+              onClick={() => setView("my-profile")}
+            >
+              My Profile
+            </button>
+          )}
           {staffAccess && (
             <button
               className={view === "staff-workspace" ? "active" : ""}
@@ -1279,7 +1317,9 @@ export default function App() {
             {staffAccess
               ? "Switch profile / lock"
               : activeRole || session
-                ? "Sign out / lock"
+                ? activeRole === "client"
+                  ? "Sign Out"
+                  : "Sign out / lock"
                 : "Sign in"}
           </button>
         </nav>
@@ -1411,6 +1451,37 @@ export default function App() {
             onBook={beginStaffBooking}
             onCancel={cancelFromWorkspace}
           />
+        ) : view === "my-profile" && activeRole === "client" ? (
+          <ClientProfile
+            key={`${live}-${session?.user.id || "local"}`}
+            live={live}
+            db={db}
+            data={staffData}
+            setData={setStaffData}
+            onSaved={setOwnClient}
+            onHome={startBooking}
+            onBuy={() => setView("voucher-purchase")}
+          />
+        ) : view === "voucher-purchase" && activeRole === "client" ? (
+          <VoucherPurchase
+            key={`${live}-${session?.user.id || "local"}`}
+            live={live}
+            db={db}
+            data={staffData}
+            setData={setStaffData}
+            treatments={treatments}
+            client={ownClient}
+            onHome={startBooking}
+            onProfile={() => setView("my-profile")}
+          />
+        ) : view === "multiple-bookings" && activeRole === "client" ? (
+          <section className="panel login">
+            <button className="back" onClick={startBooking}>
+              ← Booking home
+            </button>
+            <h1>You and Other People</h1>
+            <p>Multiple bookings are coming soon.</p>
+          </section>
         ) : view === "book" &&
           (activeRole === "client" || (staffAccess && staffClient)) ? (
           <>
@@ -1455,6 +1526,20 @@ export default function App() {
                     onClick={() => chooseRecipient(false)}
                   >
                     Someone Else
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={() => setView("multiple-bookings")}
+                  >
+                    You and Other People <small>(multiple bookings)</small>
+                  </button>
+                </div>
+                <div className="recipient-voucher">
+                  <button
+                    className="secondary"
+                    onClick={() => setView("voucher-purchase")}
+                  >
+                    Buy a Voucher
                   </button>
                 </div>
               </section>
@@ -1528,7 +1613,10 @@ export default function App() {
                     <button
                       key={c}
                       className={category === c ? "chosen" : ""}
-                      onClick={() => setCategory(c)}
+                      onClick={() => {
+                        defaultPrevious.current = false;
+                        setCategory(c);
+                      }}
                     >
                       {c}
                       <span>
@@ -1579,7 +1667,11 @@ export default function App() {
                             {money(t.price)}
                           </strong>
                         </div>
-                        <span className="choose">Choose treatment ↗</span>
+                        <span className="choose">
+                          {forSelf && !staffClient && previousIds.includes(t.id)
+                            ? "Rebook Treatment ↗"
+                            : "Choose treatment ↗"}
+                        </span>
                       </button>
                     ))}
                   </div>

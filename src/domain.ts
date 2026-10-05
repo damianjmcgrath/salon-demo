@@ -4,6 +4,9 @@ export type Client = {
   name: string;
   email: string;
   phone: string;
+  marketing_email?: boolean;
+  marketing_sms?: boolean;
+  marketing_whatsapp?: boolean;
   revision: number;
   created_at?: string;
   updated_at?: string;
@@ -80,6 +83,10 @@ export type Voucher = {
   revision: number;
   created_at: string;
   balance?: number;
+  recipient_email?: string;
+  demo_purchase?: boolean;
+  purchased_by?: string;
+  treatment_name?: string | null;
 };
 export type VoucherTransaction = {
   id: string;
