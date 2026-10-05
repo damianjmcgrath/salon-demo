@@ -78,7 +78,7 @@ async function findEmma() {
   await screen.findByRole("heading", { name: "Emma Demo", exact: true });
 }
 test("UI: staff tiles, PIN preview, home tiles and profile locking work", async () => {
-  assert(screen.getByRole("heading", { name: "Who’s working today?" }));
+  assert(screen.getByRole("heading", { name: "Select a Staff Profile" }));
   await login();
   for (const name of [
     "Appointment Management",
@@ -89,7 +89,7 @@ test("UI: staff tiles, PIN preview, home tiles and profile locking work", async 
   fireEvent.click(
     screen.getByRole("button", { name: "Switch profile / lock" }),
   );
-  await screen.findByRole("heading", { name: "Who’s working today?" });
+  await screen.findByRole("heading", { name: "Select a Staff Profile" });
   assert.equal(
     screen.queryByRole("heading", { name: "Your salon workspace." }),
     null,

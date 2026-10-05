@@ -1047,3 +1047,5 @@ textarea {
     margin: 0;
   }
 }
+.staff-tile .profile-photo { width:112px; height:112px; object-fit:cover; object-position:50% 25%; border-radius:50%; display:block; margin:0 auto 12px; border:3px solid #eee4d7; }
+.staff-tile h2 { margin:0; }

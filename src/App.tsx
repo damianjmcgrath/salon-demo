@@ -1684,7 +1684,7 @@ export default function App() {
               <h1>
                 {accountantPortal
                   ? "Accountant sign-in"
-                  : "Who’s working today?"}
+                  : "Select a Staff Profile"}
               </h1>
               <p>
                 Choose your profile.{" "}
@@ -1710,7 +1710,7 @@ export default function App() {
                           setError("");
                         }}
                       >
-                        <span className="avatar">{s.name[0]}</span>
+                        {s.role !== "accountant" ? <img className="profile-photo" src={`./images/${s.name.toLowerCase()}.webp`} alt="" /> : <span className="avatar">{s.name[0]}</span>}
                         <h2>{s.name}</h2>
                       </button>
                     ))}
