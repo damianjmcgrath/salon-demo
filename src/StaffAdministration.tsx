@@ -84,6 +84,7 @@ export default function StaffAdministration({
   const [notes, setNotes] = useState<StaffNote[]>([]),
     [note, setNote] = useState(""),
     [days, setDays] = useState<DayShift[]>([]),
+    [clockDays, setClockDays] = useState<DayShift[]>([]),
     [shiftStart, setShiftStart] = useState(dublinToday()),
     [clockStart, setClockStart] = useState(addDays(dublinToday(), -13)),
     [clocks, setClocks] = useState<WorkSession[]>([]),
@@ -191,6 +192,16 @@ export default function StaffAdministration({
           ),
         ),
       );
+      setClockDays(
+        Array.from({ length: 14 }, (_, i) =>
+          localShift(
+            records,
+            data.dayShifts || [],
+            s.id,
+            addDays(clockStart, i),
+          ),
+        ),
+      );
       setClocks(
         (data.shifts || [])
           .filter(
@@ -215,8 +226,11 @@ export default function StaffAdministration({
           .from("staff_day_shifts")
           .select("*")
           .eq("staff_id", s.id)
-          .gte("shift_date", shiftStart)
-          .lte("shift_date", addDays(shiftStart, 13)),
+          .gte("shift_date", shiftStart < clockStart ? shiftStart : clockStart)
+          .lte(
+            "shift_date",
+            addDays(shiftStart > clockStart ? shiftStart : clockStart, 13),
+          ),
         db!
           .from("work_sessions")
           .select("*")
@@ -234,6 +248,23 @@ export default function StaffAdministration({
       setDays(
         Array.from({ length: 14 }, (_, i) => {
           const date = addDays(shiftStart, i);
+          const saved = sh.data?.find((x) => x.shift_date === date);
+          if (saved) return saved;
+          const rota = r.data?.find(
+            (x) => x.weekday === new Date(date + "T12:00:00Z").getUTCDay(),
+          );
+          return {
+            staff_id: s.id,
+            shift_date: date,
+            start_minute: rota?.start_minute ?? null,
+            end_minute: rota?.end_minute ?? null,
+            revision: 0,
+          };
+        }),
+      );
+      setClockDays(
+        Array.from({ length: 14 }, (_, i) => {
+          const date = addDays(clockStart, i);
           const saved = sh.data?.find((x) => x.shift_date === date);
           if (saved) return saved;
           const rota = r.data?.find(
@@ -1144,39 +1175,110 @@ export default function StaffAdministration({
                 Add missed clock entry
               </button>
               {!clocks.length && <p>No clock entries for this period.</p>}
-              <div className="clock-history">
-                {clocks.map((w) => (
-                  <article className="staff-note" key={w.id}>
-                    <strong>
-                      {localClockInput(w.clocked_in_at).replace("T", " · ")}
-                    </strong>
-                    <p>
-                      Clock-Out:{" "}
-                      {w.clocked_out_at
-                        ? localClockInput(w.clocked_out_at).replace("T", " · ")
-                        : "Still clocked in"}
-                    </p>
-                    {w.correction_reason && (
-                      <p>Correction: {w.correction_reason}</p>
-                    )}
-                    <button
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() => {
-                        setClockEdit(w);
-                        setClockIn(localClockInput(w.clocked_in_at));
-                        setClockOut(
-                          w.clocked_out_at
-                            ? localClockInput(w.clocked_out_at)
-                            : "",
-                        );
-                        setReason("");
-                      }}
-                    >
-                      Amend clock times
-                    </button>
-                  </article>
-                ))}
+              <div className="clock-table-scroll">
+                <table className="clock-history-table">
+                  <caption className="small">
+                    Clock history in Dublin time. Scheduled hours use the saved
+                    daily shift or regular rota. Hours worked are elapsed time,
+                    including breaks.
+                  </caption>
+                  <thead>
+                    <tr>
+                      {[
+                        "Date",
+                        "Clock In Time",
+                        "Clock Out Time",
+                        "Hours Worked",
+                        "Scheduled Hours",
+                        "Actions",
+                      ].map((label) => (
+                        <th scope="col" key={label}>
+                          {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clocks.map((w) => {
+                      const day = localClockInput(w.clocked_in_at).slice(0, 10);
+                      const shift = clockDays.find((s) => s.shift_date === day);
+                      const duration = (mins: number) =>
+                        `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+                      const dateLabel = (iso: string, withTime = true) => {
+                        const local = localClockInput(iso);
+                        const weekday = new Intl.DateTimeFormat("en-GB", {
+                          timeZone: "Europe/Dublin",
+                          weekday: "long",
+                        }).format(new Date(iso));
+                        const [year, month, date] = local
+                          .slice(0, 10)
+                          .split("-");
+                        return `${weekday} ${date}/${month}/${year.slice(2)}${withTime ? ` ${local.slice(11, 16)}` : ""}`;
+                      };
+                      return (
+                        <tr key={w.id}>
+                          <th scope="row">
+                            {dateLabel(w.clocked_in_at, false)}
+                          </th>
+                          <td>{dateLabel(w.clocked_in_at)}</td>
+                          <td>
+                            {w.clocked_out_at
+                              ? dateLabel(w.clocked_out_at)
+                              : "Still clocked in"}
+                          </td>
+                          <td>
+                            {w.clocked_out_at
+                              ? duration(
+                                  Math.max(
+                                    0,
+                                    Math.floor(
+                                      (Date.parse(w.clocked_out_at) -
+                                        Date.parse(w.clocked_in_at)) /
+                                        60000,
+                                    ),
+                                  ),
+                                )
+                              : "—"}
+                          </td>
+                          <td>
+                            {shift
+                              ? duration(
+                                  shift.start_minute == null ||
+                                    shift.end_minute == null
+                                    ? 0
+                                    : shift.end_minute - shift.start_minute,
+                                )
+                              : "—"}
+                          </td>
+                          <td>
+                            {" "}
+                            <button
+                              className="secondary"
+                              disabled={busy}
+                              onClick={() => {
+                                setClockEdit(w);
+                                setClockIn(localClockInput(w.clocked_in_at));
+                                setClockOut(
+                                  w.clocked_out_at
+                                    ? localClockInput(w.clocked_out_at)
+                                    : "",
+                                );
+                                setReason("");
+                              }}
+                            >
+                              Amend clock times
+                            </button>
+                            {w.correction_reason && (
+                              <p className="small">
+                                Correction: {w.correction_reason}
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
               {clockIn && (
                 <form

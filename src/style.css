@@ -1387,3 +1387,33 @@ textarea {
     text-align: left;
   }
 }
+
+.clock-table-scroll {
+  overflow-x: auto;
+  margin-top: 20px;
+}
+.clock-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.clock-history-table caption {
+  text-align: left;
+  padding-bottom: 14px;
+}
+.clock-history-table th,
+.clock-history-table td {
+  padding: 14px;
+  text-align: left;
+  border-bottom: 1px solid #e2ddd3;
+  vertical-align: top;
+}
+.clock-history-table thead {
+  background: #eee9df;
+}
+.clock-history-table tbody th {
+  font-weight: 500;
+}
+.clock-history-table td {
+  min-width: 110px;
+}

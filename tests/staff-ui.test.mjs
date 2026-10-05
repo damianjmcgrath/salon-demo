@@ -560,6 +560,12 @@ test("UI: admin can add and amend missed clock entries with a retained audit tra
   const d = JSON.parse(localStorage.getItem("sculpted-staff-data-v1"));
   assert.equal(d.shifts.length, 1);
   assert.equal(d.shifts[0].clocked_in_at, "2026-10-04T08:15:00.000Z");
+  const table = screen.getByRole("table");
+  assert(table.textContent.includes("Sunday 04/10/26 09:15"));
+  assert(table.textContent.includes("Sunday 04/10/26 17:00"));
+  assert(table.textContent.includes("07:45"));
+  assert(table.textContent.includes("00:00"));
+  assert(screen.getByRole("columnheader", { name: "Scheduled Hours" }));
   const log = d.activity.filter((a) => a.action === "staff_clock_corrected");
   assert.equal(log.length, 2);
   assert.equal(log[1].details.before.clocked_in_at, "2026-10-04T08:00:00.000Z");
