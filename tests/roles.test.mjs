@@ -13,11 +13,11 @@ test("accountant is reporting only; staff cannot see management reports", () => 
   assert.equal(canAccess("staff", "diary"), true);
   assert.equal(canAccess("staff", "report"), false);
 });
-test("admin and IT share operational access with distinct role identities", () => {
-  for (const role of ["admin", "it_support"])
-    for (const view of ["diary", "workspace", "report"])
+test("admin has operational access and IT Support is retired", () => {
+  for (const role of ["admin"])
+    for (const view of ["diary", "staff-workspace", "report"])
       assert.equal(canAccess(role, view), true);
-  assert.equal(roleHome("accountant"), "report");
+  assert.equal(roleHome("accountant"), "reporting-home");
   assert.equal(roleHome("staff"), "staff-workspace");
   assert.equal(normalizeRole("superuser"), null);
   assert.equal(canAccess(null, "diary"), false);
@@ -26,4 +26,9 @@ test("admin and IT share operational access with distinct role identities", () =
 test("client login opens booking and anonymous users cannot book", () => {
   assert.equal(roleHome("client"), "book");
   assert.equal(canAccess(null, "book"), false);
+});
+
+test("retired IT Support has no access", () => {
+  assert.equal(normalizeRole("it_support"), null);
+  assert.equal(canAccess("it_support", "diary"), false);
 });

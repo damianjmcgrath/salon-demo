@@ -57,7 +57,7 @@ after(async () => {
   dom.window.close();
   globalThis.Date = ActualDate;
 });
-async function login(name = /Aoife/) {
+async function login(name = /Leah/) {
   fireEvent.click(screen.getByRole("button", { name }));
   fireEvent.change(screen.getByLabelText("4-digit demo PIN"), {
     target: { value: "1234" },
@@ -94,8 +94,8 @@ test("UI: staff tiles, PIN preview, home tiles and profile locking work", async 
     screen.queryByRole("heading", { name: "Your salon workspace." }),
     null,
   );
-  await login(/Demo Therapist A/);
-  assert(screen.getByText(/STAFF PORTAL · Demo Therapist A/));
+  await login(/Leah/);
+  assert(screen.getByText(/STAFF PORTAL · Leah/));
 });
 test("UI: client search, audited contact edit, notes and cancellation", async () => {
   await login();
@@ -128,7 +128,7 @@ test("UI: client search, audited contact edit, notes and cancellation", async ()
   assert(
     data.activity.some((a) => a.details.reason === "Client called to cancel"),
   );
-  assert.equal(data.notes[0].author_name, "Aoife");
+  assert.equal(data.notes[0].author_name, "Leah");
 });
 test("UI: new-client booking reuses treatment/time/guarantee flow and sidebar Continue", async () => {
   await login();
@@ -214,7 +214,7 @@ test("UI: diary hides staff takings, has date arrows, and changes only own daily
   assert(screen.getByRole("button", { name: "Lunch · 12:30–13:00" }));
   assert.equal(
     screen.getAllByRole("button", { name: "Lunch · 13:00–13:30" }).length,
-    2,
+    1,
   );
   fireEvent.click(screen.getByRole("button", { name: "Add break time" }));
   const additional = screen.getByRole("dialog", { name: "Personal break" });
@@ -271,4 +271,73 @@ test("UI: diary no-show is visibly marked and records no guarantee charge", asyn
   const data = JSON.parse(localStorage.getItem("sculpted-staff-data-v1"));
   assert.equal(data.activity.at(-1).details.guarantee_charged, false);
   assert.equal(data.activity.at(-1).details.after, "no_show");
+});
+test("UI: admin has six tiles, accountant only Reporting, and clocks remain profile specific", async () => {
+  await login(/Aoife/);
+  assert.equal(document.querySelectorAll(".workspace-card").length, 6);
+  const out = screen.getByRole("button", { name: "Clock-Out" });
+  assert(out.disabled);
+  fireEvent.click(screen.getByRole("button", { name: "Clock-In" }));
+  assert(!out.disabled);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Switch profile / lock" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Jacqui/ }));
+  fireEvent.change(screen.getByLabelText("4-digit demo PIN"), {
+    target: { value: "1234" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open demo workspace" }));
+  assert(await screen.findByRole("heading", { name: "Welcome, Jacqui." }));
+  assert.equal(document.querySelectorAll(".workspace-card").length, 1);
+  assert.equal(screen.queryByRole("button", { name: "Clock-In" }), null);
+  assert.equal(
+    screen.queryByRole("button", { name: /Client Administration/ }),
+    null,
+  );
+});
+test("UI: voucher issuance, client assignment, transfer and print use the current name", async () => {
+  await login();
+  fireEvent.click(screen.getByRole("button", { name: /Voucher Management/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Create a New Voucher/ }));
+  fireEvent.change(screen.getByLabelText("Voucher amount (€)"), {
+    target: { value: "50" },
+  });
+  fireEvent.change(screen.getByLabelText("Expiry date"), {
+    target: { value: "2027-12-31" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Assign to an existing client" }),
+  );
+  fireEvent.change(screen.getByLabelText("Name"), {
+    target: { value: "Emma" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Search", exact: true }));
+  fireEvent.click(await screen.findByRole("button", { name: /Emma Demo/ }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Create voucher", exact: true }),
+  );
+  assert(await screen.findByRole("heading", { name: "Gift Voucher" }));
+  let prints = 0;
+  window.print = () => prints++;
+  fireEvent.click(screen.getByRole("button", { name: "Print voucher" }));
+  assert.equal(prints, 1);
+  fireEvent.click(
+    screen.getByRole("button", { name: "Reassign", exact: true }),
+  );
+  fireEvent.change(screen.getByLabelText("Name"), {
+    target: { value: "Grace" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Search", exact: true }));
+  fireEvent.click(await screen.findByRole("button", { name: /Grace Demo/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Transfer voucher" }));
+  await screen.findByRole("heading", { name: "Gift Voucher" });
+  const saved = JSON.parse(localStorage.getItem("sculpted-staff-data-v1"));
+  assert.equal(saved.vouchers[0].assigned_client_name, "Grace Demo");
+  assert.equal(saved.voucherTransactions.length, 2);
+  assert.equal(Number(saved.vouchers[0].original_amount), 50);
+  assert(
+    document
+      .querySelector(".voucher-print-area")
+      .textContent.includes("Grace Demo"),
+  );
 });

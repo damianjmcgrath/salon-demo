@@ -61,6 +61,24 @@ before(async () => {
   await pg.query("update public.staff_users set staff_id=2 where user_id=$1", [
     staffB,
   ]);
+  await pg.exec(
+    await readFile(
+      new URL("../supabase/006_vouchers_clock_profiles.sql", import.meta.url),
+      "utf8",
+    ),
+  );
+  await pg.query(
+    "update staff_users set role='admin',profile_key='aoife',active=true where user_id=$1",
+    [staffA],
+  );
+  await pg.query(
+    "update staff_users set profile_key='leah',active=true where user_id=$1",
+    [staffB],
+  );
+  await pg.query(
+    "update staff_users set profile_key='jacqui',active=true where user_id=$1",
+    [accountant],
+  );
   clientId = (
     await one("select id from clients where auth_user_id=$1", [clientUser])
   ).id;
@@ -359,7 +377,7 @@ test("database: owner-disabled personal breaks and pending temporary passwords a
   await as(clientUser);
   await assert.rejects(
     pg.query(
-      "select * from book_appointment($1,3,$2,600,'Client Test','0800000000',true,true,'client@example.com','saved_demo')",
+      "select * from book_appointment($1,2,$2,960,'Client Test','0800000000',true,true,'client@example.com','saved_demo')",
       [treatmentId, date],
     ),
     /temporary password/,
@@ -400,4 +418,63 @@ test("database: provisioning reservations serialize login creation and link hist
     await pg.query("select * from get_client_activity($1)", [c.id])
   ).rows.find((e) => e.action === "client_account_created");
   assert.equal(event.actor_name, "Aoife");
+});
+test("database: clock records are per staff and require an open shift", async () => {
+  await as(staffA);
+  await assert.rejects(pg.query("select clock_out()"), /Clock in/i);
+  const w = await one("select * from clock_in()");
+  assert.equal(w.staff_name, "Aoife");
+  await assert.rejects(pg.query("select clock_in()"), /already/i);
+  await as(staffB);
+  await assert.rejects(pg.query("select clock_out()"), /Clock in/i);
+  const l = await one("select * from clock_in()");
+  assert.equal(l.staff_name, "Leah");
+  await pg.query("select clock_out()");
+  await as(staffA);
+  const closed = await one("select * from clock_out()");
+  assert.equal(closed.id, w.id);
+  assert(closed.clocked_out_at >= closed.clocked_in_at);
+  await as(accountant);
+  assert.equal((await pg.query("select * from work_sessions")).rows.length, 0);
+  await assert.rejects(pg.query("select clock_in()"), /Staff access/);
+});
+test("database: vouchers retain value and audited transfers, rejecting stale and unauthorized changes", async () => {
+  await as(staffB);
+  const target = await one(
+    "select * from create_client('Voucher Recipient','voucher@example.com','0800000099')",
+  );
+  await assert.rejects(pg.query("select create_voucher(-1,'2080-01-01',null)"));
+  const v = await one("select * from create_voucher(50,'2080-01-01',$1)", [
+    clientId,
+  ]);
+  assert(v.code.startsWith("SC-"));
+  const changed = await one("select * from reassign_voucher($1,$2,$3)", [
+    v.id,
+    target.id,
+    v.revision,
+  ]);
+  assert.equal(changed.assigned_client_name, "Voucher Recipient");
+  assert.equal(Number(changed.original_amount), 50);
+  await assert.rejects(
+    pg.query("select reassign_voucher($1,$2,$3)", [v.id, clientId, v.revision]),
+    /changed/i,
+  );
+  const found = await one("select * from search_vouchers($1,null)", [
+    v.code.toLowerCase().replaceAll("-", ""),
+  ]);
+  assert.equal(Number(found.balance), 50);
+  assert.equal(
+    (
+      await pg.query("select * from voucher_transactions where voucher_id=$1", [
+        v.id,
+      ])
+    ).rows.length,
+    2,
+  );
+  await as(accountant);
+  assert.equal((await pg.query("select * from vouchers")).rows.length, 0);
+  await assert.rejects(
+    pg.query("select create_voucher(10,'2080-01-01',null)"),
+    /Staff access/,
+  );
 });

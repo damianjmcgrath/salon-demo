@@ -966,3 +966,84 @@ textarea {
 .metrics.staff-metrics {
   grid-template-columns: repeat(2, 1fr);
 }
+/* Compact portal tiles */
+.workspace-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.workspace-card,
+.staff-tile {
+  padding: 20px;
+  min-height: 150px;
+}
+.workspace-card h2 {
+  font-size: 23px;
+  margin: 0 0 10px;
+}
+.workspace-card p {
+  margin: 0 0 12px;
+}
+.clock-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 0 0 24px;
+}
+.clock-buttons {
+  display: flex;
+  gap: 10px;
+}
+.clock-button {
+  background: #b52b35;
+  color: white;
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 22px;
+  font-weight: 700;
+}
+.clock-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.voucher-print-area {
+  border: 1px solid #ded5c8;
+  padding: 32px;
+  max-width: 600px;
+  margin: 20px 0;
+  background: #fffaf4;
+}
+.voucher-code {
+  font-size: 25px;
+  letter-spacing: 2px;
+}
+@media (max-width: 900px) {
+  .workspace-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+  .clock-bar {
+    gap: 10px;
+  }
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .voucher-print-area,
+  .voucher-print-area * {
+    visibility: visible;
+  }
+  .voucher-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 90%;
+    max-width: none;
+    margin: 0;
+  }
+}

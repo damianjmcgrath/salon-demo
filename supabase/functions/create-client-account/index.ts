@@ -88,12 +88,12 @@ Deno.serve(async (req: Request) => {
   if (action !== "create") return respond({ error: "Unknown action." }, 400);
   const { data: membership } = await admin
     .from("staff_users")
-    .select("role")
+    .select("role,active")
     .eq("user_id", uid)
     .maybeSingle();
   if (
     !membership ||
-    !["staff", "admin", "it_support"].includes(membership.role)
+    (membership.active === false || !["staff", "admin"].includes(membership.role))
   )
     return respond({ error: "Staff access required." }, 403);
   if (typeof body.client_id !== "string")

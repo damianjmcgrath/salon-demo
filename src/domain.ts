@@ -58,4 +58,36 @@ export type LocalStaffData = {
   notes: Note[];
   activity: Activity[];
   breaks: DiaryBreak[];
+  vouchers?: Voucher[];
+  voucherTransactions?: VoucherTransaction[];
+  shifts?: WorkSession[];
+};
+export type Voucher = {
+  id: string;
+  code: string;
+  original_amount: number;
+  expires_on: string;
+  client_id: string | null;
+  assigned_client_name: string | null;
+  revision: number;
+  created_at: string;
+  balance?: number;
+};
+export type VoucherTransaction = {
+  id: string;
+  voucher_id: string;
+  kind: string;
+  amount: number;
+  from_client_id?: string | null;
+  to_client_id?: string | null;
+  actor_name: string;
+  created_at: string;
+};
+export type WorkSession = {
+  id: string;
+  user_id: string;
+  staff_id: number;
+  staff_name: string;
+  clocked_in_at: string;
+  clocked_out_at: string | null;
 };

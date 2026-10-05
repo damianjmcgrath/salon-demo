@@ -1,3 +1,4 @@
+import ClockControls from "./ClockControls";
 import { useEffect, useState, useRef } from "react";
 import { createClient, type Session } from "@supabase/supabase-js";
 import catalog from "./catalog.json";
@@ -9,7 +10,7 @@ import {
   canAccess,
   roleLabels,
 } from "./roles.js";
-type Role = "client" | "staff" | "admin" | "accountant" | "it_support";
+type Role = "client" | "staff" | "admin" | "accountant";
 import {
   availableSlots,
   startInterval,
@@ -49,8 +50,12 @@ const db =
     : null;
 const initialStaff: Staff[] = [
   { id: 1, name: "Aoife" },
-  { id: 2, name: "Demo Therapist A" },
-  { id: 3, name: "Demo Therapist B" },
+  { id: 2, name: "Leah" },
+];
+const profiles = [
+  { id: 1, name: "Aoife", role: "admin" as Role, staffId: 1 },
+  { id: 2, name: "Leah", role: "staff" as Role, staffId: 2 },
+  { id: 3, name: "Jacqui", role: "accountant" as Role, staffId: null },
 ];
 const money = (n: number) =>
   new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(
@@ -97,7 +102,7 @@ const sample: Appointment[] = [
   },
   {
     id: "sample-3",
-    staff_id: 3,
+    staff_id: 2,
     start_minute: 600,
     duration: 15,
     client_name: "Sophie Demo",
@@ -152,12 +157,8 @@ export default function App() {
   const identityVersion = useRef(0);
   const authUser = useRef<string | null>(null);
   const activeRole = live ? role : localRole;
-  const staffAccess = ["staff", "admin", "it_support"].includes(
-    activeRole || "",
-  );
-  const reportAccess = ["admin", "accountant", "it_support"].includes(
-    activeRole || "",
-  );
+  const staffAccess = ["staff", "admin"].includes(activeRole || "");
+  const reportAccess = ["admin", "accountant"].includes(activeRole || "");
   const [local, setLocal] = useState<Appointment[]>(() => {
       try {
         return (
@@ -581,7 +582,7 @@ export default function App() {
     }
     setRoleLoading(true);
     db.from("staff_users")
-      .select("role,staff_id")
+      .select("*")
       .eq("user_id", session.user.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -593,7 +594,11 @@ export default function App() {
           setRoleLoading(false);
           return;
         }
-        const next = data ? normalizeRole(data.role) : "client";
+        const next = data
+          ? data.active === false
+            ? null
+            : normalizeRole(data.role)
+          : "client";
         if (!next) {
           setError(
             "This account has an unrecognised role. Contact the salon owner.",
@@ -1088,16 +1093,6 @@ export default function App() {
               Reports
             </button>
           )}
-          {["admin", "it_support"].includes(activeRole || "") && (
-            <button
-              className={view === "workspace" ? "active" : ""}
-              onClick={() => setView("workspace")}
-            >
-              {activeRole === "it_support"
-                ? "Support workspace"
-                : "Administration"}
-            </button>
-          )}
           {activeRole && (
             <span className="role-badge">
               {roleLabels[activeRole]}
@@ -1126,6 +1121,18 @@ export default function App() {
         </div>
       )}
       <main>
+        {staffAccess && !roleLoading && (
+          <ClockControls
+            key={`${live}-${session?.user.id || activeRole}`}
+            live={live}
+            db={db}
+            data={staffData}
+            setData={setStaffData}
+            userId={session?.user.id || `local-${activeRole}`}
+            staffId={ownStaffId}
+            name={actorName}
+          />
+        )}
         {roleLoading && live ? (
           <section className="panel login" role="status">
             <h2>Opening your workspace…</h2>
@@ -1203,6 +1210,9 @@ export default function App() {
         ) : view === "staff-workspace" && staffAccess ? (
           <StaffWorkspace
             key={`${live}-${session?.user.id || localStaffId}-${initialStaffAppointment?.id || "home"}`}
+            role={activeRole || "staff"}
+            onReporting={() => setView("reporting-placeholder")}
+            onStaffAdmin={() => setView("staff-admin")}
             db={db}
             live={live}
             data={staffData}
@@ -1402,7 +1412,7 @@ export default function App() {
                       onChange={(e) => setStaffChoice(Number(e.target.value))}
                     >
                       <option value={0}>No preference — first available</option>
-                      {staff.map((s) => (
+                      {profiles.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name}
                         </option>
@@ -1664,7 +1674,7 @@ export default function App() {
               </p>
               {loginTile === null ? (
                 <div className="workspace-grid">
-                  {staff.map((s) => (
+                  {profiles.map((s) => (
                     <button
                       className="panel staff-tile"
                       key={s.id}
@@ -1690,7 +1700,7 @@ export default function App() {
                   >
                     ← Choose a different profile
                   </button>
-                  <h2>{staff.find((s) => s.id === loginTile)?.name}</h2>
+                  <h2>{profiles.find((s) => s.id === loginTile)?.name}</h2>
                   {live && db ? (
                     <AuthPanel db={db} staffMode onComplete={() => {}} />
                   ) : (
@@ -1705,9 +1715,12 @@ export default function App() {
                           setPin("");
                           return;
                         }
-                        setLocalStaffId(loginTile);
-                        setLocalRole("staff");
-                        setView("staff-workspace");
+                        const selected = profiles.find(
+                          (p) => p.id === loginTile,
+                        )!;
+                        setLocalStaffId(selected.staffId);
+                        setLocalRole(selected.role);
+                        setView(roleHome(selected.role));
                         setPin("");
                         setDate(today());
                       }}
@@ -1760,7 +1773,7 @@ export default function App() {
                     key={r}
                     className="secondary"
                     onClick={() => {
-                      if (r === "staff") setLocalStaffId(1);
+                      setLocalStaffId(r === "staff" ? 2 : r === "admin" ? 1 : null);
                       setLocalRole(r as Role);
                       setView(roleHome(r));
                     }}
@@ -1819,60 +1832,38 @@ export default function App() {
               is confirmed.
             </p>
           </section>
-        ) : view === "workspace" &&
-          ["admin", "it_support"].includes(activeRole || "") ? (
+        ) : view === "reporting-home" && activeRole === "accountant" ? (
           <section className="owner-workspace">
-            <p className="eyebrow">
-              {activeRole === "it_support"
-                ? "IT SUPPORT · SEPARATE AUDIT IDENTITY"
-                : "OWNER & ADMINISTRATION"}
-            </p>
-            <h1>
-              {activeRole === "it_support"
-                ? "Your support workspace."
-                : "Your salon, in one place."}
-            </h1>
-            <p>
-              {activeRole === "it_support"
-                ? "You have the owner’s operational access. Actions remain attributed to your individual account."
-                : "Manage the day and review the salon’s recorded takings."}
-            </p>
+            <h1>Welcome, Jacqui.</h1>
             <div className="workspace-grid">
               <button
                 className="panel workspace-card"
-                onClick={() => {
-                  setDate(today());
-                  setView("diary");
-                }}
+                onClick={() => setView("reporting-placeholder")}
               >
-                <h2>Salon diary</h2>
-                <p>Appointments, check-in and checkout.</p>
-                <span>Open diary →</span>
+                <h2>Reporting</h2>
+                <p>Reporting tools coming next.</p>
+                <span>Open →</span>
               </button>
-              <button
-                className="panel workspace-card"
-                onClick={() => setView("report")}
-              >
-                <h2>Reports</h2>
-                <p>Completed treatments and payment methods.</p>
-                <span>Open reports →</span>
-              </button>
-              <div className="panel">
-                <h2>Accounts & permissions</h2>
-                <p>Individual accounts with salon-assigned roles.</p>
-                <p className="small">
-                  Account provisioning is currently managed in Supabase. Client
-                  registrations cannot choose a staff role.
-                </p>
-              </div>
-              <div className="panel">
-                <h2>Coming next</h2>
-                <p>Staff, rotas, treatment administration and HR reporting.</p>
-                <p className="small">
-                  These administration tools are not yet available in this demo.
-                </p>
-              </div>
             </div>
+          </section>
+        ) : ["reporting-placeholder", "staff-admin"].includes(view) &&
+          canAccess(activeRole, view) ? (
+          <section className="panel">
+            <button
+              className="back"
+              onClick={() => setView(roleHome(activeRole))}
+            >
+              ← Home
+            </button>
+            <h1>
+              {view === "staff-admin" ? "Staff Administration" : "Reporting"}
+            </h1>
+            <p>We’ll build out this page in the next iteration.</p>
+            {view === "reporting-placeholder" && (
+              <button className="primary" onClick={() => setView("report")}>
+                View existing daily report
+              </button>
+            )}
           </section>
         ) : !canAccess(activeRole, view) ? (
           <section className="panel login">
@@ -1984,7 +1975,7 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-                    {staff.map((s) => (
+                    {profiles.map((s) => (
                       <div className="staff-column" key={s.id}>
                         <div className="staff-heading">
                           <span className="avatar">{s.name[0]}</span>

@@ -1,33 +1,28 @@
-export const roles = ["client", "staff", "admin", "accountant", "it_support"];
+export const roles = ["client", "staff", "admin", "accountant"];
 export function normalizeRole(value) {
   return roles.includes(value) ? value : null;
 }
 export function roleHome(role) {
-  return role === "staff"
+  return ["staff", "admin"].includes(role)
     ? "staff-workspace"
     : role === "accountant"
-      ? "report"
-      : ["admin", "it_support"].includes(role)
-        ? "workspace"
-        : "book";
+      ? "reporting-home"
+      : "book";
 }
 export function canAccess(role, view) {
   if (["login", "recovery"].includes(view)) return true;
-  if (view === "book")
-    return ["client", "staff", "admin", "it_support"].includes(role);
-  if (view === "staff-workspace")
-    return ["staff", "admin", "it_support"].includes(role);
+  if (view === "book") return ["client", "staff", "admin"].includes(role);
+  if (["staff-workspace", "diary"].includes(view))
+    return ["staff", "admin"].includes(role);
   if (view === "my-bookings") return role === "client";
-  if (view === "diary") return ["staff", "admin", "it_support"].includes(role);
-  if (view === "report")
-    return ["admin", "accountant", "it_support"].includes(role);
-  if (view === "workspace") return ["admin", "it_support"].includes(role);
+  if (["report", "reporting-home", "reporting-placeholder"].includes(view))
+    return ["admin", "accountant"].includes(role);
+  if (view === "staff-admin") return role === "admin";
   return false;
 }
 export const roleLabels = {
   client: "Client",
   staff: "Staff",
-  admin: "Owner / Admin",
+  admin: "Admin",
   accountant: "Accountant",
-  it_support: "IT Support",
 };

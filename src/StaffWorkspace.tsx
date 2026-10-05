@@ -1,3 +1,5 @@
+import ClientSearch from "./ClientSearch";
+import VoucherManagement from "./VoucherManagement";
 import {
   useEffect,
   useRef,
@@ -27,7 +29,13 @@ export default function StaffWorkspace({
   onBook,
   onCancel,
   initialAppointment,
+  role,
+  onReporting,
+  onStaffAdmin,
 }: {
+  role: string;
+  onReporting: () => void;
+  onStaffAdmin: () => void;
   db: SupabaseClient | null;
   live: boolean;
   data: LocalStaffData;
@@ -461,8 +469,29 @@ export default function StaffWorkspace({
               "Today’s schedule, check-in and personal breaks.",
               onDiary,
             )}
+            {tile(
+              "Voucher Management",
+              "Create, assign, transfer and print vouchers.",
+              () => setScreen("vouchers"),
+            )}
+            {role === "admin" &&
+              tile(
+                "Staff Administration",
+                "Staff administration tools coming next.",
+                onStaffAdmin,
+              )}
+            {role === "admin" &&
+              tile("Reporting", "Reporting tools coming next.", onReporting)}
           </div>
         </>
+      ) : screen === "vouchers" ? (
+        <VoucherManagement
+          db={db}
+          live={live}
+          data={data}
+          setData={setData}
+          actor={actor}
+        />
       ) : screen === "appointments" ? (
         <>
           <h1>Appointment Management</h1>
@@ -506,57 +535,15 @@ export default function StaffWorkspace({
           </div>
         </>
       ) : screen === "search" ? (
-        <section className="panel">
-          <h1>Client Search</h1>
-          <p>
-            Fill in any field. When you fill in several, results must match all
-            of them.
-          </p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void search();
-            }}
-            className="client-search"
-          >
-            {(["name", "email", "phone"] as const).map((k) => (
-              <label key={k}>
-                {k === "name"
-                  ? "Name"
-                  : k === "email"
-                    ? "Email Address"
-                    : "Phone Number"}
-                <input
-                  value={query[k]}
-                  onChange={(e) => setQuery({ ...query, [k]: e.target.value })}
-                />
-              </label>
-            ))}
-            <button className="primary" disabled={busy}>
-              {busy ? "Searching…" : "Search"}
-            </button>
-          </form>
-          <div className="search-results">
-            {results.map((c) => (
-              <button
-                className="history-card"
-                key={c.id}
-                onClick={() => select(c)}
-              >
-                <strong>{c.name}</strong>
-                <span>
-                  {c.email} · {c.phone}
-                </span>
-                <span>Select →</span>
-              </button>
-            ))}
-          </div>
-          {message && results.length === 0 && (
-            <p>
-              No matching clients. Try fewer details or create a new client.
-            </p>
-          )}
-        </section>
+        <ClientSearch
+          query={query}
+          onQuery={setQuery}
+          results={results}
+          busy={busy}
+          searched={!!message}
+          onSearch={() => void search()}
+          onSelect={select}
+        />
       ) : screen === "create" ? (
         <section className="panel">
           <h1>Create a New Client</h1>
