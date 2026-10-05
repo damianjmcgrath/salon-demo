@@ -1732,7 +1732,7 @@ export default function App() {
                         {p === "morning"
                           ? "Morning · 08:00–12:00"
                           : p === "afternoon"
-                            ? "Afternoon · 12:00–16:00"
+                            ? "Afternoon · 12:00–17:00"
                             : "Evening · 17:00–20:00"}
                       </button>
                     ))}

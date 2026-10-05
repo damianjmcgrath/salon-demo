@@ -52,7 +52,7 @@ export function periodSlots(slots, period) {
     period === "morning"
       ? s.start_minute >= 480 && s.start_minute < 720
       : period === "afternoon"
-        ? s.start_minute >= 720 && s.start_minute < 960
+        ? s.start_minute >= 720 && s.start_minute < 1020
         : period === "evening"
           ? s.start_minute >= 1020 && s.start_minute < 1200
           : false,

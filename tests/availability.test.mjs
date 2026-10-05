@@ -64,7 +64,7 @@ test("period is mandatory and midday belongs to afternoon", async () => {
   );
   assert.deepEqual(
     periodSlots(slots, "afternoon").map((s) => s.start_minute),
-    [720, 780, 959],
+    [720, 780, 959, 960, 1019],
   );
   assert.deepEqual(
     periodSlots(slots, "evening").map((s) => s.start_minute),
