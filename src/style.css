@@ -1346,3 +1346,44 @@ textarea {
     padding-top: 24px;
   }
 }
+
+.appointment-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: #faf8f3;
+  border: 1px solid #e2ddd3;
+  border-radius: 16px;
+}
+.appointment-section h2 {
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.appointment-section h2 span {
+  font:
+    14px "DM Sans",
+    sans-serif;
+  background: #eae3d7;
+  border-radius: 20px;
+  padding: 5px 10px;
+}
+.appointment-actions {
+  text-align: right;
+  flex-shrink: 0;
+}
+@media (max-width: 650px) {
+  .appointment-section {
+    padding: 18px;
+  }
+  .appointment-section h2 {
+    font-size: 24px;
+  }
+  .appointment-section .history-card {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .appointment-actions {
+    text-align: left;
+  }
+}

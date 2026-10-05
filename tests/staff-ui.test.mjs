@@ -769,3 +769,31 @@ test("UI: attended self bookings default to Previous Bookings and say Rebook Tre
     window.history.replaceState({}, "", "?portal=staff");
   }
 });
+
+test("UI: appointment sections separate history and rebook directly into time selection", async () => {
+  try {
+    cleanup();
+    const catalog = JSON.parse(await readFile(new URL("../src/catalog.json", import.meta.url), "utf8"));
+    const t = catalog.find(t => t.name === "Glamour Special");
+    const base = { user_id: "local-client", staff_id: 1, treatment_id: t.id, start_minute: 600, duration: t.duration, client_name: "Demo Client", treatment_name: t.name, price: t.price, booked_for_self: true };
+    localStorage.setItem("sculpted-demo-v1", JSON.stringify([
+      { ...base, id: "future", appointment_date: "2026-10-06", status: "booked" },
+      { ...base, id: "completed", appointment_date: "2026-10-05", status: "completed" },
+      { ...base, id: "cancelled", appointment_date: "2026-10-07", status: "cancelled" }
+    ]));
+    await clientScreen("appointment-history");
+    fireEvent.click(screen.getByRole("button", { name: "My appointments", exact: true }));
+    const upcoming = screen.getByRole("region", { name: /Upcoming Appointments/ });
+    const previous = screen.getByRole("region", { name: /Previous Appointments/ });
+    assert.equal(upcoming.querySelectorAll(".history-card").length, 1);
+    assert.equal(previous.querySelectorAll(".history-card").length, 2);
+    assert.equal(upcoming.querySelector("button"), null);
+    fireEvent.click(previous.querySelector("button"));
+    assert(screen.getByText(/Who would you like to see/i));
+    assert(screen.getAllByText("Glamour Special").length > 0);
+    assert.equal(screen.queryByRole("heading", { name: "All treatments", exact: true }), null);
+  } finally {
+    cleanup();
+    window.history.replaceState({}, "", "?portal=staff");
+  }
+});

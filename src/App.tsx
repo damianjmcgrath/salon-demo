@@ -2153,32 +2153,111 @@ export default function App() {
             >
               Book a treatment →
             </button>
-            <div className="booking-history">
-              {(live
-                ? myBookings
-                : local.filter((a) => a.user_id === "local-client")
-              ).map((a) => (
-                <article className="history-card" key={a.id}>
-                  <div>
-                    <h3>{a.treatment_name}</h3>
-                    <p>
-                      {a.appointment_date} · {time(a.start_minute)} ·{" "}
-                      {staff.find((s) => s.id === a.staff_id)?.name}
-                    </p>
-                  </div>
-                  <div>
-                    <strong>{money(a.price)}</strong>
-                    <p className="status">{a.status.replace("_", " ")}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
-            {!(
-              live
-                ? myBookings
-                : local.filter((a) => a.user_id === "local-client")
-            ).length && (
-              <p>No appointments yet. Your bookings will appear here.</p>
+            {(["Upcoming Appointments", "Previous Appointments"] as const).map(
+              (heading, index) => {
+                const now = new Date();
+                const parts = new Intl.DateTimeFormat("en-CA", {
+                  timeZone: "Europe/Dublin",
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hourCycle: "h23",
+                }).formatToParts(now);
+                const part = (key: string) =>
+                  parts.find((p) => p.type === key)?.value || "";
+                const currentDay = `${part("year")}-${part("month")}-${part("day")}`;
+                const currentMinute =
+                  Number(part("hour")) * 60 + Number(part("minute"));
+                const upcoming = (a: Appointment) =>
+                  ["booked", "checked_in"].includes(a.status) &&
+                  (a.appointment_date > currentDay ||
+                    (a.appointment_date === currentDay &&
+                      a.start_minute + a.duration > currentMinute));
+                const appointments = (
+                  live
+                    ? myBookings
+                    : local.filter((a) => a.user_id === "local-client")
+                )
+                  .filter((a) => upcoming(a) === (index === 0))
+                  .sort(
+                    (a, b) =>
+                      (a.appointment_date.localeCompare(b.appointment_date) ||
+                        a.start_minute - b.start_minute) *
+                      (index === 0 ? 1 : -1),
+                  );
+                return (
+                  <section
+                    className="appointment-section"
+                    key={heading}
+                    aria-labelledby={`appointments-${index}`}
+                  >
+                    <h2 id={`appointments-${index}`}>
+                      {heading} <span>{appointments.length}</span>
+                    </h2>
+                    {appointments.length === 0 && (
+                      <p>
+                        {index === 0
+                          ? "You have no upcoming appointments."
+                          : "You have no previous appointments yet."}
+                      </p>
+                    )}
+                    {appointments.map((a) => {
+                      const currentTreatment =
+                        treatments.find((t) => t.id === a.treatment_id) ||
+                        treatments.find((t) => t.name === a.treatment_name);
+                      return (
+                        <article className="history-card" key={a.id}>
+                          <div>
+                            <h3>{a.treatment_name}</h3>
+                            <p>
+                              {a.appointment_date} · {time(a.start_minute)} ·{" "}
+                              {staff.find((s) => s.id === a.staff_id)?.name}
+                            </p>
+                          </div>
+                          <div className="appointment-actions">
+                            <strong>{money(a.price)}</strong>
+                            <p className="status">
+                              {a.status.replaceAll("_", " ")}
+                            </p>
+                            {index === 1 && (
+                              <button
+                                className="primary"
+                                disabled={!currentTreatment}
+                                onClick={() => {
+                                  if (!currentTreatment) return;
+                                  startBooking();
+                                  chooseRecipient(a.booked_for_self !== false);
+                                  if (a.booked_for_self === false) {
+                                    setName(a.client_name);
+                                    setEmail(a.attendee_email || "");
+                                    setPhone(a.phone || "");
+                                  }
+                                  setStaffClient(null);
+                                  setAmending(null);
+                                  setConfirmation(null);
+                                  setTreatment(currentTreatment);
+                                  setStaffChoice(0);
+                                  setDate(today());
+                                  setStep(2);
+                                }}
+                              >
+                                Rebook appointment
+                              </button>
+                            )}
+                            {index === 1 && !currentTreatment && (
+                              <p className="small">
+                                This treatment is no longer available.
+                              </p>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </section>
+                );
+              },
             )}
             <p className="small">
               Cancellation and rescheduling will be added when the salon policy
