@@ -35,16 +35,21 @@ import {
 } from "./staffModel.js";
 const staffPortal =
   new URLSearchParams(window.location.search).get("portal") === "staff";
+const accountantPortal =
+  new URLSearchParams(window.location.search).get("portal") === "accountant";
+const privatePortal = staffPortal || accountantPortal;
 type Slot = { staff_id: number; start_minute: number };
 const env = (import.meta as unknown as { env: Record<string, string> }).env;
 const db =
   env.VITE_SUPABASE_URL && env.VITE_SUPABASE_PUBLISHABLE_KEY
     ? createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_PUBLISHABLE_KEY, {
         auth: {
-          storageKey: staffPortal
-            ? "sculpted-staff-session"
-            : "sculpted-client-session",
-          storage: staffPortal ? sessionStorage : localStorage,
+          storageKey: accountantPortal
+            ? "sculpted-accountant-session"
+            : staffPortal
+              ? "sculpted-staff-session"
+              : "sculpted-client-session",
+          storage: privatePortal ? sessionStorage : localStorage,
         },
       })
     : null;
@@ -1044,7 +1049,7 @@ export default function App() {
           SCULPTED<span>BY AOIFE CLAIRE</span>
         </a>
         <nav>
-          {activeRole === "client" && !staffPortal && (
+          {activeRole === "client" && !privatePortal && (
             <button
               className={view === "book" ? "active" : ""}
               onClick={() =>
@@ -1196,12 +1201,20 @@ export default function App() {
               </button>
             </form>
           </section>
-        ) : staffPortal && activeRole === "client" ? (
+        ) : privatePortal &&
+          activeRole &&
+          (accountantPortal
+            ? activeRole !== "accountant"
+            : !["admin", "staff"].includes(activeRole)) ? (
           <section className="panel login">
-            <h1>Staff account required.</h1>
+            <h1>
+              {accountantPortal
+                ? "Accountant account required."
+                : "Staff account required."}
+            </h1>
             <p>
-              This is the salon’s staff entry point. Your current account is a
-              client account.
+              This account cannot access this portal. Switch to the appropriate
+              account or portal.
             </p>
             <button className="primary" onClick={() => void signOut()}>
               Switch account
@@ -1412,7 +1425,7 @@ export default function App() {
                       onChange={(e) => setStaffChoice(Number(e.target.value))}
                     >
                       <option value={0}>No preference — first available</option>
-                      {profiles.map((s) => (
+                      {staff.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name}
                         </option>
@@ -1662,10 +1675,17 @@ export default function App() {
             ) : null}
           </>
         ) : view === "login" || view === "recovery" ? (
-          staffPortal && view !== "recovery" ? (
+          privatePortal && view !== "recovery" ? (
             <section className="staff-login">
-              <p className="eyebrow">SCULPTED · STAFF PORTAL</p>
-              <h1>Who’s working today?</h1>
+              <p className="eyebrow">
+                SCULPTED ·{" "}
+                {accountantPortal ? "ACCOUNTANT PORTAL" : "STAFF PORTAL"}
+              </p>
+              <h1>
+                {accountantPortal
+                  ? "Accountant sign-in"
+                  : "Who’s working today?"}
+              </h1>
               <p>
                 Choose your profile.{" "}
                 {live
@@ -1674,20 +1694,26 @@ export default function App() {
               </p>
               {loginTile === null ? (
                 <div className="workspace-grid">
-                  {profiles.map((s) => (
-                    <button
-                      className="panel staff-tile"
-                      key={s.id}
-                      onClick={() => {
-                        setLoginTile(s.id);
-                        setPin("");
-                        setError("");
-                      }}
-                    >
-                      <span className="avatar">{s.name[0]}</span>
-                      <h2>{s.name}</h2>
-                    </button>
-                  ))}
+                  {profiles
+                    .filter((p) =>
+                      accountantPortal
+                        ? p.role === "accountant"
+                        : p.role !== "accountant",
+                    )
+                    .map((s) => (
+                      <button
+                        className="panel staff-tile"
+                        key={s.id}
+                        onClick={() => {
+                          setLoginTile(s.id);
+                          setPin("");
+                          setError("");
+                        }}
+                      >
+                        <span className="avatar">{s.name[0]}</span>
+                        <h2>{s.name}</h2>
+                      </button>
+                    ))}
                 </div>
               ) : (
                 <>
@@ -1773,7 +1799,9 @@ export default function App() {
                     key={r}
                     className="secondary"
                     onClick={() => {
-                      setLocalStaffId(r === "staff" ? 2 : r === "admin" ? 1 : null);
+                      setLocalStaffId(
+                        r === "staff" ? 2 : r === "admin" ? 1 : null,
+                      );
                       setLocalRole(r as Role);
                       setView(roleHome(r));
                     }}
@@ -1975,7 +2003,7 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-                    {profiles.map((s) => (
+                    {staff.map((s) => (
                       <div className="staff-column" key={s.id}>
                         <div className="staff-heading">
                           <span className="avatar">{s.name[0]}</span>
@@ -2087,7 +2115,8 @@ export default function App() {
         )}
       </main>
       <footer>
-        SCULPTED BY AOIFE CLAIRE <a href="?portal=staff">Staff portal</a>{" "}
+        SCULPTED BY AOIFE CLAIRE <a href="?portal=staff">Staff portal</a> ·{" "}
+        <a href="?portal=accountant">Accountant portal</a>{" "}
         <span>Salon system · Proof of concept</span>
       </footer>
       {breakDraft && staffAccess && (

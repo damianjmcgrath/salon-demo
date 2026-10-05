@@ -282,18 +282,7 @@ test("UI: admin has six tiles, accountant only Reporting, and clocks remain prof
   fireEvent.click(
     screen.getByRole("button", { name: "Switch profile / lock" }),
   );
-  fireEvent.click(screen.getByRole("button", { name: /Jacqui/ }));
-  fireEvent.change(screen.getByLabelText("4-digit demo PIN"), {
-    target: { value: "1234" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Open demo workspace" }));
-  assert(await screen.findByRole("heading", { name: "Welcome, Jacqui." }));
-  assert.equal(document.querySelectorAll(".workspace-card").length, 1);
-  assert.equal(screen.queryByRole("button", { name: "Clock-In" }), null);
-  assert.equal(
-    screen.queryByRole("button", { name: /Client Administration/ }),
-    null,
-  );
+  assert.equal(screen.queryByRole("button", { name: /Jacqui/ }), null);
 });
 test("UI: voucher issuance, client assignment, transfer and print use the current name", async () => {
   await login();
@@ -340,4 +329,20 @@ test("UI: voucher issuance, client assignment, transfer and print use the curren
       .querySelector(".voucher-print-area")
       .textContent.includes("Grace Demo"),
   );
+});
+
+test("UI: diary and booking therapist choices contain only salon staff", async () => {
+  await login();
+  fireEvent.click(screen.getByRole("button", { name: /Staff Diary Today/ }));
+  assert.equal(document.querySelectorAll(".staff-column").length, 2);
+  assert.equal(screen.queryByText("Jacqui"), null);
+});
+test('UI: separate Accountant Portal has only Jacqui and Reporting',async()=>{
+ cleanup();window.history.replaceState({},'', '?portal=accountant');
+ try {
+ const AccountantApp=(await import(pathToFileURL(buildDir+'/app.mjs').href+'?accountant')).default;
+ render(React.createElement(AccountantApp));assert(screen.getByRole('heading',{name:'Accountant sign-in'}));assert.equal(document.querySelectorAll('.staff-tile').length,1);
+ fireEvent.click(screen.getByRole('button',{name:/Jacqui/}));fireEvent.change(screen.getByLabelText('4-digit demo PIN'),{target:{value:'1234'}});fireEvent.click(screen.getByRole('button',{name:'Open demo workspace'}));
+ assert(await screen.findByRole('heading',{name:'Welcome, Jacqui.'}));assert.equal(document.querySelectorAll('.workspace-card').length,1);assert.equal(screen.queryByRole('button',{name:'Clock-In'}),null);assert.equal(screen.queryByRole('button',{name:'Staff Diary'}),null);
+ } finally {cleanup();window.history.replaceState({},'','?portal=staff');}
 });
