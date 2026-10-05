@@ -916,3 +916,20 @@ test("database: admin manages another staff break; staff and accountant are deni
   assert.equal(changed.start_minute, 1095);
   await assert.rejects(pg.query("select admin_save_staff_break(1,$1,1095,1110,'break',$2,$3)",[dt,b.id,changed.revision]), /selected staff/);
 });
+
+test("database: testing reset requires all three clients and preserves staff and audits", async () => {
+  await pg.exec("reset role");
+  const sql = await readFile(new URL("../supabase/reset_testing_data.sql", import.meta.url), "utf8");
+  await assert.rejects(pg.exec(sql), /Create the three/);
+  await pg.exec("rollback");
+  for (const [i,email,name] of [[1,'jacqui@example.com','Jacqui Durnin'],[2,'aoife@example.com','Aoife Durnin'],[3,'damian@example.com','Damian McGrath']]) {
+    const id=`90000000-0000-0000-0000-00000000000${i}`;
+    await pg.query("insert into auth.users(id,email) values($1,$2)",[id,email]);
+    await pg.query("insert into clients(auth_user_id,name,email,phone) values($1,$2,$3,'123')",[id,name,email]);
+  }
+  const before=(await one("select count(*)::integer as n from staff_users")).n;
+  await pg.exec(sql);
+  assert.equal((await one("select count(*)::integer as n from appointments")).n,0);
+  assert.equal((await one("select count(*)::integer as n from staff_users")).n,before);
+  assert.equal((await one("select count(*)::integer as n from audit_events where action='testing_data_reset'")).n,1);
+});

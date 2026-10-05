@@ -58,6 +58,7 @@ const db =
         },
       })
     : null;
+const offlineTest = env.MODE === "test";
 const initialStaff: Staff[] = [
   { id: 1, name: "Aoife" },
   { id: 2, name: "Leah" },
@@ -124,7 +125,7 @@ const sample: Appointment[] = [
   },
 ];
 export default function App() {
-  const [live, setLive] = useState(!!db),
+  const [live] = useState(!offlineTest),
     [view, setView] = useState("login"),
     [treatments, setTreatments] = useState<Treatment[]>(catalog),
     [staff, setStaff] = useState<Staff[]>(initialStaff),
@@ -1182,47 +1183,6 @@ export default function App() {
   const diaryHeight = (diaryEnd - diaryStart) * 1.6;
   return (
     <>
-      <div className="demo-banner">
-        PROOF OF CONCEPT · Fictional clients · No real payments{" "}
-        <button
-          onClick={() => {
-            requestVersion.current++;
-            identityVersion.current++;
-            setLive(!live);
-            setRole(null);
-            setLocalRole(null);
-            setOwnClient(null);
-            setLocalStaffId(null);
-            setStaffId(null);
-            setLoginTile(null);
-            setPin("");
-            setStaffClient(null);
-            setAmending(null);
-            setInitialStaffAppointment(null);
-            setRemoteBreaks([]);
-            setBreakDraft(null);
-            setRemote([]);
-            setMyBookings([]);
-            setName("");
-            setPhone("");
-            setTreatment(null);
-            setConfirmation(null);
-            setStep(0);
-            setPeriod("");
-            setCard("");
-            setConsent(false);
-            setStep(0);
-            setSelected(null);
-            setView("login");
-            setError("");
-            setTreatments(catalog);
-            setStaff(initialStaff);
-          }}
-          disabled={!db}
-        >
-          {live ? "Supabase connected mode" : "Local demo mode"} ↗
-        </button>
-      </div>
       <header className={activeRole === "client" ? "client-header" : ""}>
         <a
           className="brand"
@@ -1323,7 +1283,7 @@ export default function App() {
             }}
           >
             {staffAccess
-              ? "Switch profile / lock"
+              ? "Log Out"
               : activeRole || session
                 ? activeRole === "client"
                   ? "Sign Out"
@@ -1970,12 +1930,7 @@ export default function App() {
                   ? "Accountant sign-in"
                   : "Select a Staff Profile"}
               </h1>
-              <p>
-                Choose your profile.{" "}
-                {live
-                  ? "Use your individual account to sign in."
-                  : "Local PIN preview only · initial demo PIN 1234"}
-              </p>
+              <p>Choose your profile and enter your PIN.</p>
               {loginTile === null ? (
                 <div className="workspace-grid">
                   {profiles
@@ -2035,6 +1990,7 @@ export default function App() {
                           <label>
                             4-digit login PIN
                             <input
+                              autoFocus
                               type="password"
                               inputMode="numeric"
                               pattern="[0-9]{4}"
@@ -2052,16 +2008,11 @@ export default function App() {
                           </button>
                         </form>
                       )}
-                      <details className="panel">
-                        <summary>
-                          {accountantPortal
-                            ? "Sign in to Reporting"
-                            : "Use email and password"}
-                        </summary>
+                      {accountantPortal && (
                         <AuthPanel db={db} staffMode onComplete={() => {}} />
-                      </details>
+                      )}
                     </>
-                  ) : (
+                  ) : offlineTest ? (
                     <form
                       className="panel login"
                       onSubmit={(e) => {
@@ -2109,6 +2060,10 @@ export default function App() {
                         a trusted-device PIN service is a later step.
                       </p>
                     </form>
+                  ) : (
+                    <p role="alert">
+                      The login service is unavailable. Please try again later.
+                    </p>
                   )}
                 </>
               )}
@@ -2121,7 +2076,7 @@ export default function App() {
                 if (view === "recovery") setView("login");
               }}
             />
-          ) : (
+          ) : offlineTest ? (
             <section className="panel login">
               <p className="eyebrow">LOCAL DEMO · ROLE PREVIEW</p>
               <h1>Explore each workspace.</h1>
@@ -2148,6 +2103,13 @@ export default function App() {
               </div>
               <p className="small">
                 For real sign-in, switch to Supabase connected mode above.
+              </p>
+            </section>
+          ) : (
+            <section className="panel login">
+              <h1>Welcome back.</h1>
+              <p role="alert">
+                The login service is unavailable. Please try again later.
               </p>
             </section>
           )
@@ -2563,11 +2525,6 @@ export default function App() {
           </>
         )}
       </main>
-      <footer>
-        SCULPTED BY AOIFE CLAIRE <a href="?portal=staff">Staff portal</a> ·{" "}
-        <a href="?portal=accountant">Accountant portal</a>{" "}
-        <span>Salon system · Proof of concept</span>
-      </footer>
       {breakDraft && staffAccess && (
         <div className="modal-backdrop">
           <section

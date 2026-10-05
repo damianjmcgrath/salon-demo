@@ -1417,3 +1417,27 @@ textarea {
 .clock-history-table td {
   min-width: 110px;
 }
+
+.client-auth-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 540px) minmax(0, 380px);
+  gap: 28px;
+  justify-content: center;
+  align-items: start;
+}
+.client-auth-layout .login {
+  width: 100%;
+  margin: 0;
+  max-width: none;
+}
+.create-account-panel {
+  padding: 32px;
+}
+.create-account-panel .primary {
+  width: 100%;
+}
+@media (max-width: 750px) {
+  .client-auth-layout {
+    grid-template-columns: minmax(0, 540px);
+  }
+}

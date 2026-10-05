@@ -39,9 +39,10 @@ before(async () => {
     format: "esm",
     packages: "external",
     outfile: out,
-    define: { "import.meta.env": "{}" },
+    define: { "import.meta.env": '{"MODE":"test"}' },
     jsx: "automatic",
   });
+  await build({ entryPoints: [new URL("../src/AuthPanel.tsx", import.meta.url).pathname], bundle: true, platform: "node", format: "esm", packages: "external", outfile: buildDir + "/auth.mjs", jsx: "automatic" });
   App = (await import(pathToFileURL(out))).default;
 });
 beforeEach(() => {
@@ -87,7 +88,7 @@ test("UI: staff tiles, PIN preview, home tiles and profile locking work", async 
   ])
     assert(screen.getByRole("heading", { name, exact: true }));
   fireEvent.click(
-    screen.getByRole("button", { name: "Switch profile / lock" }),
+    screen.getByRole("button", { name: "Log Out" }),
   );
   await screen.findByRole("heading", { name: "Select a Staff Profile" });
   assert.equal(
@@ -280,7 +281,7 @@ test("UI: admin has six tiles, accountant only Reporting, and clocks remain prof
   fireEvent.click(screen.getByRole("button", { name: "Clock-In" }));
   assert(!out.disabled);
   fireEvent.click(
-    screen.getByRole("button", { name: "Switch profile / lock" }),
+    screen.getByRole("button", { name: "Log Out" }),
   );
   assert.equal(screen.queryByRole("button", { name: /Jacqui/ }), null);
 });
@@ -503,7 +504,7 @@ test("UI: newly created staff appears in login and uses its saved demo PIN", asy
   fireEvent.click(screen.getByRole("button", { name: "Save staff details" }));
   await screen.findByRole("heading", { name: "Nora", exact: true });
   fireEvent.click(
-    screen.getByRole("button", { name: "Switch profile / lock" }),
+    screen.getByRole("button", { name: "Log Out" }),
   );
   fireEvent.click(await screen.findByRole("button", { name: /Nora/ }));
   fireEvent.change(screen.getByLabelText("4-digit demo PIN"), {
@@ -820,4 +821,18 @@ test("UI: admin can select Leah for a break and edit Leah's lunch", async () => 
   assert.equal(lunch.disabled, false);
   fireEvent.click(lunch);
   assert.equal(screen.getByLabelText("Staff member").value, "2");
+});
+
+test("UI: client login has a separate create account button and removes obsolete copy", async () => {
+  cleanup();
+  const AuthPanel = (await import(pathToFileURL(buildDir + "/auth.mjs"))).default;
+  render(React.createElement(AuthPanel, { db: {}, onComplete() {} }));
+  assert(screen.getByRole("heading", { name: "Welcome back." }));
+  assert.equal(screen.queryByText(/One secure sign-in/), null);
+  assert.equal(screen.queryByText(/SCULPTED · YOUR WORKSPACE/), null);
+  fireEvent.click(screen.getByRole("button", { name: "New Client? Create an Account" }));
+  assert(screen.getByLabelText("Full name"));
+  assert(screen.getByLabelText("Mobile number"));
+  fireEvent.click(screen.getByRole("button", { name: "Already registered? Sign in" }));
+  assert(screen.getByRole("heading", { name: "Welcome back." }));
 });
