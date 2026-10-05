@@ -1220,10 +1220,10 @@ export default function StaffAdministration({
                           <th scope="row">
                             {dateLabel(w.clocked_in_at, false)}
                           </th>
-                          <td>{dateLabel(w.clocked_in_at)}</td>
+                          <td>{localClockInput(w.clocked_in_at).slice(11, 16)}</td>
                           <td>
                             {w.clocked_out_at
-                              ? dateLabel(w.clocked_out_at)
+                              ? localClockInput(w.clocked_out_at).slice(11, 16)
                               : "Still clocked in"}
                           </td>
                           <td>

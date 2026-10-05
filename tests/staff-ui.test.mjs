@@ -561,8 +561,10 @@ test("UI: admin can add and amend missed clock entries with a retained audit tra
   assert.equal(d.shifts.length, 1);
   assert.equal(d.shifts[0].clocked_in_at, "2026-10-04T08:15:00.000Z");
   const table = screen.getByRole("table");
-  assert(table.textContent.includes("Sunday 04/10/26 09:15"));
-  assert(table.textContent.includes("Sunday 04/10/26 17:00"));
+  const row = table.querySelector("tbody tr");
+  assert.equal(row.cells[0].textContent, "Sunday 04/10/26");
+  assert.equal(row.cells[1].textContent, "09:15");
+  assert.equal(row.cells[2].textContent, "17:00");
   assert(table.textContent.includes("07:45"));
   assert(table.textContent.includes("00:00"));
   assert(screen.getByRole("columnheader", { name: "Scheduled Hours" }));
