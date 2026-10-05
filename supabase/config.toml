@@ -1,0 +1,3 @@
+[functions.create-client-account]
+# The function validates the caller using Supabase Auth getUser and checks their role itself.
+verify_jwt = false

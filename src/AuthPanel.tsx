@@ -3,10 +3,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export default function AuthPanel({
   db,
   recovery = false,
+  staffMode = false,
   onComplete,
 }: {
   db: SupabaseClient;
   recovery?: boolean;
+  staffMode?: boolean;
   onComplete: () => void;
 }) {
   const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
@@ -179,18 +181,20 @@ export default function AuthPanel({
       </form>
       {!recovery && (
         <div className="auth-links">
-          <button
-            onClick={() => {
-              setMode(mode === "signup" ? "signin" : "signup");
-              setError("");
-              setMessage("");
-              setPassword("");
-            }}
-          >
-            {mode === "signup"
-              ? "Already registered? Sign in"
-              : "New client? Create an account"}
-          </button>
+          {!staffMode && (
+            <button
+              onClick={() => {
+                setMode(mode === "signup" ? "signin" : "signup");
+                setError("");
+                setMessage("");
+                setPassword("");
+              }}
+            >
+              {mode === "signup"
+                ? "Already registered? Sign in"
+                : "New client? Create an account"}
+            </button>
+          )}
           <button
             onClick={() => {
               setMode(mode === "reset" ? "signin" : "reset");

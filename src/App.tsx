@@ -17,28 +17,35 @@ import {
   attendedTreatmentIds,
 } from "./availability.js";
 type Treatment = (typeof catalog)[number];
-type Staff = { id: number; name: string };
-type Appointment = {
-  user_id?: string;
-  treatment_id?: number;
-  booked_for_self?: boolean;
-  attendee_email?: string;
-  id: string;
-  staff_id: number;
-  start_minute: number;
-  duration: number;
-  client_name: string;
-  treatment_name: string;
-  price: number;
-  status: string;
-  payment_method?: string;
-  appointment_date: string;
-};
+import StaffWorkspace from "./StaffWorkspace";
+import type {
+  Staff,
+  Appointment,
+  Client,
+  LocalStaffData,
+  DiaryBreak,
+} from "./domain";
+import {
+  demoClients,
+  effectiveBreaks,
+  shiftDate,
+  validateBreak,
+  validTransition,
+} from "./staffModel.js";
+const staffPortal =
+  new URLSearchParams(window.location.search).get("portal") === "staff";
 type Slot = { staff_id: number; start_minute: number };
 const env = (import.meta as unknown as { env: Record<string, string> }).env;
 const db =
   env.VITE_SUPABASE_URL && env.VITE_SUPABASE_PUBLISHABLE_KEY
-    ? createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_PUBLISHABLE_KEY)
+    ? createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_PUBLISHABLE_KEY, {
+        auth: {
+          storageKey: staffPortal
+            ? "sculpted-staff-session"
+            : "sculpted-client-session",
+          storage: staffPortal ? sessionStorage : localStorage,
+        },
+      })
     : null;
 const initialStaff: Staff[] = [
   { id: 1, name: "Aoife" },
@@ -111,7 +118,38 @@ export default function App() {
   const [localRole, setLocalRole] = useState<Role | null>(null),
     [roleLoading, setRoleLoading] = useState(!!db),
     [myBookings, setMyBookings] = useState<Appointment[]>([]);
+  const [staffId, setStaffId] = useState<number | null>(null),
+    [localStaffId, setLocalStaffId] = useState<number | null>(null);
+  const [loginTile, setLoginTile] = useState<number | null>(null),
+    [pin, setPin] = useState("");
+  const [ownClient, setOwnClient] = useState<Client | null>(null);
+  const [staffClient, setStaffClient] = useState<Client | null>(null),
+    [amending, setAmending] = useState<Appointment | null>(null),
+    [changeReason, setChangeReason] = useState("");
+  const [initialStaffAppointment, setInitialStaffAppointment] =
+    useState<Appointment | null>(null);
+  const [staffData, setStaffData] = useState<LocalStaffData>(() => {
+    try {
+      return (
+        JSON.parse(
+          localStorage.getItem("sculpted-staff-data-v1") || "null",
+        ) || { clients: demoClients, notes: [], activity: [], breaks: [] }
+      );
+    } catch {
+      return { clients: demoClients, notes: [], activity: [], breaks: [] };
+    }
+  });
+  const [remoteBreaks, setRemoteBreaks] = useState<DiaryBreak[]>([]),
+    [breakDraft, setBreakDraft] = useState<DiaryBreak | null>(null),
+    [breakStart, setBreakStart] = useState("13:00"),
+    [breakEnd, setBreakEnd] = useState("13:30");
+  const [statusAction, setStatusAction] = useState(""),
+    [statusReason, setStatusReason] = useState("");
+  const [requiresPasswordChange, setRequiresPasswordChange] = useState(false),
+    [newPassword, setNewPassword] = useState(""),
+    [confirmPassword, setConfirmPassword] = useState("");
   const requestVersion = useRef(0);
+  const identityVersion = useRef(0);
   const authUser = useRef<string | null>(null);
   const activeRole = live ? role : localRole;
   const staffAccess = ["staff", "admin", "it_support"].includes(
@@ -125,7 +163,16 @@ export default function App() {
         return (
           JSON.parse(localStorage.getItem("sculpted-demo-v1") || "null") ||
           sample
-        );
+        ).map((a: Appointment) => ({
+          ...a,
+          client_id:
+            a.client_id ||
+            demoClients.find((c) => c.name === a.client_name)?.id,
+          treatment_id:
+            a.treatment_id ||
+            catalog.find((t) => t.name === a.treatment_name)?.id,
+          revision: a.revision || 0,
+        }));
       } catch {
         return sample;
       }
@@ -160,20 +207,24 @@ export default function App() {
     setSearch("");
     setName(
       self
-        ? session?.user.user_metadata.full_name || (live ? "" : "Demo Client")
+        ? ownClient?.name ||
+            session?.user.user_metadata.full_name ||
+            (live ? "" : "Demo Client")
         : "",
     );
     setPhone(
       self
-        ? session?.user.user_metadata.mobile || (live ? "" : "0800000000")
+        ? ownClient?.phone ||
+            session?.user.user_metadata.mobile ||
+            (live ? "" : "0800000000")
         : "",
     );
     setEmail(self ? session?.user.email || "client@example.com" : "");
     setStep(
       self &&
         (!live ||
-          (session?.user.user_metadata.full_name &&
-            session?.user.user_metadata.mobile))
+          ((ownClient?.name || session?.user.user_metadata.full_name) &&
+            (ownClient?.phone || session?.user.user_metadata.mobile)))
         ? 1
         : -1,
     );
@@ -189,11 +240,210 @@ export default function App() {
     : activeRole === "accountant"
       ? local.filter((a) => a.status === "completed")
       : local;
-  const breaks = staff.map((s) => ({
-    staff_id: s.id,
-    start_minute: 780,
-    duration: 30,
-  }));
+  const breaks: DiaryBreak[] = live
+    ? remoteBreaks
+    : effectiveBreaks(
+        staff.map((s) => s.id),
+        date,
+        staffData.breaks,
+      );
+  const ownStaffId = live ? staffId : localStaffId;
+  const actorName =
+    staff.find((s) => s.id === ownStaffId)?.name ||
+    roleLabels[activeRole || "client"];
+  useEffect(() => {
+    localStorage.setItem("sculpted-staff-data-v1", JSON.stringify(staffData));
+  }, [staffData]);
+  function auditLocal(
+    action: string,
+    appointment: Appointment | null,
+    details: Record<string, any>,
+  ) {
+    setStaffData((d) => ({
+      ...d,
+      activity: [
+        ...d.activity,
+        {
+          id: crypto.randomUUID(),
+          client_id: appointment?.client_id,
+          appointment_id: appointment?.id,
+          action,
+          details,
+          actor_name: actorName,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    }));
+  }
+  function staffHome() {
+    setInitialStaffAppointment(null);
+    setStaffClient(null);
+    setAmending(null);
+    setSelected(null);
+    setView("staff-workspace");
+  }
+  function beginStaffBooking(client: Client, appointment?: Appointment) {
+    setStaffClient(client);
+    setAmending(appointment || null);
+    setName(client.name);
+    setEmail(client.email);
+    setPhone(client.phone);
+    setForSelf(true);
+    setCategory("All treatments");
+    setSearch("");
+    setTreatment(null);
+    setSlot(null);
+    setPeriod("");
+    setConsent(false);
+    setCard("");
+    setChangeReason("");
+    setStep(1);
+    setView("book");
+    setSelected(null);
+    if (appointment) {
+      setStaffChoice(appointment.staff_id);
+      setDate(appointment.appointment_date);
+    }
+  }
+  async function amendFromDiary(a: Appointment) {
+    setBusy(true);
+    setError("");
+    try {
+      const r =
+        live && db
+          ? await db
+              .from("clients")
+              .select("*")
+              .eq("id", a.client_id)
+              .maybeSingle()
+          : null;
+      if (r?.error) throw r.error;
+      const c = live
+        ? r?.data
+        : staffData.clients.find((c) => c.id === a.client_id);
+      if (!c)
+        throw Error(
+          "This appointment needs a linked client record. Apply migration 005 first.",
+        );
+      beginStaffBooking(c, a);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function cancelFromWorkspace(a: Appointment, reason: string) {
+    if (live && db) {
+      const r = await db.rpc("update_appointment_status", {
+        p_id: a.id,
+        p_status: "cancelled",
+        p_revision: a.revision || 0,
+        p_reason: reason,
+      });
+      if (r.error) throw r.error;
+      await refresh();
+    } else {
+      setLocal((as) =>
+        as.map((x) =>
+          x.id === a.id
+            ? { ...x, status: "cancelled", revision: (x.revision || 0) + 1 }
+            : x,
+        ),
+      );
+      auditLocal("status_changed", a, {
+        before: a.status,
+        after: "cancelled",
+        reason,
+        guarantee_charged: false,
+      });
+    }
+  }
+  function openBreak(b?: DiaryBreak) {
+    const draft = b || {
+      id: null,
+      staff_id: ownStaffId || 0,
+      kind: "break",
+      start_minute: 840,
+      duration: 15,
+      revision: 0,
+    };
+    if (draft.staff_id !== ownStaffId) {
+      setError("You can only change your own breaks.");
+      return;
+    }
+    setBreakDraft(draft);
+    setBreakStart(time(draft.start_minute));
+    setBreakEnd(time(draft.start_minute + draft.duration));
+    setError("");
+  }
+  async function saveBreak() {
+    if (!breakDraft) return;
+    const operation = identityVersion.current;
+    setBusy(true);
+    setError("");
+    const minute = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m;
+    };
+    const start = minute(breakStart),
+      end = minute(breakEnd);
+    try {
+      if (live && db) {
+        const r = await db.rpc("save_staff_break", {
+          p_date: date,
+          p_start: start,
+          p_end: end,
+          p_kind: breakDraft.kind,
+          p_id: breakDraft.id,
+          p_revision: breakDraft.revision,
+        });
+        if (r.error) throw r.error;
+        if (operation !== identityVersion.current) return;
+        await refresh();
+      } else {
+        validateBreak({
+          staffId: ownStaffId,
+          date,
+          start,
+          end,
+          breakId: breakDraft.id,
+          kind: breakDraft.kind,
+          appointments: local,
+          breaks,
+        });
+        const b = {
+          ...breakDraft,
+          id: breakDraft.id || crypto.randomUUID(),
+          appointment_date: date,
+          start_minute: start,
+          duration: end - start,
+          revision: breakDraft.revision + 1,
+        };
+        setStaffData((d) => ({
+          ...d,
+          breaks: [
+            ...d.breaks.filter(
+              (x) =>
+                x.id !== b.id &&
+                !(
+                  b.kind === "lunch" &&
+                  x.kind === "lunch" &&
+                  x.staff_id === b.staff_id &&
+                  x.appointment_date === date
+                ),
+            ),
+            b,
+          ],
+        }));
+        auditLocal("staff_break_saved", null, { before: breakDraft, after: b });
+      }
+      setBreakDraft(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     localStorage.setItem("sculpted-demo-v1", JSON.stringify(local));
   }, [local]);
@@ -202,6 +452,9 @@ export default function App() {
     db.auth.getSession().then(({ data, error }) => {
       authUser.current = data.session?.user.id || null;
       setSession(data.session);
+      setRequiresPasswordChange(
+        !!data.session?.user.app_metadata.requires_password_change,
+      );
       if (error) {
         setError(error.message);
         setRoleLoading(false);
@@ -210,10 +463,21 @@ export default function App() {
     const { data } = db.auth.onAuthStateChange((event, nextSession) => {
       requestVersion.current++;
       if (authUser.current !== (nextSession?.user.id || null)) {
+        identityVersion.current++;
         setRole(null);
         setRemote([]);
         setMyBookings([]);
         setSelected(null);
+        setOwnClient(null);
+        setStaffId(null);
+        setStaffClient(null);
+        setAmending(null);
+        setInitialStaffAppointment(null);
+        setBreakDraft(null);
+        setStatusAction("");
+        setRemoteBreaks([]);
+        setLoginTile(null);
+        setPin("");
         setConfirmation(null);
         setStep(0);
         setPeriod("");
@@ -223,12 +487,25 @@ export default function App() {
         authUser.current = nextSession?.user.id || null;
       }
       setSession(nextSession);
+      setRequiresPasswordChange(
+        !!nextSession?.user.app_metadata.requires_password_change,
+      );
       if (event === "PASSWORD_RECOVERY") setView("recovery");
       if (event === "SIGNED_OUT") {
         setRole(null);
         setRemote([]);
         setMyBookings([]);
         setSelected(null);
+        setOwnClient(null);
+        setStaffId(null);
+        setStaffClient(null);
+        setAmending(null);
+        setInitialStaffAppointment(null);
+        setBreakDraft(null);
+        setStatusAction("");
+        setRemoteBreaks([]);
+        setLoginTile(null);
+        setPin("");
         setConfirmation(null);
         setStep(0);
         setPeriod("");
@@ -283,6 +560,13 @@ export default function App() {
       if (result.error) setError(result.error.message);
       else setRemote(result.data as Appointment[]);
     }
+    if (staffAccess) {
+      const b = await db.rpc("get_diary_breaks", { p_date: date });
+      if (version === requestVersion.current) {
+        if (b.error) setError(b.error.message);
+        else setRemoteBreaks(b.data || []);
+      }
+    }
   }
   useEffect(() => {
     let cancelled = false;
@@ -297,7 +581,7 @@ export default function App() {
     }
     setRoleLoading(true);
     db.from("staff_users")
-      .select("role")
+      .select("role,staff_id")
       .eq("user_id", session.user.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -317,6 +601,7 @@ export default function App() {
           setRoleLoading(false);
           return;
         }
+        setStaffId(data?.staff_id || null);
         setRole(next as Role);
         setRoleLoading(false);
         setName(session.user.user_metadata.full_name || "");
@@ -354,7 +639,45 @@ export default function App() {
       cancelled = true;
     };
   }, [live, session?.user.id, activeRole, view, confirmation]);
+  useEffect(() => {
+    if (!live || !db || !session || activeRole !== "client") {
+      setOwnClient(null);
+      return;
+    }
+    let cancelled = false;
+    db.from("clients")
+      .select("id,name,email,phone,auth_user_id,revision")
+      .eq("auth_user_id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setOwnClient(data);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [live, session?.user.id, activeRole, view]);
+  useEffect(() => {
+    if (!staffAccess) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(
+        () => {
+          void signOut();
+        },
+        5 * 60 * 1000,
+      );
+    };
+    const events = ["pointerdown", "keydown", "touchstart"];
+    events.forEach((e) => window.addEventListener(e, reset));
+    reset();
+    return () => {
+      clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [staffAccess, session?.user.id, localStaffId]);
   async function signOut() {
+    identityVersion.current++;
     setBusy(true);
     setError("");
     if (db && session) {
@@ -369,6 +692,22 @@ export default function App() {
     setSession(null);
     setRole(null);
     setLocalRole(null);
+    setOwnClient(null);
+    setLocalStaffId(null);
+    setStaffId(null);
+    setLoginTile(null);
+    setPin("");
+    setStaffClient(null);
+    setAmending(null);
+    setInitialStaffAppointment(null);
+    setRemoteBreaks([]);
+    setBreakDraft(null);
+    setStatusAction("");
+    setStatusReason("");
+    setRequiresPasswordChange(false);
+    setNewPassword("");
+    setConfirmPassword("");
+    setEmail("");
     setRemote([]);
     setMyBookings([]);
     setSelected(null);
@@ -392,10 +731,11 @@ export default function App() {
     setSlots([]);
     if (!treatment) return;
     if (live && db && session) {
-      db.rpc("get_available_slots", {
+      db.rpc(amending ? "get_booking_slots" : "get_available_slots", {
         p_treatment_id: treatment.id,
         p_date: date,
         p_staff_id: staffChoice || null,
+        ...(amending ? { p_exclude_id: amending.id } : {}),
       }).then(({ data, error }) => {
         if (cancelled) return;
         if (error) setError(error.message);
@@ -415,7 +755,9 @@ export default function App() {
           : availableSlots(
               treatment.duration,
               staffChoice ? [staffChoice] : staff.map((s) => s.id),
-              local.filter((a) => a.appointment_date === date),
+              local.filter(
+                (a) => a.appointment_date === date && a.id !== amending?.id,
+              ),
               breaks,
             ),
       );
@@ -423,29 +765,67 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [treatment, date, staffChoice, live, local, staff]);
+  }, [
+    treatment,
+    date,
+    staffChoice,
+    live,
+    local,
+    staff,
+    staffData.breaks,
+    remoteBreaks,
+    amending?.id,
+  ]);
   async function book() {
-    if (!treatment || !slot || !consent || !card || activeRole !== "client")
+    if (
+      !treatment ||
+      !slot ||
+      (!amending && (!consent || !card)) ||
+      (!staffClient && activeRole !== "client") ||
+      requiresPasswordChange
+    )
       return;
+    const operation = identityVersion.current;
     setBusy(true);
     setError("");
     try {
       let a: Appointment;
       if (live) {
         if (!session || !db) throw Error("Please sign in first.");
-        const r = await db.rpc("book_appointment", {
-          p_treatment_id: treatment.id,
-          p_staff_id: slot.staff_id,
-          p_date: date,
-          p_start: slot.start_minute,
-          p_client_name: name.trim(),
-          p_phone: phone.trim(),
-          p_demo_consent: consent,
-          p_booked_for_self: forSelf,
-          p_attendee_email: email.trim(),
-          p_demo_card: card,
-        });
+        const r = amending
+          ? await db.rpc("amend_appointment", {
+              p_id: amending.id,
+              p_treatment_id: treatment.id,
+              p_staff_id: slot.staff_id,
+              p_date: date,
+              p_start: slot.start_minute,
+              p_revision: amending.revision || 0,
+              p_reason: changeReason,
+            })
+          : staffClient
+            ? await db.rpc("staff_book_appointment", {
+                p_client_id: staffClient.id,
+                p_treatment_id: treatment.id,
+                p_staff_id: slot.staff_id,
+                p_date: date,
+                p_start: slot.start_minute,
+                p_demo_card: card,
+                p_demo_consent: consent,
+              })
+            : await db.rpc("book_appointment", {
+                p_treatment_id: treatment.id,
+                p_staff_id: slot.staff_id,
+                p_date: date,
+                p_start: slot.start_minute,
+                p_client_name: name.trim(),
+                p_phone: phone.trim(),
+                p_demo_consent: consent,
+                p_booked_for_self: forSelf,
+                p_attendee_email: email.trim(),
+                p_demo_card: card,
+              });
         if (r.error) throw r.error;
+        if (operation !== identityVersion.current) return;
         a = r.data;
         await refresh();
       } else {
@@ -453,29 +833,74 @@ export default function App() {
         const valid = availableSlots(
           treatment.duration,
           [slot.staff_id],
-          local.filter((a) => a.appointment_date === date),
+          local.filter(
+            (a) => a.appointment_date === date && a.id !== amending?.id,
+          ),
           breaks,
         ).some((s) => s.start_minute === slot.start_minute);
         if (!valid)
           throw Error("That time is no longer available. Choose another.");
+        let recipient = staffClient;
+        if (!recipient) {
+          recipient = forSelf
+            ? staffData.clients.find(
+                (c) => c.auth_user_id === "local-client",
+              ) || null
+            : null;
+          if (!recipient) {
+            recipient = {
+              id: crypto.randomUUID(),
+              auth_user_id: forSelf ? "local-client" : null,
+              name: name.trim(),
+              email: email.trim(),
+              phone: phone.trim(),
+              revision: 0,
+            };
+            const c = recipient;
+            setStaffData((d) => ({ ...d, clients: [...d.clients, c] }));
+          }
+        }
         a = {
-          id: crypto.randomUUID(),
-          user_id: "local-client",
+          id: amending?.id || crypto.randomUUID(),
+          client_id: recipient?.id || amending?.client_id,
+          revision: amending ? (amending.revision || 0) + 1 : 0,
+          user_id: amending
+            ? amending.user_id
+            : staffClient
+              ? staffClient.auth_user_id
+              : "local-client",
           treatment_id: treatment.id,
-          booked_for_self: forSelf,
-          attendee_email: email.trim(),
+          booked_for_self: amending?.booked_for_self ?? forSelf,
+          attendee_email: amending?.attendee_email || email.trim(),
+          phone: amending?.phone || phone.trim(),
           staff_id: slot.staff_id,
           start_minute: slot.start_minute,
           duration: treatment.duration,
-          client_name: name.trim(),
+          client_name: amending?.client_name || name.trim(),
           treatment_name: treatment.name,
           price: treatment.price,
-          status: "booked",
+          status: amending?.status || "booked",
           appointment_date: date,
         };
-        setLocal((prev) => [...prev, a]);
+        if (amending && !changeReason.trim())
+          throw Error("Add a reason for the amendment.");
+        if (amending && treatment.id === amending.treatment_id)
+          a.price = amending.price;
+        setLocal((prev) =>
+          amending ? prev.map((x) => (x.id === a.id ? a : x)) : [...prev, a],
+        );
+        auditLocal(
+          amending
+            ? "appointment_amended"
+            : staffClient
+              ? "staff_booking_created"
+              : "booking_created",
+          a,
+          { before: amending, after: a, reason: changeReason },
+        );
         if (!localRole) setLocalRole("client");
       }
+      if (operation !== identityVersion.current) return;
       setConfirmation(a);
       setStep(4);
     } catch (e) {
@@ -486,6 +911,7 @@ export default function App() {
   }
   async function changeStatus(status: string, payment = "") {
     if (!selected) return;
+    const operation = identityVersion.current;
     setBusy(true);
     setError("");
     try {
@@ -494,18 +920,40 @@ export default function App() {
           p_id: selected.id,
           p_status: status,
           p_payment: payment || null,
+          p_revision: selected.revision || 0,
+          p_reason: statusReason || null,
         });
         if (r.error) throw r.error;
+        if (operation !== identityVersion.current) return;
         await refresh();
-      } else
+      } else {
+        if (!validTransition(selected.status, status))
+          throw Error("Invalid appointment transition.");
+        if (["cancelled", "no_show"].includes(status) && !statusReason.trim())
+          throw Error("Add a reason.");
+        auditLocal("status_changed", selected, {
+          before: selected.status,
+          after: status,
+          payment_method: payment,
+          reason: statusReason,
+          guarantee_charged: false,
+        });
         setLocal((prev) =>
           prev.map((a) =>
             a.id === selected.id
-              ? { ...a, status, payment_method: payment }
+              ? {
+                  ...a,
+                  status,
+                  payment_method: payment,
+                  revision: (a.revision || 0) + 1,
+                }
               : a,
           ),
         );
+      }
       setSelected(null);
+      setStatusAction("");
+      setStatusReason("");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -517,7 +965,7 @@ export default function App() {
   );
   const visibleSlots: Slot[] = periodSlots(slots, period);
   const categories = [
-    ...(forSelf ? ["Previous Bookings"] : []),
+    ...(forSelf && !staffClient ? ["Previous Bookings"] : []),
     "All treatments",
     ...new Set(treatments.map((t) => t.category)),
   ];
@@ -540,9 +988,20 @@ export default function App() {
         <button
           onClick={() => {
             requestVersion.current++;
+            identityVersion.current++;
             setLive(!live);
             setRole(null);
             setLocalRole(null);
+            setOwnClient(null);
+            setLocalStaffId(null);
+            setStaffId(null);
+            setLoginTile(null);
+            setPin("");
+            setStaffClient(null);
+            setAmending(null);
+            setInitialStaffAppointment(null);
+            setRemoteBreaks([]);
+            setBreakDraft(null);
             setRemote([]);
             setMyBookings([]);
             setName("");
@@ -570,17 +1029,25 @@ export default function App() {
           className="brand"
           href="#"
           onClick={() =>
-            activeRole === "client" ? startBooking() : setView("login")
+            staffAccess
+              ? staffHome()
+              : activeRole === "client"
+                ? startBooking()
+                : setView("login")
           }
         >
           SCULPTED<span>BY AOIFE CLAIRE</span>
         </a>
         <nav>
-          {canAccess(activeRole, "book") && (
+          {activeRole === "client" && !staffPortal && (
             <button
               className={view === "book" ? "active" : ""}
               onClick={() =>
-                activeRole === "client" ? startBooking() : setView("login")
+                staffAccess
+                  ? staffHome()
+                  : activeRole === "client"
+                    ? startBooking()
+                    : setView("login")
               }
             >
               Book a treatment
@@ -596,10 +1063,21 @@ export default function App() {
           )}
           {staffAccess && (
             <button
-              className={view === "diary" ? "active" : ""}
-              onClick={() => setView("diary")}
+              className={view === "staff-workspace" ? "active" : ""}
+              onClick={staffHome}
             >
-              Salon diary
+              Staff home
+            </button>
+          )}
+          {staffAccess && (
+            <button
+              className={view === "diary" ? "active" : ""}
+              onClick={() => {
+                setDate(today());
+                setView("diary");
+              }}
+            >
+              Staff Diary
             </button>
           )}
           {reportAccess && (
@@ -633,11 +1111,15 @@ export default function App() {
               else setView("login");
             }}
           >
-            {activeRole || session ? "Sign out / lock" : "Sign in"}
+            {staffAccess
+              ? "Switch profile / lock"
+              : activeRole || session
+                ? "Sign out / lock"
+                : "Sign in"}
           </button>
         </nav>
       </header>
-      {error && (
+      {error && !selected && !breakDraft && (
         <div role="alert" className="error">
           {error}
           <button onClick={() => setError("")}>Dismiss</button>
@@ -648,7 +1130,95 @@ export default function App() {
           <section className="panel login" role="status">
             <h2>Opening your workspace…</h2>
           </section>
-        ) : view === "book" && activeRole === "client" ? (
+        ) : requiresPasswordChange && session && db ? (
+          <section className="panel login">
+            <h1>Choose your own password.</h1>
+            <p>
+              Your login was created with a temporary password. Change it before
+              continuing.
+            </p>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setBusy(true);
+                setError("");
+                try {
+                  if (newPassword !== confirmPassword)
+                    throw Error("Passwords do not match.");
+                  const r = await db.functions.invoke("create-client-account", {
+                    body: { action: "set_password", password: newPassword },
+                  });
+                  if (r.error || r.data?.error)
+                    throw Error(r.data?.error || r.error?.message);
+                  const refreshed = await db.auth.refreshSession();
+                  if (refreshed.error) throw refreshed.error;
+                  setRequiresPasswordChange(false);
+                  setNewPassword("");
+                  setConfirmPassword("");
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <label>
+                New password
+                <input
+                  required
+                  type="password"
+                  minLength={12}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </label>
+              <label>
+                Confirm password
+                <input
+                  required
+                  type="password"
+                  minLength={12}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </label>
+              <button className="primary" disabled={busy}>
+                Save new password
+              </button>
+            </form>
+          </section>
+        ) : staffPortal && activeRole === "client" ? (
+          <section className="panel login">
+            <h1>Staff account required.</h1>
+            <p>
+              This is the salon’s staff entry point. Your current account is a
+              client account.
+            </p>
+            <button className="primary" onClick={() => void signOut()}>
+              Switch account
+            </button>
+          </section>
+        ) : view === "staff-workspace" && staffAccess ? (
+          <StaffWorkspace
+            key={`${live}-${session?.user.id || localStaffId}-${initialStaffAppointment?.id || "home"}`}
+            db={db}
+            live={live}
+            data={staffData}
+            setData={setStaffData}
+            appointments={local}
+            actor={actorName}
+            initialAppointment={initialStaffAppointment}
+            onDiary={() => {
+              setDate(today());
+              setView("diary");
+            }}
+            onBook={beginStaffBooking}
+            onCancel={cancelFromWorkspace}
+          />
+        ) : view === "book" &&
+          (activeRole === "client" || (staffAccess && staffClient)) ? (
           <>
             <div className="intro">
               <p className="eyebrow">A LITTLE TIME FOR YOU</p>
@@ -686,7 +1256,10 @@ export default function App() {
               </section>
             ) : step === -1 ? (
               <section className="panel login">
-                <button className="back" onClick={() => setStep(0)}>
+                <button
+                  className="back"
+                  onClick={() => (staffClient ? staffHome() : setStep(0))}
+                >
                   ← Who are you booking for?
                 </button>
                 <h2>{forSelf ? "Your contact details" : "Their details"}</h2>
@@ -735,10 +1308,18 @@ export default function App() {
             ) : step === 1 ? (
               <div className="catalog-layout">
                 <aside>
-                  <button className="back" onClick={() => setStep(0)}>
+                  <button
+                    className="back"
+                    onClick={() => (staffClient ? staffHome() : setStep(0))}
+                  >
                     ← Booking recipient
                   </button>
                   <h3>Explore treatments</h3>
+                  {staffClient && (
+                    <p className="small">
+                      {amending ? "Amending" : "Booking for"} {staffClient.name}
+                    </p>
+                  )}
                   {categories.map((c) => (
                     <button
                       key={c}
@@ -911,80 +1492,102 @@ export default function App() {
                   <button className="back" onClick={() => setStep(2)}>
                     ← Change time
                   </button>
-                  <h2>Booking Guarantee</h2>
-                  <p>
-                    Guarantee your booking using your saved card details, or
-                    supply new card details.
-                  </p>
+                  <h2>
+                    {amending
+                      ? "Review appointment changes"
+                      : "Booking Guarantee"}
+                  </h2>
+                  {!amending && (
+                    <p>
+                      Guarantee your booking using your saved card details, or
+                      supply new card details.
+                    </p>
+                  )}
                   <p>
                     Booking for <strong>{name}</strong> · {email}
                   </p>
-                  <div className="guarantee">
-                    <p>
-                      No payment will be taken now. Payment will be taken in the
-                      salon after your treatment. The booking guarantee will
-                      only charge €10 for no-shows or late cancellations.
-                    </p>
-                    <p className="small">
-                      Demo only: cards and charges are simulated. Do not enter
-                      real card details. The late-cancellation deadline is still
-                      to be confirmed by the salon.
-                    </p>
+                  {amending ? (
                     <label>
-                      Card for your guarantee
-                      <select
-                        value={card}
-                        onChange={(e) => {
-                          setCard(e.target.value);
-                          setConsent(false);
-                        }}
-                      >
-                        <option value="">Select a card option</option>
-                        <option value="saved_demo">
-                          Saved demo card · Visa •••• 4242
-                        </option>
-                        <option value="new_demo">Supply a new demo card</option>
-                      </select>
-                    </label>
-                    {card === "new_demo" && (
-                      <div>
-                        <label>
-                          Demo cardholder name
-                          <input value={name} readOnly />
-                        </label>
-                        <label>
-                          Example card number
-                          <input value="4242 4242 4242 4242" readOnly />
-                        </label>
-                        <p className="small">
-                          Example expiry 12/30 · example security code 123. A
-                          real card form will use the payment provider’s secure
-                          fields.
-                        </p>
-                      </div>
-                    )}
-                    <label className="check">
-                      <input
-                        type="checkbox"
-                        checked={consent}
-                        onChange={(e) => setConsent(e.target.checked)}
+                      Reason for amendment
+                      <textarea
+                        required
+                        value={changeReason}
+                        onChange={(e) => setChangeReason(e.target.value)}
                       />
-                      I agree to the €10 no-show / late-cancellation guarantee
-                      and understand this booking is simulated.
                     </label>
-                  </div>
+                  ) : (
+                    <div className="guarantee">
+                      <p>
+                        No payment will be taken now. Payment will be taken in
+                        the salon after your treatment. The booking guarantee
+                        will only charge €10 for no-shows or late cancellations.
+                      </p>
+                      <p className="small">
+                        Demo only: cards and charges are simulated. Do not enter
+                        real card details. The late-cancellation deadline is
+                        still to be confirmed by the salon.
+                      </p>
+                      <label>
+                        Card for your guarantee
+                        <select
+                          value={card}
+                          onChange={(e) => {
+                            setCard(e.target.value);
+                            setConsent(false);
+                          }}
+                        >
+                          <option value="">Select a card option</option>
+                          <option value="saved_demo">
+                            Saved demo card · Visa •••• 4242
+                          </option>
+                          <option value="new_demo">
+                            Supply a new demo card
+                          </option>
+                        </select>
+                      </label>
+                      {card === "new_demo" && (
+                        <div>
+                          <label>
+                            Demo cardholder name
+                            <input value={name} readOnly />
+                          </label>
+                          <label>
+                            Example card number
+                            <input value="4242 4242 4242 4242" readOnly />
+                          </label>
+                          <p className="small">
+                            Example expiry 12/30 · example security code 123. A
+                            real card form will use the payment provider’s
+                            secure fields.
+                          </p>
+                        </div>
+                      )}
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked={consent}
+                          onChange={(e) => setConsent(e.target.checked)}
+                        />
+                        I agree to the €10 no-show / late-cancellation guarantee
+                        and understand this booking is simulated.
+                      </label>
+                    </div>
+                  )}
                   <button
                     className="primary"
                     disabled={
                       busy ||
-                      !consent ||
-                      !card ||
+                      (amending ? !changeReason.trim() : !consent || !card) ||
                       !name.trim() ||
                       (live && (!session || !phone.trim()))
                     }
                     onClick={book}
                   >
-                    {busy ? "Saving…" : "Confirm appointment"}
+                    {busy
+                      ? "Saving…"
+                      : amending
+                        ? "Save appointment changes"
+                        : "Confirm appointment"}
                   </button>
                 </section>
                 <Summary
@@ -997,7 +1600,9 @@ export default function App() {
             ) : confirmation ? (
               <section className="success panel">
                 <div className="success-icon">✓</div>
-                <p className="eyebrow">YOU’RE ALL BOOKED</p>
+                <p className="eyebrow">
+                  {amending ? "APPOINTMENT UPDATED" : "YOU’RE ALL BOOKED"}
+                </p>
                 <h2>See you soon, {confirmation.client_name.split(" ")[0]}.</h2>
                 <p>{confirmation.treatment_name}</p>
                 <h3>
@@ -1014,15 +1619,23 @@ export default function App() {
                 <button
                   className="primary"
                   onClick={() => {
+                    if (staffClient) {
+                      staffHome();
+                      return;
+                    }
                     setView("my-bookings");
                     setStep(1);
                   }}
                 >
-                  View my appointments
+                  {staffClient ? "Back to staff home" : "View my appointments"}
                 </button>
                 <button
                   className="back"
                   onClick={() => {
+                    if (staffClient) {
+                      staffHome();
+                      return;
+                    }
                     setStep(1);
                     setConfirmation(null);
                     setStep(0);
@@ -1031,13 +1644,101 @@ export default function App() {
                     setConsent(false);
                   }}
                 >
-                  Book another treatment
+                  {staffClient
+                    ? "Book another appointment"
+                    : "Book another treatment"}
                 </button>
               </section>
             ) : null}
           </>
         ) : view === "login" || view === "recovery" ? (
-          live && db ? (
+          staffPortal && view !== "recovery" ? (
+            <section className="staff-login">
+              <p className="eyebrow">SCULPTED · STAFF PORTAL</p>
+              <h1>Who’s working today?</h1>
+              <p>
+                Choose your profile.{" "}
+                {live
+                  ? "Use your individual account to sign in."
+                  : "Local PIN preview only · demo PIN 1234"}
+              </p>
+              {loginTile === null ? (
+                <div className="workspace-grid">
+                  {staff.map((s) => (
+                    <button
+                      className="panel staff-tile"
+                      key={s.id}
+                      onClick={() => {
+                        setLoginTile(s.id);
+                        setPin("");
+                        setError("");
+                      }}
+                    >
+                      <span className="avatar">{s.name[0]}</span>
+                      <h2>{s.name}</h2>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <button
+                    className="back"
+                    onClick={() => {
+                      setLoginTile(null);
+                      setPin("");
+                    }}
+                  >
+                    ← Choose a different profile
+                  </button>
+                  <h2>{staff.find((s) => s.id === loginTile)?.name}</h2>
+                  {live && db ? (
+                    <AuthPanel db={db} staffMode onComplete={() => {}} />
+                  ) : (
+                    <form
+                      className="panel login"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (pin !== "1234") {
+                          setError(
+                            "Use demo PIN 1234. This is not a real staff login.",
+                          );
+                          setPin("");
+                          return;
+                        }
+                        setLocalStaffId(loginTile);
+                        setLocalRole("staff");
+                        setView("staff-workspace");
+                        setPin("");
+                        setDate(today());
+                      }}
+                    >
+                      <label>
+                        4-digit demo PIN
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          pattern="[0-9]{4}"
+                          maxLength={4}
+                          value={pin}
+                          onChange={(e) =>
+                            setPin(e.target.value.replace(/\D/g, ""))
+                          }
+                          required
+                          autoComplete="off"
+                        />
+                      </label>
+                      <button className="primary">Open demo workspace</button>
+                      <p className="small">
+                        This previews fast profile switching using fictional
+                        local data. Connected mode requires full authentication;
+                        a trusted-device PIN service is a later step.
+                      </p>
+                    </form>
+                  )}
+                </>
+              )}
+            </section>
+          ) : live && db ? (
             <AuthPanel
               db={db}
               recovery={view === "recovery"}
@@ -1059,6 +1760,7 @@ export default function App() {
                     key={r}
                     className="secondary"
                     onClick={() => {
+                      if (r === "staff") setLocalStaffId(1);
                       setLocalRole(r as Role);
                       setView(roleHome(r));
                     }}
@@ -1138,7 +1840,10 @@ export default function App() {
             <div className="workspace-grid">
               <button
                 className="panel workspace-card"
-                onClick={() => setView("diary")}
+                onClick={() => {
+                  setDate(today());
+                  setView("diary");
+                }}
               >
                 <h2>Salon diary</h2>
                 <p>Appointments, check-in and checkout.</p>
@@ -1189,7 +1894,19 @@ export default function App() {
                 </h1>
               </div>
               <div className="date-controls">
-                <button onClick={() => setDate(demoDate())}>Today</button>
+                <button
+                  aria-label="Previous day"
+                  onClick={() => setDate(shiftDate(date, -1))}
+                >
+                  ←
+                </button>
+                <button onClick={() => setDate(today())}>Today</button>
+                <button
+                  aria-label="Next day"
+                  onClick={() => setDate(shiftDate(date, 1))}
+                >
+                  →
+                </button>
                 <input
                   aria-label="Diary date"
                   type="date"
@@ -1201,12 +1918,14 @@ export default function App() {
                 )}
               </div>
             </div>
-            <div className="metrics">
+            <div className={`metrics ${reportAccess ? "" : "staff-metrics"}`}>
               <div>
                 <span>
                   {activeRole === "accountant"
                     ? "Completed records"
-                    : "Appointments"}
+                    : date === today()
+                      ? "Appointments scheduled for today"
+                      : "Appointments scheduled for this day"}
                 </span>
                 <strong>
                   {
@@ -1216,15 +1935,21 @@ export default function App() {
                 </strong>
               </div>
               <div>
-                <span>Completed</span>
+                <span>
+                  {date === today()
+                    ? "Appointments completed so far today"
+                    : "Appointments completed on this day"}
+                </span>
                 <strong>{completed.length}</strong>
               </div>
-              <div>
-                <span>Recorded takings</span>
-                <strong>
-                  {money(completed.reduce((s, a) => s + a.price, 0))}
-                </strong>
-              </div>
+              {reportAccess && (
+                <div>
+                  <span>Recorded takings</span>
+                  <strong>
+                    {money(completed.reduce((s, a) => s + a.price, 0))}
+                  </strong>
+                </div>
+              )}
             </div>
             {view === "diary" ? (
               <>
@@ -1232,10 +1957,23 @@ export default function App() {
                   <span>● Booked</span>
                   <span>● Checked in</span>
                   <span>● Completed</span>
+                  <span className="no-show-label">● No-show</span>
                   <span>▧ Break / unavailable</span>
+                  <button
+                    className="secondary"
+                    disabled={!ownStaffId}
+                    onClick={() => openBreak()}
+                  >
+                    Add break time
+                  </button>
                 </div>
                 <div className="diary-scroll">
-                  <div className="diary">
+                  <div
+                    className="diary"
+                    style={{
+                      gridTemplateColumns: `85px repeat(${staff.length}, minmax(200px, 1fr))`,
+                    }}
+                  >
                     <div className="time-column">
                       <div className="staff-heading">Dublin time</div>
                       <div className="time-body">
@@ -1263,12 +2001,26 @@ export default function App() {
                           {new Date(date + "T12:00:00").getDay() === 0 ? (
                             <div className="closed">Salon closed</div>
                           ) : (
-                            <div
-                              className="break-block"
-                              style={{ top: 384, height: 48 }}
-                            >
-                              Lunch · 13:00–13:30
-                            </div>
+                            <>
+                              {breaks
+                                .filter((b) => b.staff_id === s.id)
+                                .map((b, i) => (
+                                  <button
+                                    key={b.id || `lunch-${s.id}-${i}`}
+                                    className="break-block"
+                                    disabled={b.staff_id !== ownStaffId}
+                                    onClick={() => openBreak(b)}
+                                    style={{
+                                      top: (b.start_minute - 540) * 1.6,
+                                      height: Math.max(b.duration * 1.6, 24),
+                                    }}
+                                  >
+                                    {b.kind === "lunch" ? "Lunch" : "Break"} ·{" "}
+                                    {time(b.start_minute)}–
+                                    {time(b.start_minute + b.duration)}
+                                  </button>
+                                ))}
+                            </>
                           )}
                           {dayAppointments
                             .filter(
@@ -1283,7 +2035,11 @@ export default function App() {
                                   top: (a.start_minute - 540) * 1.6,
                                   height: Math.max(a.duration * 1.6, 24),
                                 }}
-                                onClick={() => setSelected(a)}
+                                onClick={() => {
+                                  setSelected(a);
+                                  setStatusAction("");
+                                  setStatusReason("");
+                                }}
                               >
                                 <strong>
                                   {time(a.start_minute)} · {a.client_name}
@@ -1340,8 +2096,70 @@ export default function App() {
         )}
       </main>
       <footer>
-        SCULPTED BY AOIFE CLAIRE <span>Salon system · Proof of concept</span>
+        SCULPTED BY AOIFE CLAIRE <a href="?portal=staff">Staff portal</a>{" "}
+        <span>Salon system · Proof of concept</span>
       </footer>
+      {breakDraft && staffAccess && (
+        <div className="modal-backdrop">
+          <section
+            className="modal panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Personal break"
+          >
+            <button
+              className="close"
+              aria-label="Close break"
+              onClick={() => setBreakDraft(null)}
+            >
+              ×
+            </button>
+            {error && (
+              <p role="alert" className="auth-error">
+                {error}
+              </p>
+            )}
+            <h2>
+              {breakDraft.kind === "lunch" ? "Your lunch" : "Add break time"}
+            </h2>
+            <p>
+              {actorName} · {date}
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void saveBreak();
+              }}
+            >
+              <label>
+                Start
+                <input
+                  required
+                  type="time"
+                  value={breakStart}
+                  onChange={(e) => setBreakStart(e.target.value)}
+                />
+              </label>
+              <label>
+                End
+                <input
+                  required
+                  type="time"
+                  value={breakEnd}
+                  onChange={(e) => setBreakEnd(e.target.value)}
+                />
+              </label>
+              <p className="small">
+                Changes affect this date only and are recorded. Breaks cannot
+                overlap appointments or other breaks.
+              </p>
+              <button className="primary" disabled={busy}>
+                Save break time
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
       {selected && staffAccess && (
         <div className="modal-backdrop">
           <section
@@ -1357,6 +2175,11 @@ export default function App() {
             >
               ×
             </button>
+            {error && (
+              <p role="alert" className="auth-error">
+                {error}
+              </p>
+            )}
             <p className="eyebrow">APPOINTMENT DETAILS</p>
             <h2>{selected.client_name}</h2>
             <h3>{selected.treatment_name}</h3>
@@ -1369,7 +2192,29 @@ export default function App() {
               {money(selected.price)}
             </p>
             <span className="status">{selected.status.replace("_", " ")}</span>
+            <p>
+              {selected.attendee_email || ""} · {selected.phone || ""}
+            </p>
+            <button
+              className="back"
+              onClick={() => {
+                setInitialStaffAppointment(selected);
+                setSelected(null);
+                setView("staff-workspace");
+              }}
+            >
+              Open client record →
+            </button>
             <hr />
+            {["booked", "checked_in"].includes(selected.status) && (
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() => void amendFromDiary(selected)}
+              >
+                Amend appointment
+              </button>
+            )}
             {selected.status === "booked" && (
               <button
                 className="primary"
@@ -1399,14 +2244,80 @@ export default function App() {
                 </p>
               </>
             )}
-            {selected.status === "booked" && (
+            {["booked", "checked_in"].includes(selected.status) && (
               <button
-                className="back"
+                className="danger"
                 disabled={busy}
-                onClick={() => void changeStatus("cancelled")}
+                onClick={() => {
+                  setStatusAction("cancelled");
+                  setStatusReason("");
+                }}
               >
                 Cancel appointment
               </button>
+            )}
+            {selected.status === "booked" && (
+              <button
+                className="danger"
+                disabled={
+                  busy ||
+                  selected.appointment_date > today() ||
+                  (selected.appointment_date === today() &&
+                    selected.start_minute >
+                      Number(
+                        new Intl.DateTimeFormat("en-GB", {
+                          timeZone: "Europe/Dublin",
+                          hour: "2-digit",
+                          hourCycle: "h23",
+                        }).format(new Date()),
+                      ) *
+                        60 +
+                        Number(
+                          new Intl.DateTimeFormat("en-GB", {
+                            timeZone: "Europe/Dublin",
+                            minute: "2-digit",
+                          }).format(new Date()),
+                        ))
+                }
+                onClick={() => {
+                  setStatusAction("no_show");
+                  setStatusReason("");
+                }}
+              >
+                Mark as no-show
+              </button>
+            )}
+            {statusAction && (
+              <div className="guarantee">
+                <h3>
+                  {statusAction === "no_show"
+                    ? "Record a no-show"
+                    : "Confirm cancellation"}
+                </h3>
+                <label>
+                  Reason
+                  <textarea
+                    required
+                    value={statusReason}
+                    onChange={(e) => setStatusReason(e.target.value)}
+                  />
+                </label>
+                <p className="small">
+                  This action is audited. No guarantee charge will be taken in
+                  this iteration.
+                </p>
+                <button
+                  className="danger"
+                  disabled={busy || !statusReason.trim()}
+                  onClick={() => void changeStatus(statusAction)}
+                >
+                  Confirm{" "}
+                  {statusAction === "no_show" ? "no-show" : "cancellation"}
+                </button>
+                <button className="back" onClick={() => setStatusAction("")}>
+                  Keep appointment
+                </button>
+              </div>
             )}
           </section>
         </div>

@@ -18,7 +18,7 @@ test("admin and IT share operational access with distinct role identities", () =
     for (const view of ["diary", "workspace", "report"])
       assert.equal(canAccess(role, view), true);
   assert.equal(roleHome("accountant"), "report");
-  assert.equal(roleHome("staff"), "diary");
+  assert.equal(roleHome("staff"), "staff-workspace");
   assert.equal(normalizeRole("superuser"), null);
   assert.equal(canAccess(null, "diary"), false);
 });

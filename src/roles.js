@@ -4,7 +4,7 @@ export function normalizeRole(value) {
 }
 export function roleHome(role) {
   return role === "staff"
-    ? "diary"
+    ? "staff-workspace"
     : role === "accountant"
       ? "report"
       : ["admin", "it_support"].includes(role)
@@ -13,7 +13,10 @@ export function roleHome(role) {
 }
 export function canAccess(role, view) {
   if (["login", "recovery"].includes(view)) return true;
-  if (view === "book") return role === "client";
+  if (view === "book")
+    return ["client", "staff", "admin", "it_support"].includes(role);
+  if (view === "staff-workspace")
+    return ["staff", "admin", "it_support"].includes(role);
   if (view === "my-bookings") return role === "client";
   if (view === "diary") return ["staff", "admin", "it_support"].includes(role);
   if (view === "report")

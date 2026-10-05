@@ -1,130 +1,90 @@
-# Sculpted Salon — first working slice
+# Sculpted salon system
 
-React + TypeScript + Vite, with optional Supabase authentication and PostgreSQL persistence. This repository is the development proof of concept, not a live salon replacement.
+React, TypeScript and Vite with Supabase Auth, PostgreSQL and server-side booking functions. This is a development proof of concept with fictional clients and simulated guarantees; it is not a live salon replacement.
 
-## Role-aware login update
+- Client entry: https://damianjmcgrath.github.io/salon-demo/
+- Staff entry (bookmark this): https://damianjmcgrath.github.io/salon-demo/?portal=staff
 
-Existing installations: run ONLY `supabase/003_roles.sql` in the SQL Editor. Do not rerun `001_schema.sql`. New installations run 001, 002, then 003.
+A future dedicated staff subdomain can serve this entry point. No custom domain or DNS has been configured. Every privileged operation checks the caller's database role, independently of the URL.
 
-The published app now starts in connected mode with a sign-in page. Public treatment browsing remains available. Existing confirmed accounts still work; existing staff role assignments are preserved. Client sign-up, email confirmation, password reset and role-based landing pages are implemented. Configure the exact deployed URL under Authentication → URL Configuration, both as Site URL and an allowed Redirect URL, before using confirmation/reset emails. Do not disable email confirmation to work around delivery issues.
+## Updating the existing development database
 
-| Role          | Landing page      | Available experience                                                     |
-| ------------- | ----------------- | ------------------------------------------------------------------------ |
-| Client        | My appointments   | Book treatments and view own booking history                             |
-| Staff         | Salon diary       | Check in, complete and cancel appointments                               |
-| Owner / Admin | Administration    | Diary, reports and administration overview                               |
-| Accountant    | Reports           | Completed-treatment report only; no operational diary or booking writes  |
-| IT Support    | Support workspace | Same current operational access as owner, separate account/role identity and audit role snapshot |
+Apply `supabase/005_staff_flow.sql` once in the Supabase SQL Editor, **after 004**. Do not rerun earlier migrations. For a brand-new environment, apply 001–005 in order. Migration 005 adds independent client records, notes, date-specific breaks, appointment revisions and audited staff operations; it backfills existing demo appointments without changing their original contact/price snapshots.
 
-Admin screens beyond the overview are still future work. No role can manage users from the application yet. Access comes from `staff_users`, never editable client metadata or a live role selector. Accounts with no staff membership are clients. Invalid roles and permission-loading failures do not open a staff workspace.
+After applying 005, map each operational account to its diary column. Find its UUID under Authentication → Users, then substitute the UUID and correct column ID below:
 
-### Provision staff and privileged demo accounts
+```sql
+-- Diary columns: 1 = Aoife, 2 = Demo Therapist A, 3 = Demo Therapist B.
+-- Change the UUID and staff_id before running. Map each staff member separately.
+update public.staff_users
+set staff_id = 1
+where user_id = 'REPLACE_WITH_AUTH_USER_UUID'::uuid
+  and role in ('staff','admin','it_support');
+```
 
-Create each account using Supabase Authentication → Users (Add user / send invitation, depending on your dashboard). The person sets their own password or uses Forgot password with their email. Alternatively, have the person create and confirm a client account first, then assign their salon role. Do not share passwords in chat or put them into SQL.
+A diary column can have one mapped account. An unmapped staff account can manage appointments and clients but cannot change personal breaks. The mapping is explicit; names, selected tiles and editable user metadata never determine a live staff member's identity. `can_manage_own_breaks` defaults to true and can be turned off by trusted database administration. Owner/IT break administration and HR reporting will be built with those role flows.
 
-Use the Auth user's UUID to assign ONE appropriate role in SQL:
+Existing role assignments remain unchanged. Staff accounts must already have `staff_users` membership; new public registrations remain clients. Accountant access stays reporting-only. To assign an account's role through trusted database administration:
 
 ```sql
 insert into public.staff_users(user_id,role)
-values ('AUTH-USER-UUID', 'admin')
-on conflict (user_id) do update set role=excluded.role;
+values ('REPLACE_WITH_AUTH_USER_UUID'::uuid,'staff')
+on conflict(user_id) do update set role=excluded.role;
 ```
 
-Replace `admin` with `staff`, `accountant`, or `it_support` as appropriate. Remove a membership to return an account to client permissions. Role changes should be followed by sign-out and sign-in to reload the workspace. Never let customers submit this SQL or choose their own privileged role. Account-level authorisation changes take effect in database checks even before the old UI refreshes.
+Use `admin`, `accountant` or `it_support` instead when appropriate. Sign out and back in after changing an assignment. Never put a password or server secret in this SQL or the frontend.
 
-On a shared computer, use **Sign out / lock** before changing staff. This ends the browser's session and clears the visible client/diary state. It is full sign-out, not a PIN-based account switch. Local role preview remains available through the mode toggle; it uses fictional browser-local data and never changes Supabase permissions.
+## Staff walkthrough
 
-### Verify the role update
+Switch to **Local demo mode** at the top of the staff entry page to try the complete fictional-data workflow without database setup. Click a profile and use demo PIN **1234**. This PIN is a preview only: it does not authenticate a Supabase account. In connected mode, tiles lead to individual email/password authentication. A real short-PIN flow needs a trusted-device service with server-side attempt limits and independent staff sessions; it is intentionally not implemented as an internet-facing password substitute.
 
-Use separate accounts for each role: confirm client access to own bookings only; staff diary access without report navigation; accountant completed reports with diary/status-change/booking API denial; owner and IT access to diary/reports; sign-out removes the session and visible records; recovery links allow password change and require fresh sign-in afterwards. Client registration must not create a `staff_users` row. Automated tests cover the frontend access matrix; hosted authentication/RLS/recovery checks must be performed after applying 003.
+After sign-in, staff home has **Appointment Management**, **Client Administration** and **Staff Diary**.
 
-## What works
+- Existing-client bookings use name/email/phone search, then the treatment, time, demo guarantee and confirmation screens. Multiple search fields narrow matches using all supplied criteria; phone searches ignore formatting. Connected search returns at most 100 results, so refine broad searches.
+- New-client bookings first create an independent client record. A login is optional; creating a record never requires signing the staff member out or registering the client in the staff browser session.
+- Amend and cancel workflows show the selected client's open bookings. Amendments revalidate duration, skills, rota, breaks and overlap while excluding the original booking itself. A date/time/staff-only move retains the original price; choosing another treatment uses its current price. Before/after values and an explanatory reason are recorded. Revision checks reject stale edits.
+- Client Administration supports contact changes, authored/timestamped notes, booking history, future bookings and change history. Contact email is independent of the client's verified sign-in email. Existing appointments retain their original booking contact details.
+- Staff Diary opens today in Dublin time, with previous/next day arrows and a date picker. Staff see appointment and completion counts, without Recorded takings. Opening an appointment supports check-in, payment-method recording, amendment, cancellation, client record access and a reasoned no-show action. Future appointments cannot be marked no-show in connected mode. No-show cards are red; no guarantee is charged in this iteration.
+- Lunch defaults to 13:00–13:30. Staff can click only their own lunch and can add their own additional break. Changes affect the selected date, must fit the working day, cannot overlap appointments/other breaks, and change booking availability. Cancelled appointments release their slot; no-show records retain their diary slot and history.
+- **Switch profile / lock** clears the current session and visible records. The staff entry uses a separate tab-session auth store from the client entry. The UI signs staff out after five minutes without input. This assists shared-computer use; production session/device controls still require hardening.
 
-- All 111 publicly listed services in 10 categories, with exact displayed prices and “From” indicators.
-- Search and category browsing; staff preference and calculated availability on one screen.
-- Fictional local booking and shared Supabase booking modes.
-- A day diary with working hours, lunch breaks, appointment details and status colours.
-- Check in, complete with recorded payment method, cancel, and daily recorded takings.
-- In Supabase mode: individual email/password accounts; customer/staff read permissions; server-side availability revalidation; database overlap constraint; treatment price/name/duration snapshots; basic booking/status audit events.
+Local demo data persists in this browser. It is not protected server data and must remain fictional. Local sample bookings use the current working day; local mode permits past time slots for demonstrations. Connected booking functions allow future slots only.
 
-## Demo assumptions and boundaries
+## Optional temporary-password client logins
 
-The catalogue was extracted on 4 October 2026 from https://www.phorest.com/salon/sculptedbyaoifeclaire/book/service-selection?showSpecialOffers=false. Original categories, spelling, similar names and package/course listings are preserved. The source CSV is `data/treatments.csv`.
+Client records and bookings work after migration 005 without an Edge Function. To create **real Supabase demo logins** using the optional temporary-password field, also deploy `supabase/functions/create-client-account/index.ts`:
 
-Durations are provisional by category, not sourced from Phorest. Aoife plus two fictional therapists are seeded. All are provisionally qualified for every service. Opening hours are Monday–Saturday 09:00–17:00, with 13:00–13:30 lunch. Sunday is closed. Verify all these assumptions with the salon.
+1. In the development project's Edge Functions area, create a function named `create-client-account`, paste that file's source into its editor, and deploy it. Alternatively, use the Supabase CLI with this repository's `supabase/config.toml`.
+2. The function validates the bearer token with Supabase Auth and checks staff membership itself. Disable the platform's legacy JWT-verification toggle for this function, as configured in `supabase/config.toml`; do not remove the function's authentication checks.
+3. Add the Edge Function secret `SALON_DEMO_ACCOUNT_PROVISIONING=true`. This is off by default and is for **fictional development accounts only**. The server auto-confirms those fictional emails and sends no messages. Do not enable this workflow for production clients; use verified activation/password-setting links instead.
+4. The default allowed browser origin is `https://damianjmcgrath.github.io`. If hosting changes, set `SALON_ALLOWED_ORIGINS` to the allowed origins, separated by commas, without paths.
+5. Supabase supplies the server's project/service credentials in the function environment. Do not paste them into the app, repository or chat.
 
-Patch-test mappings are not configured; seeded treatments have `patch_required=false`. If this is changed to true, the booking function rejects that service until the full patch-test workflow is implemented. This version does NOT prove patch-test compliance. Real payments, card collection, email reminders, social sign-in, client notes, rota/admin editing, HR reporting, voucher/credit ledgers, migration and production hardening are later milestones. Voucher/credit checkout buttons record a label only; they do not redeem balances. “From” prices use the displayed starting amount for demo totals.
+Temporary passwords are passed only to Supabase Auth through the server function, never stored in client records, notes or audit details. They require 12–128 characters. The first client sign-in shows a password-change screen. A trusted Auth app-metadata flag is cleared by the server only when it changes the password; a pending initial password change also blocks self-booking in PostgreSQL.
 
-Local mode is visibly labelled, saves only to this browser's localStorage and is not shared across devices. Supabase mode saves to the development project. Switch using the button at the top. Use fictional client details in both modes. The simulated card indicator never collects or charges a card. The diary does not update automatically across browsers; use Refresh in Supabase mode.
+Provisioning is reserved per client to prevent duplicate creation. A failed account creation retains the client record so it can be retried from that record, without creating a duplicate client. An existing login with the same email is never silently attached. Staff authentication stays unchanged. Test this deployed Edge Function with fictional accounts before demonstrating connected provisioning; local database tests cannot establish hosted Auth/Edge integration.
 
-## Run on your computer
+## Client journey and catalogue
 
-Install Node.js 22 LTS or newer and clone this repository. In its folder:
+The client entry asks for sign-in or account creation first, followed by self/someone-else selection. Proxy bookings collect attendee name, email and phone; their history is not searched. Previous Bookings lists completed self treatments only. Staff bookings tied to a client's login also appear in their own history.
+
+Morning is 08:00–11:59 and afternoon starts at 12:00. Demo opening hours remain Monday–Saturday 09:00–17:00. Start grids are hourly for 60 minutes, half-hourly for 30, and quarterly for 15. Other provisional durations use quarter-hour starts; short patch-test services use 5-minute starts. These additional-duration assumptions need salon confirmation.
+
+The 111 treatments/prices in `data/treatments.csv` and `src/catalog.json` came from the salon's Phorest catalogue. Duration, working-hour and qualification values are provisional demo assumptions. Patch-test mappings and the full patch-test workflow remain unimplemented; a treatment marked patch-required is rejected rather than bypassing that restriction.
+
+Booking guarantees use saved/new **example** cards, a €10 policy snapshot and consent. No real PAN, CVV, payment token, charge or email is collected/sent. The late-cancellation deadline and payment-provider integration remain to be agreed. Voucher/credit checkout options are payment-method labels, without a financial ledger.
+
+## Development and validation
 
 ```sh
 npm ci
-cp .env.example .env.local
+npm test
+npm run build
 npm run dev
 ```
 
-On Windows you can copy `.env.example` to `.env.local` in File Explorer instead. Open the local URL Vite prints. Without `.env.local`, local demo mode still works and the Supabase toggle is disabled. With it, the toggle is available and connected sign-in mode is the default.
+Local Supabase configuration goes into `.env.local` using `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`. GitHub Actions supplies those public browser values when building. Server/service keys never belong in Vite variables.
 
-The configured project URL and publishable key are browser-safe identifiers. NEVER put a database password, Supabase secret key or service-role key in `VITE_*`, source code, GitHub or the browser.
+Tests cover availability/periods, roles, search, breaks, date navigation and appointment statuses; offline DOM tests exercise the actual React staff forms and journeys. PostgreSQL tests use PGlite with a minimal Supabase Auth schema and the real migrations, functions, RLS policies and exclusion constraint. They verify audited staff booking, double-booking rejection, client/accountant denial, stale edits, cancellations, amendments, personal breaks, no-shows, self/proxy booking and account-link reservations. These tests do not replace hosted Supabase Auth, Edge deployment, real browser layout or concurrent multi-connection acceptance checks.
 
-## Set up your Supabase development database
-
-1. Open the `salon-system` development project in Supabase and go to **SQL Editor**.
-2. Run `supabase/001_schema.sql` once in the new empty project. It is transactional and is not a repeatable reset script.
-3. Run `supabase/002_seed.sql`, then `supabase/003_roles.sql`. It imports the services and fictional schedules/skills, with conflict guards.
-4. In **Authentication → URL Configuration**, set Site URL to the local app URL initially, or the exact published GitHub Pages URL once available. Add both your local URL and the published URL to allowed redirect URLs for email confirmations. Keep email confirmation enabled.
-5. Use Supabase mode in the app to create an account through the booking confirmation screen. Confirm its email, then sign in.
-6. To give YOUR account staff access, find its UUID in **Authentication → Users**. Run this in the SQL Editor, substituting that UUID:
-
-```sql
-insert into public.staff_users(user_id,role)
-values ('YOUR-AUTH-USER-UUID', 'admin');
-```
-
-Ordinary customer accounts must not be added here. Membership is only editable through trusted database administration in this first slice; customers cannot assign themselves roles. Sign out and back in after adding membership. Staff/admin/IT Support share the first-slice diary actions. Apply 003 for differentiated navigation and accountant reporting access.
-
-No client-side direct INSERT/UPDATE/DELETE grants are provided. Bookings and lifecycle changes use guarded database functions. Availability returns staff/time slots without other clients' details. Customers can read their own appointments; only staff can read the full diary. Tables explicitly have RLS and select grants so this works with “Automatically expose new tables” disabled.
-
-## Publish the fictional-data demo on GitHub Pages
-
-In this repository go to **Settings → Pages → Build and deployment → Source → GitHub Actions**. Then go to **Actions → Build and deploy salon demo → Run workflow** on `main`.
-
-The workflow installs the locked dependencies, runs availability tests, builds the application and deploys `dist`. It contains only the supplied public project URL/publishable key. GitHub reports the actual deployed URL. The Vite base path is `/salon-demo/`; if you rename the repository, update `vite.config.ts`. Routes use application state, avoiding GitHub Pages deep-link 404s.
-
-If workflow creation is unavailable through the connector, upload the provided `pages-workflow.yml` template as `.github/workflows/pages.yml` using your GitHub account first.
-
-Use GitHub Pages for this fictional-data demonstration only. Reassess hosting for a production salon application, including the hosting provider's terms and the operational requirements.
-
-## Walkthrough for the owner
-
-1. Start in local mode and choose a treatment (for example BIAB).
-2. Choose no preference, a weekday and a free time.
-3. Enter a fictional name; acknowledge the simulated guarantee; confirm.
-4. Open the salon diary. Select the new booking, check in, then complete with cash/card.
-5. Open Daily overview and check the recorded total.
-6. Repeat in Supabase mode after setup to demonstrate persistent shared bookings. A second signed-in browser will see the same data after Refresh, while a customer account cannot access the diary.
-
-Local sample bookings initially appear on the current day (or Monday if today is Sunday). Local mode deliberately permits demonstration of earlier times; Supabase mode permits only future times in the Europe/Dublin timezone.
-
-## Validation
-
-```sh
-npm test
-npm run build
-```
-
-Tests cover overlap boundaries, adjacent appointments, breaks, closing time, no preference and cancellation. Before showing Supabase mode, verify: customer diary denial, staff access, two bookings competing for the same slot, cancellation freeing time, and a catalogue price change leaving old bookings unchanged. The SQL must be executed and these integration checks completed in the configured Supabase development project; frontend build/tests alone do not establish database integration.
-
-Database definitions, access policies and seed data are stored in this repository so future environments can be reproduced. Create a separate production project before using real salon data.
-
-
-### Client journey update
-Apply `supabase/004_client_booking_flow.sql` once, after 003. Client sign-in opens the recipient choice; completed self bookings supply the Previous Bookings filter. Proxy bookings remain owned by the booking account, with separate attendee contact details. No other person's history is looked up.
-
-Morning is 08:00–11:59, afternoon starts at 12:00. Demo rotas still open 09:00–17:00. Start grids: 60 minutes hourly, 30 half-hourly, 15 quarterly. For other provisional durations, 15-minute starts are used (5-minute patch tests use 5-minute starts), pending salon confirmation. Server availability enforces the same grid and preserves breaks, qualification and overlap checks.
-
-Guarantees are simulated with saved/new example cards, €10 policy snapshot and consent. No real PAN, CVV or payments are collected. Real saved cards and secure new-card entry require payment-provider integration; the late-cancellation deadline is unconfirmed. Existing historic appointments are treated as self bookings; their guarantee/email fields remain unknown.
+GitHub Pages deploys the fictional demo on pushes to main. Production hosting, device/PIN security, recovery/verification, retention, backups, provider terms and operational cutover remain separate work. Use a separate production environment before introducing real salon data.
