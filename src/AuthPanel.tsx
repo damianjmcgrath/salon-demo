@@ -4,12 +4,10 @@ export default function AuthPanel({
   db,
   recovery = false,
   onComplete,
-  onBrowse,
 }: {
   db: SupabaseClient;
   recovery?: boolean;
   onComplete: () => void;
-  onBrowse: () => void;
 }) {
   const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
   const [email, setEmail] = useState(""),
@@ -203,7 +201,6 @@ export default function AuthPanel({
           >
             {mode === "reset" ? "Back to sign in" : "Forgot password?"}
           </button>
-          <button onClick={onBrowse}>Browse treatments first →</button>
         </div>
       )}
       <p className="small">

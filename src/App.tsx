@@ -10,11 +10,19 @@ import {
   roleLabels,
 } from "./roles.js";
 type Role = "client" | "staff" | "admin" | "accountant" | "it_support";
-import { availableSlots } from "./availability.js";
+import {
+  availableSlots,
+  startInterval,
+  periodSlots,
+  attendedTreatmentIds,
+} from "./availability.js";
 type Treatment = (typeof catalog)[number];
 type Staff = { id: number; name: string };
 type Appointment = {
   user_id?: string;
+  treatment_id?: number;
+  booked_for_self?: boolean;
+  attendee_email?: string;
   id: string;
   staff_id: number;
   start_minute: number;
@@ -130,8 +138,46 @@ export default function App() {
     [date, setDate] = useState(demoDate()),
     [slots, setSlots] = useState<Slot[]>([]),
     [slot, setSlot] = useState<Slot | null>(null),
-    [step, setStep] = useState(1),
+    [step, setStep] = useState(0),
     [confirmation, setConfirmation] = useState<Appointment | null>(null);
+  const [forSelf, setForSelf] = useState(true);
+  const [email, setEmail] = useState("");
+  const [period, setPeriod] = useState("");
+  const [card, setCard] = useState("");
+  function startBooking() {
+    setStep(0);
+    setView("book");
+    setTreatment(null);
+    setSlot(null);
+    setPeriod("");
+    setCategory("All treatments");
+    setConsent(false);
+    setCard("");
+  }
+  function chooseRecipient(self: boolean) {
+    setForSelf(self);
+    setCategory("All treatments");
+    setSearch("");
+    setName(
+      self
+        ? session?.user.user_metadata.full_name || (live ? "" : "Demo Client")
+        : "",
+    );
+    setPhone(
+      self
+        ? session?.user.user_metadata.mobile || (live ? "" : "0800000000")
+        : "",
+    );
+    setEmail(self ? session?.user.email || "client@example.com" : "");
+    setStep(
+      self &&
+        (!live ||
+          (session?.user.user_metadata.full_name &&
+            session?.user.user_metadata.mobile))
+        ? 1
+        : -1,
+    );
+  }
   const [name, setName] = useState(""),
     [phone, setPhone] = useState(""),
     [consent, setConsent] = useState(false),
@@ -169,6 +215,10 @@ export default function App() {
         setMyBookings([]);
         setSelected(null);
         setConfirmation(null);
+        setStep(0);
+        setPeriod("");
+        setCard("");
+        setConsent(false);
         setRoleLoading(!!nextSession);
         authUser.current = nextSession?.user.id || null;
       }
@@ -180,9 +230,13 @@ export default function App() {
         setMyBookings([]);
         setSelected(null);
         setConfirmation(null);
+        setStep(0);
+        setPeriod("");
+        setCard("");
+        setConsent(false);
         setName("");
         setPhone("");
-        setStep(1);
+        setStep(0);
         setView("login");
         setRoleLoading(false);
       }
@@ -319,11 +373,15 @@ export default function App() {
     setMyBookings([]);
     setSelected(null);
     setConfirmation(null);
+    setStep(0);
+    setPeriod("");
+    setCard("");
+    setConsent(false);
     setTreatment(null);
     setSlot(null);
     setName("");
     setPhone("");
-    setStep(1);
+    setStep(0);
     setRoleLoading(false);
     setView("login");
     setBusy(false);
@@ -333,7 +391,7 @@ export default function App() {
     setSlot(null);
     setSlots([]);
     if (!treatment) return;
-    if (db && session) {
+    if (live && db && session) {
       db.rpc("get_available_slots", {
         p_treatment_id: treatment.id,
         p_date: date,
@@ -341,7 +399,13 @@ export default function App() {
       }).then(({ data, error }) => {
         if (cancelled) return;
         if (error) setError(error.message);
-        else setSlots(data || []);
+        else
+          setSlots(
+            (data || []).filter(
+              (s: Slot) =>
+                s.start_minute % startInterval(treatment.duration) === 0,
+            ),
+          );
       });
     } else {
       const sunday = new Date(date + "T12:00:00").getDay() === 0;
@@ -361,7 +425,8 @@ export default function App() {
     };
   }, [treatment, date, staffChoice, live, local, staff]);
   async function book() {
-    if (!treatment || !slot) return;
+    if (!treatment || !slot || !consent || !card || activeRole !== "client")
+      return;
     setBusy(true);
     setError("");
     try {
@@ -376,6 +441,9 @@ export default function App() {
           p_client_name: name.trim(),
           p_phone: phone.trim(),
           p_demo_consent: consent,
+          p_booked_for_self: forSelf,
+          p_attendee_email: email.trim(),
+          p_demo_card: card,
         });
         if (r.error) throw r.error;
         a = r.data;
@@ -393,6 +461,9 @@ export default function App() {
         a = {
           id: crypto.randomUUID(),
           user_id: "local-client",
+          treatment_id: treatment.id,
+          booked_for_self: forSelf,
+          attendee_email: email.trim(),
           staff_id: slot.staff_id,
           start_minute: slot.start_minute,
           duration: treatment.duration,
@@ -441,13 +512,21 @@ export default function App() {
       setBusy(false);
     }
   }
+  const previousIds = attendedTreatmentIds(
+    live ? myBookings : local.filter((a) => a.user_id === "local-client"),
+  );
+  const visibleSlots: Slot[] = periodSlots(slots, period);
   const categories = [
+    ...(forSelf ? ["Previous Bookings"] : []),
     "All treatments",
     ...new Set(treatments.map((t) => t.category)),
   ];
   const filtered = treatments.filter(
     (t) =>
-      (category === "All treatments" || t.category === category) &&
+      (category === "All treatments" ||
+        (category === "Previous Bookings"
+          ? previousIds.includes(t.id)
+          : t.category === category)) &&
       t.name.toLowerCase().includes(search.toLowerCase()),
   );
   const dayAppointments = appointments.filter(
@@ -470,7 +549,11 @@ export default function App() {
             setPhone("");
             setTreatment(null);
             setConfirmation(null);
-            setStep(1);
+            setStep(0);
+            setPeriod("");
+            setCard("");
+            setConsent(false);
+            setStep(0);
             setSelected(null);
             setView("login");
             setError("");
@@ -483,14 +566,22 @@ export default function App() {
         </button>
       </div>
       <header>
-        <a className="brand" href="#" onClick={() => setView("book")}>
+        <a
+          className="brand"
+          href="#"
+          onClick={() =>
+            activeRole === "client" ? startBooking() : setView("login")
+          }
+        >
           SCULPTED<span>BY AOIFE CLAIRE</span>
         </a>
         <nav>
           {canAccess(activeRole, "book") && (
             <button
               className={view === "book" ? "active" : ""}
-              onClick={() => setView("book")}
+              onClick={() =>
+                activeRole === "client" ? startBooking() : setView("login")
+              }
             >
               Book a treatment
             </button>
@@ -557,7 +648,7 @@ export default function App() {
           <section className="panel login" role="status">
             <h2>Opening your workspace…</h2>
           </section>
-        ) : view === "book" ? (
+        ) : view === "book" && activeRole === "client" ? (
           <>
             <div className="intro">
               <p className="eyebrow">A LITTLE TIME FOR YOU</p>
@@ -569,15 +660,84 @@ export default function App() {
               <p>Find your treatment and a time that suits you.</p>
             </div>
             <div className="steps">
-              {["Treatment", "Your time", "Confirm", "Booked"].map((s, i) => (
+              {["Treatment", "Your time", "Guarantee", "Booked"].map((s, i) => (
                 <span key={s} className={step === i + 1 ? "current" : ""}>
                   {i + 1} {s}
                 </span>
               ))}
             </div>
-            {step === 1 ? (
+            {step === 0 ? (
+              <section className="panel login">
+                <h2>Who are you booking for?</h2>
+                <div className="role-options">
+                  <button
+                    className="primary"
+                    onClick={() => chooseRecipient(true)}
+                  >
+                    Book Appointment for Yourself
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={() => chooseRecipient(false)}
+                  >
+                    Book Appointment for Someone Else
+                  </button>
+                </div>
+              </section>
+            ) : step === -1 ? (
+              <section className="panel login">
+                <button className="back" onClick={() => setStep(0)}>
+                  ← Who are you booking for?
+                </button>
+                <h2>{forSelf ? "Your contact details" : "Their details"}</h2>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setStep(1);
+                  }}
+                >
+                  <label>
+                    Full name
+                    <input
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Email address
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      readOnly={forSelf}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Phone number
+                    <input
+                      type="tel"
+                      required
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="primary"
+                    type="submit"
+                    disabled={!name.trim() || !phone.trim()}
+                  >
+                    Continue to treatments →
+                  </button>
+                </form>
+              </section>
+            ) : step === 1 ? (
               <div className="catalog-layout">
                 <aside>
+                  <button className="back" onClick={() => setStep(0)}>
+                    ← Booking recipient
+                  </button>
                   <h3>Explore treatments</h3>
                   {categories.map((c) => (
                     <button
@@ -587,9 +747,11 @@ export default function App() {
                     >
                       {c}
                       <span>
-                        {c === "All treatments"
-                          ? treatments.length
-                          : treatments.filter((t) => t.category === c).length}
+                        {c === "Previous Bookings"
+                          ? previousIds.length
+                          : c === "All treatments"
+                            ? treatments.length
+                            : treatments.filter((t) => t.category === c).length}
                       </span>
                     </button>
                   ))}
@@ -615,6 +777,8 @@ export default function App() {
                         key={t.id}
                         onClick={() => {
                           setTreatment(t);
+                          setPeriod("");
+                          setCard("");
                           setStep(2);
                           setConsent(false);
                         }}
@@ -634,7 +798,13 @@ export default function App() {
                       </button>
                     ))}
                   </div>
-                  {!filtered.length && <p>No treatments match your search.</p>}
+                  {!filtered.length && (
+                    <p>
+                      {category === "Previous Bookings"
+                        ? "No previously attended treatments yet."
+                        : "No treatments match your search."}
+                    </p>
+                  )}
                 </section>
               </div>
             ) : step === 2 && treatment ? (
@@ -671,8 +841,30 @@ export default function App() {
                     Demo opening hours: Monday–Saturday, 09:00–17:00. Lunch:
                     13:00–13:30.
                   </p>
+                  <fieldset className="period-choice">
+                    <legend>Morning or afternoon?</legend>
+                    {["morning", "afternoon"].map((p) => (
+                      <button
+                        key={p}
+                        className={period === p ? "chosen" : "secondary"}
+                        onClick={() => {
+                          setPeriod(p);
+                          setSlot(null);
+                        }}
+                      >
+                        {p === "morning"
+                          ? "Morning · 08:00–12:00"
+                          : "Afternoon · from 12:00"}
+                      </button>
+                    ))}
+                  </fieldset>
+                  {!period && (
+                    <p className="small">
+                      Choose morning or afternoon to see available times.
+                    </p>
+                  )}
                   <div className="slots">
-                    {[...new Set(slots.map((s) => s.start_minute))].map(
+                    {[...new Set(visibleSlots.map((s) => s.start_minute))].map(
                       (start) => (
                         <button
                           key={start}
@@ -681,7 +873,9 @@ export default function App() {
                           }
                           onClick={() =>
                             setSlot(
-                              slots.find((s) => s.start_minute === start)!,
+                              visibleSlots.find(
+                                (s) => s.start_minute === start,
+                              )!,
                             )
                           }
                         >
@@ -690,7 +884,7 @@ export default function App() {
                       ),
                     )}
                   </div>
-                  {!slots.length && (
+                  {period && !visibleSlots.length && (
                     <p>
                       No available times. Try another date or staff preference.
                     </p>
@@ -708,6 +902,7 @@ export default function App() {
                   slot={slot}
                   date={date}
                   staff={staff}
+                  onContinue={() => setStep(3)}
                 />
               </div>
             ) : step === 3 && treatment ? (
@@ -716,48 +911,66 @@ export default function App() {
                   <button className="back" onClick={() => setStep(2)}>
                     ← Change time
                   </button>
-                  <h2>Make it yours</h2>
-                  <label>
-                    Your full name
-                    <input
-                      required
-                      autoComplete="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Mobile number
-                    <input
-                      type="tel"
-                      autoComplete="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
-                  </label>
-                  {live && !session && db && (
-                    <AuthPanel
-                      db={db}
-                      onComplete={() => {}}
-                      onBrowse={() => setStep(1)}
-                    />
-                  )}
-                  {live && session && (
-                    <p className="small">Signed in as {session.user.email}</p>
-                  )}
+                  <h2>Booking Guarantee</h2>
+                  <p>
+                    Guarantee your booking using your saved card details, or
+                    supply new card details.
+                  </p>
+                  <p>
+                    Booking for <strong>{name}</strong> · {email}
+                  </p>
                   <div className="guarantee">
-                    <h3>Booking guarantee</h3>
-                    <p>DEMO ONLY · Visa •••• 4242</p>
                     <p>
-                      No card details are collected and no charge will be taken.
+                      No payment will be taken now. Payment will be taken in the
+                      salon after your treatment. The booking guarantee will
+                      only charge €10 for no-shows or late cancellations.
                     </p>
+                    <p className="small">
+                      Demo only: cards and charges are simulated. Do not enter
+                      real card details. The late-cancellation deadline is still
+                      to be confirmed by the salon.
+                    </p>
+                    <label>
+                      Card for your guarantee
+                      <select
+                        value={card}
+                        onChange={(e) => {
+                          setCard(e.target.value);
+                          setConsent(false);
+                        }}
+                      >
+                        <option value="">Select a card option</option>
+                        <option value="saved_demo">
+                          Saved demo card · Visa •••• 4242
+                        </option>
+                        <option value="new_demo">Supply a new demo card</option>
+                      </select>
+                    </label>
+                    {card === "new_demo" && (
+                      <div>
+                        <label>
+                          Demo cardholder name
+                          <input value={name} readOnly />
+                        </label>
+                        <label>
+                          Example card number
+                          <input value="4242 4242 4242 4242" readOnly />
+                        </label>
+                        <p className="small">
+                          Example expiry 12/30 · example security code 123. A
+                          real card form will use the payment provider’s secure
+                          fields.
+                        </p>
+                      </div>
+                    )}
                     <label className="check">
                       <input
                         type="checkbox"
                         checked={consent}
                         onChange={(e) => setConsent(e.target.checked)}
                       />
-                      I understand this is a simulated booking.
+                      I agree to the €10 no-show / late-cancellation guarantee
+                      and understand this booking is simulated.
                     </label>
                   </div>
                   <button
@@ -765,6 +978,7 @@ export default function App() {
                     disabled={
                       busy ||
                       !consent ||
+                      !card ||
                       !name.trim() ||
                       (live && (!session || !phone.trim()))
                     }
@@ -811,6 +1025,10 @@ export default function App() {
                   onClick={() => {
                     setStep(1);
                     setConfirmation(null);
+                    setStep(0);
+                    setPeriod("");
+                    setCard("");
+                    setConsent(false);
                   }}
                 >
                   Book another treatment
@@ -826,7 +1044,6 @@ export default function App() {
               onComplete={() => {
                 if (view === "recovery") setView("login");
               }}
-              onBrowse={() => setView("book")}
             />
           ) : (
             <section className="panel login">
@@ -863,8 +1080,7 @@ export default function App() {
             <button
               className="primary"
               onClick={() => {
-                setStep(1);
-                setView("book");
+                startBooking();
               }}
             >
               Book a treatment →
@@ -1203,11 +1419,13 @@ function Summary({
   slot,
   date,
   staff,
+  onContinue,
 }: {
   treatment: Treatment;
   slot: Slot | null;
   date: string;
   staff: Staff[];
+  onContinue?: () => void;
 }) {
   return (
     <aside className="summary">
@@ -1225,6 +1443,11 @@ function Summary({
           <h3>{time(slot.start_minute)}</h3>
           <p>With {staff.find((s) => s.id === slot.staff_id)?.name}</p>
         </>
+      )}
+      {onContinue && (
+        <button className="primary" disabled={!slot} onClick={onContinue}>
+          Continue →
+        </button>
       )}
       <p className="small">
         A little care. A little confidence.

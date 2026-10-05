@@ -811,3 +811,29 @@ footer span {
     font-size: 9px;
   }
 }
+
+.period-choice {
+  border: 0;
+  padding: 0;
+  margin: 22px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.period-choice legend {
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+.period-choice button {
+  padding: 12px 18px;
+  border: 1px solid #c8c2b8;
+  border-radius: 6px;
+}
+.period-choice .chosen {
+  background: #252722;
+  color: white;
+}
+.summary > .primary {
+  width: 100%;
+  margin-top: 16px;
+}

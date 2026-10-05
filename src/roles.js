@@ -9,11 +9,11 @@ export function roleHome(role) {
       ? "report"
       : ["admin", "it_support"].includes(role)
         ? "workspace"
-        : "my-bookings";
+        : "book";
 }
 export function canAccess(role, view) {
   if (["login", "recovery"].includes(view)) return true;
-  if (view === "book") return !role || role === "client";
+  if (view === "book") return role === "client";
   if (view === "my-bookings") return role === "client";
   if (view === "diary") return ["staff", "admin", "it_support"].includes(role);
   if (view === "report")

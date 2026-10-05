@@ -3,7 +3,7 @@ export function availableSlots(
   staffIds,
   appointments,
   breaks,
-  interval = 10,
+  interval = startInterval(duration),
 ) {
   const slots = [];
   for (let start = 540; start + duration <= 1020; start += interval) {
@@ -25,4 +25,31 @@ export function availableSlots(
     }
   }
   return slots;
+}
+
+export function startInterval(duration) {
+  return duration === 60 ? 60 : duration === 30 ? 30 : duration < 15 ? 5 : 15;
+}
+export function periodSlots(slots, period) {
+  return slots.filter((s) =>
+    period === "morning"
+      ? s.start_minute >= 480 && s.start_minute < 720
+      : period === "afternoon"
+        ? s.start_minute >= 720
+        : false,
+  );
+}
+export function attendedTreatmentIds(bookings) {
+  return [
+    ...new Set(
+      bookings
+        .filter(
+          (a) =>
+            a.status === "completed" &&
+            a.booked_for_self !== false &&
+            a.treatment_id != null,
+        )
+        .map((a) => a.treatment_id),
+    ),
+  ];
 }

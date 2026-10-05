@@ -22,3 +22,8 @@ test("admin and IT share operational access with distinct role identities", () =
   assert.equal(normalizeRole("superuser"), null);
   assert.equal(canAccess(null, "diary"), false);
 });
+
+test("client login opens booking and anonymous users cannot book", () => {
+  assert.equal(roleHome("client"), "book");
+  assert.equal(canAccess(null, "book"), false);
+});

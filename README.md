@@ -120,3 +120,11 @@ npm run build
 Tests cover overlap boundaries, adjacent appointments, breaks, closing time, no preference and cancellation. Before showing Supabase mode, verify: customer diary denial, staff access, two bookings competing for the same slot, cancellation freeing time, and a catalogue price change leaving old bookings unchanged. The SQL must be executed and these integration checks completed in the configured Supabase development project; frontend build/tests alone do not establish database integration.
 
 Database definitions, access policies and seed data are stored in this repository so future environments can be reproduced. Create a separate production project before using real salon data.
+
+
+### Client journey update
+Apply `supabase/004_client_booking_flow.sql` once, after 003. Client sign-in opens the recipient choice; completed self bookings supply the Previous Bookings filter. Proxy bookings remain owned by the booking account, with separate attendee contact details. No other person's history is looked up.
+
+Morning is 08:00–11:59, afternoon starts at 12:00. Demo rotas still open 09:00–17:00. Start grids: 60 minutes hourly, 30 half-hourly, 15 quarterly. For other provisional durations, 15-minute starts are used (5-minute patch tests use 5-minute starts), pending salon confirmation. Server availability enforces the same grid and preserves breaks, qualification and overlap checks.
+
+Guarantees are simulated with saved/new example cards, €10 policy snapshot and consent. No real PAN, CVV or payments are collected. Real saved cards and secure new-card entry require payment-provider integration; the late-cancellation deadline is unconfirmed. Existing historic appointments are treated as self bookings; their guarantee/email fields remain unknown.
