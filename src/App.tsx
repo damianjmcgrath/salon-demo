@@ -130,6 +130,7 @@ export default function App() {
     [myBookings, setMyBookings] = useState<Appointment[]>([]);
   const [staffId, setStaffId] = useState<number | null>(null),
     [localStaffId, setLocalStaffId] = useState<number | null>(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [loginTile, setLoginTile] = useState<number | null>(null),
     [pin, setPin] = useState("");
   const [ownClient, setOwnClient] = useState<Client | null>(null);
@@ -1034,7 +1035,7 @@ export default function App() {
           {live ? "Supabase connected mode" : "Local demo mode"} ↗
         </button>
       </div>
-      <header>
+      <header className={activeRole === "client" ? "client-header" : ""}>
         <a
           className="brand"
           href="#"
@@ -1048,7 +1049,21 @@ export default function App() {
         >
           SCULPTED<span>BY AOIFE CLAIRE</span>
         </a>
-        <nav>
+        {activeRole === "client" && (
+          <button
+            className="account-menu-toggle"
+            aria-expanded={accountMenuOpen}
+            aria-controls="account-navigation"
+            onClick={() => setAccountMenuOpen(!accountMenuOpen)}
+          >
+            Menu
+          </button>
+        )}
+        <nav
+          id="account-navigation"
+          className={accountMenuOpen ? "menu-open" : ""}
+          onClick={() => setAccountMenuOpen(false)}
+        >
           {activeRole === "client" && !privatePortal && (
             <button
               className={view === "book" ? "active" : ""}
@@ -1125,7 +1140,13 @@ export default function App() {
           <button onClick={() => setError("")}>Dismiss</button>
         </div>
       )}
-      <main>
+      <main
+        className={
+          activeRole === "client" && view === "book" && step === 0
+            ? "recipient-main"
+            : ""
+        }
+      >
         {staffAccess && !roleLoading && (
           <ClockControls
             key={`${live}-${session?.user.id || activeRole}`}
@@ -1243,37 +1264,47 @@ export default function App() {
         ) : view === "book" &&
           (activeRole === "client" || (staffAccess && staffClient)) ? (
           <>
-            <div className="intro">
-              <p className="eyebrow">A LITTLE TIME FOR YOU</p>
-              <h1>
-                Your next appointment,
-                <br />
-                <em>beautifully simple.</em>
-              </h1>
-              <p>Find your treatment and a time that suits you.</p>
-            </div>
-            <div className="steps">
-              {["Treatment", "Your time", "Guarantee", "Booked"].map((s, i) => (
-                <span key={s} className={step === i + 1 ? "current" : ""}>
-                  {i + 1} {s}
-                </span>
-              ))}
-            </div>
+            {step > 0 && (
+              <>
+                <div className="intro">
+                  <p className="eyebrow">A LITTLE TIME FOR YOU</p>
+                  <h1>
+                    Your next appointment,
+                    <br />
+                    <em>beautifully simple.</em>
+                  </h1>
+                  <p>Find your treatment and a time that suits you.</p>
+                </div>
+                <div className="steps">
+                  {["Treatment", "Your time", "Guarantee", "Booked"].map(
+                    (s, i) => (
+                      <span key={s} className={step === i + 1 ? "current" : ""}>
+                        {i + 1} {s}
+                      </span>
+                    ),
+                  )}
+                </div>
+              </>
+            )}
             {step === 0 ? (
-              <section className="panel login">
-                <h2>Who are you booking for?</h2>
-                <div className="role-options">
+              <section
+                className="recipient-choice"
+                aria-labelledby="recipient-title"
+              >
+                <p className="eyebrow">YOUR NEXT APPOINTMENT</p>
+                <h1 id="recipient-title">Who are you booking for?</h1>
+                <div className="recipient-options">
                   <button
                     className="primary"
                     onClick={() => chooseRecipient(true)}
                   >
-                    Book Appointment for Yourself
+                    Yourself
                   </button>
                   <button
                     className="secondary"
                     onClick={() => chooseRecipient(false)}
                   >
-                    Book Appointment for Someone Else
+                    Someone Else
                   </button>
                 </div>
               </section>
@@ -1710,7 +1741,15 @@ export default function App() {
                           setError("");
                         }}
                       >
-                        {s.role !== "accountant" ? <img className="profile-photo" src={`./images/${s.name.toLowerCase()}.webp`} alt="" /> : <span className="avatar">{s.name[0]}</span>}
+                        {s.role !== "accountant" ? (
+                          <img
+                            className="profile-photo"
+                            src={`./images/${s.name.toLowerCase()}.webp`}
+                            alt=""
+                          />
+                        ) : (
+                          <span className="avatar">{s.name[0]}</span>
+                        )}
                         <h2>{s.name}</h2>
                       </button>
                     ))}

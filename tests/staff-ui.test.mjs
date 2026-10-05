@@ -346,3 +346,12 @@ test('UI: separate Accountant Portal has only Jacqui and Reporting',async()=>{
  assert(await screen.findByRole('heading',{name:'Welcome, Jacqui.'}));assert.equal(document.querySelectorAll('.workspace-card').length,1);assert.equal(screen.queryByRole('button',{name:'Clock-In'}),null);assert.equal(screen.queryByRole('button',{name:'Staff Diary'}),null);
  } finally {cleanup();window.history.replaceState({},'','?portal=staff');}
 });
+test('UI: client choice screen leads directly to self treatments or recipient details',async()=>{
+ cleanup();window.history.replaceState({},'', '/');
+ try {const ClientApp=(await import(pathToFileURL(buildDir+'/app.mjs').href+'?client-choice')).default;render(React.createElement(ClientApp));fireEvent.click(screen.getByRole('button',{name:'Client',exact:true}));
+ assert(screen.getByRole('heading',{name:'Who are you booking for?'}));assert.equal(document.querySelector('.intro'),null);assert.equal(document.querySelector('.steps'),null);
+ fireEvent.click(screen.getByRole('button',{name:'Menu',exact:true}));assert.equal(screen.getByRole('button',{name:'Menu',exact:true}).getAttribute('aria-expanded'),'true');fireEvent.click(screen.getByRole('button',{name:'Book a treatment',exact:true}));assert.equal(screen.getByRole('button',{name:'Menu',exact:true}).getAttribute('aria-expanded'),'false');
+ fireEvent.click(screen.getByRole('button',{name:'Yourself',exact:true}));assert(screen.getByRole('heading',{name:'Explore treatments'}));assert(document.querySelector('.steps'));
+ fireEvent.click(screen.getByRole('button',{name:/Booking recipient/}));fireEvent.click(screen.getByRole('button',{name:'Someone Else',exact:true}));assert(screen.getByRole('heading',{name:'Their details'}));assert(screen.getByLabelText('Full name'));
+ }finally{cleanup();window.history.replaceState({},'','?portal=staff');}
+});
