@@ -1139,3 +1139,6 @@ textarea {
     font-size: 19px;
   }
 }
+@media (min-width:701px) {
+  .recipient-options button { margin:0; height:108px; width:100%; }
+}
