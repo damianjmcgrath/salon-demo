@@ -8,7 +8,12 @@ export type Client = {
   created_at?: string;
   updated_at?: string;
 };
-export type Staff = { id: number; name: string };
+export type Staff = {
+  id: number;
+  name: string;
+  active?: boolean;
+  photo_url?: string | null;
+};
 export type Appointment = {
   id: string;
   user_id?: string | null;
@@ -54,6 +59,9 @@ export type Activity = {
   details?: Record<string, any> | null;
 };
 export type LocalStaffData = {
+  staffRecords?: StaffRecord[];
+  staffNotes?: StaffNote[];
+  dayShifts?: DayShift[];
   clients: Client[];
   notes: Note[];
   activity: Activity[];
@@ -90,4 +98,42 @@ export type WorkSession = {
   staff_name: string;
   clocked_in_at: string;
   clocked_out_at: string | null;
+  revision?: number;
+  correction_reason?: string;
+};
+
+export type StaffRecord = Staff & {
+  staff_id: number;
+  first_name: string;
+  last_name: string;
+  address: string;
+  date_of_birth: string | null;
+  phone: string;
+  email: string;
+  date_hired: string | null;
+  date_left: string | null;
+  employment_type: string;
+  salary: number | null;
+  hourly_rate: number | null;
+  commission_rate: number | null;
+  revision: number;
+  role: string;
+  profile_key?: string;
+  pin_set?: boolean;
+  demo_pin?: string;
+  treatment_ids?: number[];
+};
+export type StaffNote = {
+  id: string;
+  staff_id: number;
+  body: string;
+  created_at: string;
+  removed_at?: string | null;
+};
+export type DayShift = {
+  staff_id: number;
+  shift_date: string;
+  start_minute: number | null;
+  end_minute: number | null;
+  revision: number;
 };

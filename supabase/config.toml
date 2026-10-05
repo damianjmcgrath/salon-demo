@@ -1,3 +1,7 @@
 [functions.create-client-account]
 # The function validates the caller using Supabase Auth getUser and checks their role itself.
 verify_jwt = false
+
+[functions.staff-pin-login]
+# Public entry point verifies the PIN server-side with rate limiting.
+verify_jwt = false

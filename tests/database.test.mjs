@@ -79,6 +79,21 @@ before(async () => {
     "update staff_users set profile_key='jacqui',active=true where user_id=$1",
     [accountant],
   );
+  // PGlite does not ship pgcrypto: stub ONLY its hashing API in the test harness.
+  await pg.exec(
+    "create schema extensions;create function extensions.gen_salt(text,integer) returns text language sql as $$ select 'test-salt'; $$;create function extensions.crypt(text,text) returns text language sql as $$ select md5($1||'test-only'); $$;",
+  );
+  await pg.exec(
+    (
+      await readFile(
+        new URL("../supabase/007_staff_administration.sql", import.meta.url),
+        "utf8",
+      )
+    ).replace(
+      "create extension if not exists pgcrypto with schema extensions;",
+      "",
+    ),
+  );
   clientId = (
     await one("select id from clients where auth_user_id=$1", [clientUser])
   ).id;
@@ -476,5 +491,251 @@ test("database: vouchers retain value and audited transfers, rejecting stale and
   await assert.rejects(
     pg.query("select create_voucher(10,'2080-01-01',null)"),
     /Staff access/,
+  );
+});
+let hrStaff;
+test("database: staff creation stores private HR, one pay rate, hashed PIN and a public profile", async () => {
+  await as(staffA);
+  const details = {
+    first_name: "Nora",
+    last_name: "Test",
+    address: "Private address",
+    date_of_birth: "1990-01-01",
+    phone: "0800000001",
+    email: "nora@example.com",
+    date_hired: "2020-01-01",
+    employment_type: "hourly",
+    hourly_rate: 20,
+    salary: 999,
+    commission_rate: 5,
+    photo_url: null,
+  };
+  hrStaff = await one("select * from save_admin_staff(null,$1,$2,0)", [
+    details,
+    "2580",
+  ]);
+  hrStaff = hrStaff.save_admin_staff;
+  assert.equal(hrStaff.name, "Nora Test");
+  assert.equal(Number(hrStaff.hourly_rate), 20);
+  assert.equal(hrStaff.salary, null);
+  assert.equal(hrStaff.commission_rate, null);
+  assert.equal(hrStaff.pin_hash, undefined);
+  assert.equal(hrStaff.demo_pin, undefined);
+  const hrList = (await one("select list_admin_staff()")).list_admin_staff;
+  assert(
+    hrList.some(
+      (s) => s.staff_id === hrStaff.id && s.address === "Private address",
+    ),
+  );
+  assert(hrList.every((s) => s.pin_hash === undefined));
+  const profile = await one("select * from portal_profiles where staff_id=$1", [
+    hrStaff.id,
+  ]);
+  assert(profile.profile_key);
+  assert.equal(profile.role, "staff");
+  await assert.rejects(
+    pg.query("select save_admin_staff($1,$2,$3,0)", [
+      hrStaff.id,
+      details,
+      "2580",
+    ]),
+    /changed/,
+  );
+  await as(staffB);
+  assert.equal((await pg.query("select * from staff_details")).rows.length, 0);
+  await assert.rejects(pg.query("select list_admin_staff()"), /Admin access/);
+  await assert.rejects(
+    pg.query("select save_staff_skills($1,$2)", [hrStaff.id, [treatmentId]]),
+    /Admin access/,
+  );
+  await assert.rejects(
+    pg.query("select verify_staff_pin('aoife','1234')"),
+    /permission denied/,
+  );
+  await as(accountant);
+  assert.equal((await pg.query("select * from staff_notes")).rows.length, 0);
+  await assert.rejects(pg.query("select list_admin_staff()"), /Admin access/);
+  await as(null, "anon");
+  assert.equal(
+    (
+      await pg.query(
+        "select display_name from portal_profiles where staff_id=$1",
+        [hrStaff.id],
+      )
+    ).rows.length,
+    1,
+  );
+  await assert.rejects(
+    pg.query("select * from staff_details"),
+    /permission denied/,
+  );
+});
+test("database: date-specific shifts and skills determine slots, including Sunday and 8am starts", async () => {
+  await as(staffA);
+  await pg.query("select save_staff_skills($1,$2)", [
+    hrStaff.id,
+    [treatmentId],
+  ]);
+  const days = [
+    {
+      shift_date: "2080-01-07",
+      start_minute: 480,
+      end_minute: 660,
+      revision: 0,
+    },
+    {
+      shift_date: "2080-01-08",
+      start_minute: null,
+      end_minute: null,
+      revision: 0,
+    },
+  ];
+  await pg.query("select save_staff_shifts($1,$2)", [hrStaff.id, days]);
+  await as(clientUser);
+  const slots = (
+    await pg.query("select * from get_available_slots($1,$2,$3)", [
+      treatmentId,
+      "2080-01-07",
+      hrStaff.id,
+    ])
+  ).rows;
+  assert(slots.some((x) => x.start_minute === 480));
+  assert(slots.every((x) => x.start_minute + 60 <= 660));
+  assert.equal(
+    (
+      await pg.query("select * from get_available_slots($1,$2,$3)", [
+        treatmentId,
+        "2080-01-08",
+        hrStaff.id,
+      ])
+    ).rows.length,
+    0,
+  );
+  await as(staffA);
+  await assert.rejects(
+    pg.query("select save_staff_shifts($1,$2)", [hrStaff.id, days]),
+    /changed/,
+  );
+  await pg.query("select save_staff_skills($1,$2)", [hrStaff.id, []]);
+  assert.equal(
+    (
+      await pg.query("select * from get_available_slots($1,$2,$3)", [
+        treatmentId,
+        "2080-01-07",
+        hrStaff.id,
+      ])
+    ).rows.length,
+    0,
+  );
+});
+test("database: HR notes are soft removed and PIN verification locks repeated failures", async () => {
+  await as(staffA);
+  const n = await one("select * from add_staff_note($1,'Private HR note')", [
+    hrStaff.id,
+  ]);
+  await pg.query("select remove_staff_note($1)", [n.id]);
+  assert(
+    (await one("select * from staff_notes where id=$1", [n.id])).removed_at,
+  );
+  const profile = await one(
+    "select profile_key from portal_profiles where staff_id=$1",
+    [hrStaff.id],
+  );
+  await as(null, "service_role");
+  for (let i = 0; i < 5; i++) {
+    const r = await one("select verify_staff_pin($1,$2)", [
+      profile.profile_key,
+      "0000",
+    ]);
+    assert.equal(r.verify_staff_pin.valid, false);
+  }
+  assert.equal(
+    (await one("select verify_staff_pin($1,$2)", [profile.profile_key, "2580"]))
+      .verify_staff_pin.valid,
+    false,
+  );
+  await pg.exec("reset role");
+  await pg.query(
+    "update staff_pin_secrets set locked_until=now()-interval '1 minute' where staff_id=$1",
+    [hrStaff.id],
+  );
+  await as(null, "service_role");
+  assert.equal(
+    (await one("select verify_staff_pin($1,$2)", [profile.profile_key, "2580"]))
+      .verify_staff_pin.valid,
+    true,
+  );
+});
+test("database: admin clock corrections retain originals in audit and reject overlap or stale writes", async () => {
+  await as(staffA);
+  const w = await one(
+    "select * from correct_staff_clock(2,null,now()-interval '2 days',now()-interval '2 days'+interval '2 hours','Forgot clock-in',0)",
+  );
+  assert.equal(w.staff_name, "Leah");
+  const corrected = await one(
+    "select * from correct_staff_clock(2,$1,now()-interval '2 days'+interval '10 minutes',now()-interval '2 days'+interval '2 hours','Correct start',1)",
+    [w.id],
+  );
+  assert.equal(corrected.revision, 2);
+  const audit = await one(
+    "select details from audit_events where action='staff_clock_corrected' and details->'after'->>'id'=$1 order by id desc limit 1",
+    [w.id],
+  );
+  assert.equal(
+    new Date(audit.details.before.clocked_in_at).toISOString(),
+    new Date(w.clocked_in_at).toISOString(),
+  );
+  assert.equal(audit.details.reason, "Correct start");
+  await assert.rejects(
+    pg.query(
+      "select correct_staff_clock(2,$1,now()-interval '2 days',now()-interval '2 days'+interval '2 hours','Old version',1)",
+      [w.id],
+    ),
+    /changed/,
+  );
+  await as(staffB);
+  await assert.rejects(
+    pg.query(
+      "select correct_staff_clock(2,null,now()-interval '4 days',now()-interval '3 days','No',0)",
+    ),
+    /Admin access/,
+  );
+});
+test("database: archiving retains private history but removes profile and availability", async () => {
+  await as(staffA);
+  await pg.query(
+    "select archive_admin_staff($1,(now() at time zone 'Europe/Dublin')::date,'Left salon',$2)",
+    [hrStaff.id, hrStaff.revision],
+  );
+  assert.equal(
+    (await one("select active from staff where id=$1", [hrStaff.id])).active,
+    false,
+  );
+  assert.equal(
+    (
+      await one("select staff_id from staff_details where staff_id=$1", [
+        hrStaff.id,
+      ])
+    ).staff_id,
+    hrStaff.id,
+  );
+  await as(null, "anon");
+  assert.equal(
+    (
+      await pg.query("select * from portal_profiles where staff_id=$1", [
+        hrStaff.id,
+      ])
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await pg.query("select * from get_available_slots($1,$2,$3)", [
+        treatmentId,
+        "2080-01-07",
+        hrStaff.id,
+      ])
+    ).rows.length,
+    0,
   );
 });

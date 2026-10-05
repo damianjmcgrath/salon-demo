@@ -1,3 +1,5 @@
+import StaffAdministration from "./StaffAdministration";
+import { seedStaffRecords, localShift } from "./staffAdminModel";
 import ClockControls from "./ClockControls";
 import { useEffect, useState, useRef } from "react";
 import { createClient, type Session } from "@supabase/supabase-js";
@@ -57,7 +59,7 @@ const initialStaff: Staff[] = [
   { id: 1, name: "Aoife" },
   { id: 2, name: "Leah" },
 ];
-const profiles = [
+const fallbackProfiles = [
   { id: 1, name: "Aoife", role: "admin" as Role, staffId: 1 },
   { id: 2, name: "Leah", role: "staff" as Role, staffId: 2 },
   { id: 3, name: "Jacqui", role: "accountant" as Role, staffId: null },
@@ -150,6 +152,52 @@ export default function App() {
       return { clients: demoClients, notes: [], activity: [], breaks: [] };
     }
   });
+  const [portalProfiles, setPortalProfiles] = useState<
+    {
+      id: number;
+      name: string;
+      role: Role;
+      staffId: number | null;
+      photo_url?: string | null;
+      profile_key?: string;
+    }[]
+  >(fallbackProfiles);
+  const [catalogVersion, setCatalogVersion] = useState(0);
+  const [staffSkills, setStaffSkills] = useState<
+    { staff_id: number; treatment_id: number }[]
+  >([]);
+  const records =
+    staffData.staffRecords || seedStaffRecords(treatments.map((t) => t.id));
+  const profiles = live
+    ? portalProfiles
+    : [
+        ...records
+          .filter((r) => r.active !== false)
+          .map((r) => ({
+            id: r.id,
+            name: r.name,
+            role: r.role as Role,
+            staffId: r.id,
+            photo_url: r.photo_url,
+            profile_key: r.profile_key,
+          })),
+        {
+          id: -1,
+          name: "Jacqui",
+          role: "accountant" as Role,
+          staffId: null,
+          photo_url: null,
+          profile_key: "jacqui",
+        },
+      ];
+  useEffect(() => {
+    if (!live)
+      setStaff(
+        records
+          .filter((r) => r.active !== false)
+          .map((r) => ({ id: r.id, name: r.name, photo_url: r.photo_url })),
+      );
+  }, [live, staffData.staffRecords]);
   const [remoteBreaks, setRemoteBreaks] = useState<DiaryBreak[]>([]),
     [breakDraft, setBreakDraft] = useState<DiaryBreak | null>(null),
     [breakStart, setBreakStart] = useState("13:00"),
@@ -532,9 +580,15 @@ export default function App() {
     let cancelled = false;
     (async () => {
       setError("");
-      const [ts, ss] = await Promise.all([
+      const [ts, ss, ps, sk] = await Promise.all([
         db.from("treatments").select("*").order("id"),
-        db.from("staff").select("id,name").order("id"),
+        db.from("staff").select("*").eq("active", true).order("id"),
+        db
+          .from("portal_profiles")
+          .select("*")
+          .eq("active", true)
+          .order("display_name"),
+        db.from("staff_treatments").select("*"),
       ]);
       if (cancelled) return;
       if (ts.error || ss.error) {
@@ -545,11 +599,23 @@ export default function App() {
       }
       setTreatments(ts.data);
       setStaff(ss.data);
+      if (!ps.error)
+        setPortalProfiles(
+          (ps.data || []).map((p) => ({
+            id: p.staff_id ?? -1,
+            name: p.display_name,
+            role: p.role,
+            staffId: p.staff_id,
+            profile_key: p.profile_key,
+            photo_url: p.photo_url,
+          })),
+        );
+      if (!sk.error) setStaffSkills(sk.data || []);
     })();
     return () => {
       cancelled = true;
     };
-  }, [live]);
+  }, [live, catalogVersion, session?.user.id]);
   async function refresh() {
     if (!live || !db || !session || roleLoading) return;
     const version = ++requestVersion.current;
@@ -687,6 +753,32 @@ export default function App() {
       events.forEach((e) => window.removeEventListener(e, reset));
     };
   }, [staffAccess, session?.user.id, localStaffId]);
+  async function loginWithPin() {
+    if (!db) return;
+    setBusy(true);
+    setError("");
+    try {
+      const selected = profiles.find((p) => p.id === loginTile);
+      if (!selected?.profile_key)
+        throw Error("Reload the profiles and try again.");
+      const r = await db.functions.invoke("staff-pin-login", {
+        body: { profile: selected.profile_key, pin },
+      });
+      if (r.error)
+        throw Error(
+          "PIN login unavailable or incorrect PIN. Check that the PIN function is deployed and enabled.",
+        );
+      if (r.data?.error) throw Error(r.data.error);
+      const login = await db.auth.setSession(r.data.session);
+      if (login.error) throw login.error;
+      setPin("");
+    } catch (e) {
+      setError((e as Error).message);
+      setPin("");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function signOut() {
     identityVersion.current++;
     setBusy(true);
@@ -761,16 +853,43 @@ export default function App() {
     } else {
       const sunday = new Date(date + "T12:00:00").getDay() === 0;
       setSlots(
-        sunday
+        sunday &&
+          !(staffData.dayShifts || []).some(
+            (s) => s.shift_date === date && s.start_minute !== null,
+          )
           ? []
           : availableSlots(
               treatment.duration,
-              staffChoice ? [staffChoice] : staff.map((s) => s.id),
+              staff
+                .filter(
+                  (s) =>
+                    (!staffChoice || s.id === staffChoice) &&
+                    records
+                      .find((r) => r.id === s.id)
+                      ?.treatment_ids?.includes(treatment.id),
+                )
+                .map((s) => s.id),
               local.filter(
                 (a) => a.appointment_date === date && a.id !== amending?.id,
               ),
               breaks,
-            ),
+              undefined,
+              staff.map((s) =>
+                localShift(records, staffData.dayShifts || [], s.id, date),
+              ),
+            ).filter((slot) => {
+              const shift = localShift(
+                records,
+                staffData.dayShifts || [],
+                slot.staff_id,
+                date,
+              );
+              return (
+                shift.start_minute !== null &&
+                slot.start_minute >= shift.start_minute &&
+                slot.start_minute + treatment.duration <= shift.end_minute!
+              );
+            }),
       );
     }
     return () => {
@@ -784,9 +903,22 @@ export default function App() {
     local,
     staff,
     staffData.breaks,
+    staffData.staffRecords,
+    staffData.dayShifts,
     remoteBreaks,
     amending?.id,
   ]);
+  const eligibleStaff = staff.filter(
+    (s) =>
+      !treatment ||
+      (live
+        ? staffSkills.some(
+            (k) => k.staff_id === s.id && k.treatment_id === treatment.id,
+          )
+        : records
+            .find((r) => r.id === s.id)
+            ?.treatment_ids?.includes(treatment.id)),
+  );
   async function book() {
     if (
       !treatment ||
@@ -848,8 +980,15 @@ export default function App() {
             (a) => a.appointment_date === date && a.id !== amending?.id,
           ),
           breaks,
+          undefined,
+          [localShift(records, staffData.dayShifts || [], slot.staff_id, date)],
         ).some((s) => s.start_minute === slot.start_minute);
-        if (!valid)
+        if (
+          !valid ||
+          !records
+            .find((r) => r.id === slot.staff_id && r.active !== false)
+            ?.treatment_ids?.includes(treatment.id)
+        )
           throw Error("That time is no longer available. Choose another.");
         let recipient = staffClient;
         if (!recipient) {
@@ -992,6 +1131,17 @@ export default function App() {
       (a) => a.appointment_date === date,
     ),
     completed = dayAppointments.filter((a) => a.status === "completed");
+  const diaryStart = Math.min(
+    480,
+    ...dayAppointments.map((a) => Math.floor(a.start_minute / 60) * 60),
+  );
+  const diaryEnd = Math.max(
+    1080,
+    ...dayAppointments.map(
+      (a) => Math.ceil((a.start_minute + a.duration) / 60) * 60,
+    ),
+  );
+  const diaryHeight = (diaryEnd - diaryStart) * 1.6;
   return (
     <>
       <div className="demo-banner">
@@ -1149,12 +1299,12 @@ export default function App() {
       >
         {staffAccess && !roleLoading && (
           <ClockControls
-            key={`${live}-${session?.user.id || activeRole}`}
+            key={`${live}-${session?.user.id || activeRole}-${catalogVersion}`}
             live={live}
             db={db}
             data={staffData}
             setData={setStaffData}
-            userId={session?.user.id || `local-${activeRole}`}
+            userId={session?.user.id || `local-staff-${ownStaffId}`}
             staffId={ownStaffId}
             name={actorName}
           />
@@ -1456,7 +1606,7 @@ export default function App() {
                       onChange={(e) => setStaffChoice(Number(e.target.value))}
                     >
                       <option value={0}>No preference — first available</option>
-                      {staff.map((s) => (
+                      {eligibleStaff.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name}
                         </option>
@@ -1721,7 +1871,7 @@ export default function App() {
                 Choose your profile.{" "}
                 {live
                   ? "Use your individual account to sign in."
-                  : "Local PIN preview only · demo PIN 1234"}
+                  : "Local PIN preview only · initial demo PIN 1234"}
               </p>
               {loginTile === null ? (
                 <div className="workspace-grid">
@@ -1741,10 +1891,13 @@ export default function App() {
                           setError("");
                         }}
                       >
-                        {s.role !== "accountant" ? (
+                        {s.photo_url ? (
                           <img
                             className="profile-photo"
-                            src={`./images/${s.name.toLowerCase()}.webp`}
+                            src={
+                              s.photo_url ||
+                              `./images/${s.name.toLowerCase()}.webp`
+                            }
                             alt=""
                           />
                         ) : (
@@ -1767,15 +1920,56 @@ export default function App() {
                   </button>
                   <h2>{profiles.find((s) => s.id === loginTile)?.name}</h2>
                   {live && db ? (
-                    <AuthPanel db={db} staffMode onComplete={() => {}} />
+                    <>
+                      {!accountantPortal && (
+                        <form
+                          className="panel login"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void loginWithPin();
+                          }}
+                        >
+                          <label>
+                            4-digit login PIN
+                            <input
+                              type="password"
+                              inputMode="numeric"
+                              pattern="[0-9]{4}"
+                              maxLength={4}
+                              value={pin}
+                              required
+                              autoComplete="off"
+                              onChange={(e) =>
+                                setPin(e.target.value.replace(/\D/g, ""))
+                              }
+                            />
+                          </label>
+                          <button className="primary" disabled={busy}>
+                            Sign in with PIN
+                          </button>
+                        </form>
+                      )}
+                      <details className="panel">
+                        <summary>
+                          {accountantPortal
+                            ? "Sign in to Reporting"
+                            : "Use email and password"}
+                        </summary>
+                        <AuthPanel db={db} staffMode onComplete={() => {}} />
+                      </details>
+                    </>
                   ) : (
                     <form
                       className="panel login"
                       onSubmit={(e) => {
                         e.preventDefault();
-                        if (pin !== "1234") {
+                        if (
+                          pin !==
+                          (records.find((r) => r.id === loginTile)?.demo_pin ||
+                            "1234")
+                        ) {
                           setError(
-                            "Use demo PIN 1234. This is not a real staff login.",
+                            "Incorrect demo PIN. This is not a real staff login.",
                           );
                           setPin("");
                           return;
@@ -1913,7 +2107,24 @@ export default function App() {
               </button>
             </div>
           </section>
-        ) : ["reporting-placeholder", "staff-admin"].includes(view) &&
+        ) : view === "staff-admin" && activeRole === "admin" ? (
+          <StaffAdministration
+            key={`${live}-${session?.user.id || ownStaffId}`}
+            live={live}
+            db={db}
+            data={staffData}
+            setData={setStaffData}
+            treatments={treatments}
+            appointments={appointments}
+            ownStaffId={ownStaffId}
+            actor={actorName}
+            onHome={staffHome}
+            onChanged={() => {
+              setCatalogVersion((v) => v + 1);
+              void refresh();
+            }}
+          />
+        ) : ["reporting-placeholder"].includes(view) &&
           canAccess(activeRole, view) ? (
           <section className="panel">
             <button
@@ -2034,12 +2245,18 @@ export default function App() {
                   >
                     <div className="time-column">
                       <div className="staff-heading">Dublin time</div>
-                      <div className="time-body">
-                        {Array.from({ length: 9 }, (_, i) => (
-                          <span key={i} style={{ top: i * 96 }}>
-                            {time(540 + i * 60)}
-                          </span>
-                        ))}
+                      <div
+                        className="time-body"
+                        style={{ height: diaryHeight }}
+                      >
+                        {Array.from(
+                          { length: (diaryEnd - diaryStart) / 60 + 1 },
+                          (_, i) => (
+                            <span key={i} style={{ top: i * 96 }}>
+                              {time(diaryStart + i * 60)}
+                            </span>
+                          ),
+                        )}
                       </div>
                     </div>
                     {staff.map((s) => (
@@ -2048,14 +2265,20 @@ export default function App() {
                           <span className="avatar">{s.name[0]}</span>
                           {s.name}
                         </div>
-                        <div className="diary-body">
-                          {Array.from({ length: 16 }, (_, i) => (
-                            <div
-                              className="gridline"
-                              key={i}
-                              style={{ top: i * 48 }}
-                            />
-                          ))}
+                        <div
+                          className="diary-body"
+                          style={{ height: diaryHeight }}
+                        >
+                          {Array.from(
+                            { length: (diaryEnd - diaryStart) / 30 },
+                            (_, i) => (
+                              <div
+                                className="gridline"
+                                key={i}
+                                style={{ top: i * 48 }}
+                              />
+                            ),
+                          )}
                           {new Date(date + "T12:00:00").getDay() === 0 ? (
                             <div className="closed">Salon closed</div>
                           ) : (
@@ -2069,7 +2292,7 @@ export default function App() {
                                     disabled={b.staff_id !== ownStaffId}
                                     onClick={() => openBreak(b)}
                                     style={{
-                                      top: (b.start_minute - 540) * 1.6,
+                                      top: (b.start_minute - diaryStart) * 1.6,
                                       height: Math.max(b.duration * 1.6, 24),
                                     }}
                                   >
@@ -2090,7 +2313,7 @@ export default function App() {
                                 key={a.id}
                                 className={`appointment ${a.status}`}
                                 style={{
-                                  top: (a.start_minute - 540) * 1.6,
+                                  top: (a.start_minute - diaryStart) * 1.6,
                                   height: Math.max(a.duration * 1.6, 24),
                                 }}
                                 onClick={() => {

@@ -337,21 +337,230 @@ test("UI: diary and booking therapist choices contain only salon staff", async (
   assert.equal(document.querySelectorAll(".staff-column").length, 2);
   assert.equal(screen.queryByText("Jacqui"), null);
 });
-test('UI: separate Accountant Portal has only Jacqui and Reporting',async()=>{
- cleanup();window.history.replaceState({},'', '?portal=accountant');
- try {
- const AccountantApp=(await import(pathToFileURL(buildDir+'/app.mjs').href+'?accountant')).default;
- render(React.createElement(AccountantApp));assert(screen.getByRole('heading',{name:'Accountant sign-in'}));assert.equal(document.querySelectorAll('.staff-tile').length,1);
- fireEvent.click(screen.getByRole('button',{name:/Jacqui/}));fireEvent.change(screen.getByLabelText('4-digit demo PIN'),{target:{value:'1234'}});fireEvent.click(screen.getByRole('button',{name:'Open demo workspace'}));
- assert(await screen.findByRole('heading',{name:'Welcome, Jacqui.'}));assert.equal(document.querySelectorAll('.workspace-card').length,1);assert.equal(screen.queryByRole('button',{name:'Clock-In'}),null);assert.equal(screen.queryByRole('button',{name:'Staff Diary'}),null);
- } finally {cleanup();window.history.replaceState({},'','?portal=staff');}
+test("UI: separate Accountant Portal has only Jacqui and Reporting", async () => {
+  cleanup();
+  window.history.replaceState({}, "", "?portal=accountant");
+  try {
+    const AccountantApp = (
+      await import(pathToFileURL(buildDir + "/app.mjs").href + "?accountant")
+    ).default;
+    render(React.createElement(AccountantApp));
+    assert(screen.getByRole("heading", { name: "Accountant sign-in" }));
+    assert.equal(document.querySelectorAll(".staff-tile").length, 1);
+    fireEvent.click(screen.getByRole("button", { name: /Jacqui/ }));
+    fireEvent.change(screen.getByLabelText("4-digit demo PIN"), {
+      target: { value: "1234" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open demo workspace" }),
+    );
+    assert(await screen.findByRole("heading", { name: "Welcome, Jacqui." }));
+    assert.equal(document.querySelectorAll(".workspace-card").length, 1);
+    assert.equal(screen.queryByRole("button", { name: "Clock-In" }), null);
+    assert.equal(screen.queryByRole("button", { name: "Staff Diary" }), null);
+  } finally {
+    cleanup();
+    window.history.replaceState({}, "", "?portal=staff");
+  }
 });
-test('UI: client choice screen leads directly to self treatments or recipient details',async()=>{
- cleanup();window.history.replaceState({},'', '/');
- try {const ClientApp=(await import(pathToFileURL(buildDir+'/app.mjs').href+'?client-choice')).default;render(React.createElement(ClientApp));fireEvent.click(screen.getByRole('button',{name:'Client',exact:true}));
- assert(screen.getByRole('heading',{name:'Who are you booking for?'}));assert.equal(document.querySelector('.intro'),null);assert.equal(document.querySelector('.steps'),null);
- fireEvent.click(screen.getByRole('button',{name:'Menu',exact:true}));assert.equal(screen.getByRole('button',{name:'Menu',exact:true}).getAttribute('aria-expanded'),'true');fireEvent.click(screen.getByRole('button',{name:'Book a treatment',exact:true}));assert.equal(screen.getByRole('button',{name:'Menu',exact:true}).getAttribute('aria-expanded'),'false');
- fireEvent.click(screen.getByRole('button',{name:'Yourself',exact:true}));assert(screen.getByRole('heading',{name:'Explore treatments'}));assert(document.querySelector('.steps'));
- fireEvent.click(screen.getByRole('button',{name:/Booking recipient/}));fireEvent.click(screen.getByRole('button',{name:'Someone Else',exact:true}));assert(screen.getByRole('heading',{name:'Their details'}));assert(screen.getByLabelText('Full name'));
- }finally{cleanup();window.history.replaceState({},'','?portal=staff');}
+test("UI: client choice screen leads directly to self treatments or recipient details", async () => {
+  cleanup();
+  window.history.replaceState({}, "", "/");
+  try {
+    const ClientApp = (
+      await import(pathToFileURL(buildDir + "/app.mjs").href + "?client-choice")
+    ).default;
+    render(React.createElement(ClientApp));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Client", exact: true }),
+    );
+    assert(screen.getByRole("heading", { name: "Who are you booking for?" }));
+    assert.equal(document.querySelector(".intro"), null);
+    assert.equal(document.querySelector(".steps"), null);
+    fireEvent.click(screen.getByRole("button", { name: "Menu", exact: true }));
+    assert.equal(
+      screen
+        .getByRole("button", { name: "Menu", exact: true })
+        .getAttribute("aria-expanded"),
+      "true",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Book a treatment", exact: true }),
+    );
+    assert.equal(
+      screen
+        .getByRole("button", { name: "Menu", exact: true })
+        .getAttribute("aria-expanded"),
+      "false",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Yourself", exact: true }),
+    );
+    assert(screen.getByRole("heading", { name: "Explore treatments" }));
+    assert(document.querySelector(".steps"));
+    fireEvent.click(screen.getByRole("button", { name: /Booking recipient/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Someone Else", exact: true }),
+    );
+    assert(screen.getByRole("heading", { name: "Their details" }));
+    assert(screen.getByLabelText("Full name"));
+  } finally {
+    cleanup();
+    window.history.replaceState({}, "", "?portal=staff");
+  }
+});
+test("UI: admin creates staff, edits notes and skills, archives with retained history", async () => {
+  await login(/Aoife/);
+  fireEvent.click(
+    screen.getByRole("button", { name: /Staff Administration Staff/ }),
+  );
+  await screen.findByRole("heading", { name: "Staff Administration" });
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Create New Staff Member",
+      exact: true,
+    }),
+  );
+  fireEvent.change(screen.getByLabelText("First name"), {
+    target: { value: "Nora" },
+  });
+  fireEvent.change(screen.getByLabelText("Last name"), {
+    target: { value: "Test" },
+  });
+  fireEvent.change(screen.getByLabelText(/^Login PIN/), {
+    target: { value: "2580" },
+  });
+  fireEvent.change(screen.getByLabelText("Current Hourly Rate (€)"), {
+    target: { value: "20" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save staff details" }));
+  assert(await screen.findByRole("heading", { name: "Nora Test" }));
+  fireEvent.click(screen.getByRole("button", { name: "Notes", exact: true }));
+  fireEvent.change(screen.getByLabelText("New staff note"), {
+    target: { value: "Completed induction" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Add staff note" }));
+  assert(await screen.findByText("Completed induction"));
+  fireEvent.click(screen.getByRole("button", { name: "Remove note" }));
+  await waitFor(() =>
+    assert.equal(screen.queryByText("Completed induction"), null),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Treatments", exact: true }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Select visible treatments" }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Save treatment permissions" }),
+  );
+  await screen.findByText("Treatment permissions saved.");
+  fireEvent.click(screen.getByRole("button", { name: "Shifts", exact: true }));
+  assert.equal(screen.getAllByRole("checkbox", { name: "Working" }).length, 14);
+  fireEvent.click(screen.getAllByRole("checkbox", { name: "Working" })[0]);
+  fireEvent.click(screen.getByRole("button", { name: "Save working shifts" }));
+  await screen.findByText("Working shifts saved.");
+  fireEvent.click(screen.getByRole("button", { name: "Archive", exact: true }));
+  fireEvent.change(screen.getByLabelText("Archive reason"), {
+    target: { value: "Left salon" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Archive staff member", exact: true }),
+  );
+  await screen.findByText("Staff member archived. History retained.");
+  assert.equal(screen.queryByRole("button", { name: /Nora Test/ }), null);
+  fireEvent.click(
+    screen.getByRole("checkbox", { name: "Show archived staff" }),
+  );
+  assert(screen.getByRole("button", { name: /Nora Test/ }));
+  const d = JSON.parse(localStorage.getItem("sculpted-staff-data-v1"));
+  const n = d.staffRecords.find((s) => s.first_name === "Nora");
+  assert.equal(n.active, false);
+  assert.equal(n.date_left, "2026-10-05");
+  assert(d.staffNotes[0].removed_at);
+  assert(n.treatment_ids.length > 0);
+});
+test("UI: newly created staff appears in login and uses its saved demo PIN", async () => {
+  await login(/Aoife/);
+  fireEvent.click(
+    screen.getByRole("button", { name: /Staff Administration Staff/ }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: "Create New Staff Member",
+      exact: true,
+    }),
+  );
+  fireEvent.change(screen.getByLabelText("First name"), {
+    target: { value: "Nora" },
+  });
+  fireEvent.change(screen.getByLabelText(/^Login PIN/), {
+    target: { value: "2580" },
+  });
+  fireEvent.change(screen.getByLabelText("Current Hourly Rate (€)"), {
+    target: { value: "20" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save staff details" }));
+  await screen.findByRole("heading", { name: "Nora", exact: true });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Switch profile / lock" }),
+  );
+  fireEvent.click(await screen.findByRole("button", { name: /Nora/ }));
+  fireEvent.change(screen.getByLabelText("4-digit demo PIN"), {
+    target: { value: "2580" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Open demo workspace" }));
+  assert(await screen.findByRole("heading", { name: "Your salon workspace." }));
+  assert.equal(
+    screen.queryByRole("button", { name: /Staff Administration Staff/ }),
+    null,
+  );
+});
+test("UI: admin can add and amend missed clock entries with a retained audit trail", async () => {
+  await login(/Aoife/);
+  fireEvent.click(
+    screen.getByRole("button", { name: /Staff Administration Staff/ }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Leah Staff/ }));
+  await screen.findByRole("heading", { name: "Leah", exact: true });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Clock history", exact: true }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "Add missed clock entry" }),
+  );
+  fireEvent.change(screen.getByLabelText("Clock-In time"), {
+    target: { value: "2026-10-04T09:00" },
+  });
+  fireEvent.change(screen.getByLabelText("Clock-Out time"), {
+    target: { value: "2026-10-04T17:00" },
+  });
+  fireEvent.change(screen.getByLabelText("Correction reason"), {
+    target: { value: "Forgot to clock in" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Save clock correction" }),
+  );
+  await screen.findByText(
+    "Clock record saved; original times retained in the audit history.",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Amend clock times" }));
+  fireEvent.change(screen.getByLabelText("Clock-In time"), {
+    target: { value: "2026-10-04T09:15" },
+  });
+  fireEvent.change(screen.getByLabelText("Correction reason"), {
+    target: { value: "Correct actual arrival" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Save clock correction" }),
+  );
+  await screen.findByText(
+    "Clock record saved; original times retained in the audit history.",
+  );
+  const d = JSON.parse(localStorage.getItem("sculpted-staff-data-v1"));
+  assert.equal(d.shifts.length, 1);
+  assert.equal(d.shifts[0].clocked_in_at, "2026-10-04T08:15:00.000Z");
+  const log = d.activity.filter((a) => a.action === "staff_clock_corrected");
+  assert.equal(log.length, 2);
+  assert.equal(log[1].details.before.clocked_in_at, "2026-10-04T08:00:00.000Z");
 });

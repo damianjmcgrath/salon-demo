@@ -46,7 +46,7 @@ export default function ClockControls({
     if (!live) {
       setActive(
         (data.shifts || []).find(
-          (s) => s.user_id === userId && !s.clocked_out_at,
+          (s) => s.staff_id === staffId && !s.clocked_out_at,
         ) || null,
       );
       setBusy(false);

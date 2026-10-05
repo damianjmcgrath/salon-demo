@@ -1,13 +1,30 @@
+/** @param {Array<{staff_id:number,start_minute:number|null,end_minute:number|null}>|null} workingHours */
 export function availableSlots(
   duration,
   staffIds,
   appointments,
   breaks,
   interval = startInterval(duration),
+  workingHours = null,
 ) {
   const slots = [];
-  for (let start = 540; start + duration <= 1020; start += interval) {
+  for (
+    let start = workingHours ? 0 : 540;
+    start + duration <= (workingHours ? 1440 : 1020);
+    start += interval
+  ) {
     for (const staffId of staffIds) {
+      if (
+        workingHours &&
+        !workingHours.some(
+          (s) =>
+            s.staff_id === staffId &&
+            s.start_minute !== null &&
+            start >= s.start_minute &&
+            start + duration <= s.end_minute,
+        )
+      )
+        continue;
       const blocked = [
         ...appointments.filter(
           (a) => a.staff_id === staffId && a.status !== "cancelled",
