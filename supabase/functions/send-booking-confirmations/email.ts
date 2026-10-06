@@ -50,9 +50,8 @@ export function confirmationPayload(
 <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">Your ${escape(s.treatment_name)} appointment is confirmed for ${escape(date)} at ${escape(time)}.</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f3f1eb;"><tr><td align="center" style="padding:24px 12px;">
 <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background-color:#fffdf8;border:1px solid #e4e0d6;">
-<tr><td align="center" style="padding:32px 24px;background-color:#303b30;color:#fffdf8;">
-<p style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:32px;letter-spacing:5px;">SCULPTED</p>
-<p style="margin:10px 0 0;font-size:11px;letter-spacing:3px;color:#e5e5d7;">BY AOIFE CLAIRE</p>
+<tr><td align="center" style="padding:28px 24px;background-color:#ffffff;border-bottom:1px solid #e4e0d6;">
+<img src="https://damianjmcgrath.github.io/salon-demo/images/salon-logo.png" width="300" alt="Sculpted by Aoife Claire" style="display:block;width:100%;max-width:300px;height:auto;border:0;color:#292822;font-family:Georgia,'Times New Roman',serif;font-size:24px;">
 </td></tr>
 <tr><td style="padding:32px 24px 24px;">
 <p style="margin:0 0 14px;font-size:11px;font-weight:bold;letter-spacing:2px;color:#63705b;">APPOINTMENT CONFIRMED</p>
