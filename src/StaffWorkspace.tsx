@@ -413,6 +413,50 @@ export default function StaffWorkspace({
     intent === "amend" || intent === "cancel"
       ? openAppointments(history, client?.id)
       : history;
+  const appointmentSelection = intent === "amend" || intent === "cancel";
+  const clockParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Dublin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const clockPart = (key: string) =>
+    clockParts.find((p) => p.type === key)?.value || "";
+  const currentDay = `${clockPart("year")}-${clockPart("month")}-${clockPart("day")}`;
+  const currentMinute =
+    Number(clockPart("hour")) * 60 + Number(clockPart("minute"));
+  const isUpcoming = (a: Appointment) =>
+    ["booked", "checked_in"].includes(a.status) &&
+    (a.appointment_date > currentDay ||
+      (a.appointment_date === currentDay &&
+        a.start_minute + a.duration > currentMinute));
+  const appointmentGroups = appointmentSelection
+    ? [
+        {
+          heading:
+            intent === "amend"
+              ? "Select an appointment to amend"
+              : "Select an appointment to cancel",
+          bookings: visibleHistory,
+          empty: "No open appointments for this client.",
+        },
+      ]
+    : [true, false].map((upcoming) => ({
+        heading: upcoming ? "Upcoming Appointments" : "Previous Appointments",
+        bookings: visibleHistory
+          .filter((a) => isUpcoming(a) === upcoming)
+          .sort(
+            (a, b) =>
+              (a.appointment_date.localeCompare(b.appointment_date) ||
+                a.start_minute - b.start_minute) * (upcoming ? 1 : -1),
+          ),
+        empty: upcoming
+          ? "No upcoming appointments for this client."
+          : "No previous appointments for this client.",
+      }));
   function select(c: Client) {
     if (intent === "book") onBook(c);
     else void loadClient(c);
@@ -693,58 +737,61 @@ export default function StaffWorkspace({
             </div>
           )}
           <section className="panel">
-            <h2>
-              {intent === "amend"
-                ? "Select an appointment to amend"
-                : intent === "cancel"
-                  ? "Select an appointment to cancel"
-                  : "Booking history & future appointments"}
-            </h2>
-            {visibleHistory.map((a) => (
-              <article className="history-card" key={a.id}>
-                <div>
-                  <h3>{a.treatment_name}</h3>
-                  <p>
-                    {a.appointment_date} · {time(a.start_minute)} ·{" "}
-                    {a.client_name}
-                  </p>
-                  <span className={`status ${a.status}`}>
-                    {a.status.replace("_", " ")}
-                  </span>
-                </div>
-                {["booked", "checked_in"].includes(a.status) && (
-                  <div className="record-actions">
-                    {intent !== "cancel" && (
-                      <button
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() => onBook(client, a)}
-                      >
-                        Amend
-                      </button>
+            {appointmentGroups.map((group) => (
+              <section
+                className={
+                  appointmentSelection ? undefined : "appointment-section"
+                }
+                key={group.heading}
+              >
+                <h2>
+                  {group.heading}
+                  {!appointmentSelection && (
+                    <span>{group.bookings.length}</span>
+                  )}
+                </h2>
+                {group.bookings.map((a) => (
+                  <article className="history-card" key={a.id}>
+                    <div>
+                      <h3>{a.treatment_name}</h3>
+                      <p>
+                        {a.appointment_date} · {time(a.start_minute)} ·{" "}
+                        {a.client_name}
+                      </p>
+                      <span className={`status ${a.status}`}>
+                        {a.status.replace("_", " ")}
+                      </span>
+                    </div>
+                    {["booked", "checked_in"].includes(a.status) && (
+                      <div className="record-actions">
+                        {intent !== "cancel" && (
+                          <button
+                            className="secondary"
+                            disabled={busy}
+                            onClick={() => onBook(client, a)}
+                          >
+                            Amend
+                          </button>
+                        )}
+                        {intent !== "amend" && (
+                          <button
+                            className="danger"
+                            disabled={busy}
+                            onClick={() => {
+                              setCancel(a);
+                              setReason("");
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     )}
-                    {intent !== "amend" && (
-                      <button
-                        className="danger"
-                        disabled={busy}
-                        onClick={() => {
-                          setCancel(a);
-                          setReason("");
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </div>
-                )}
-              </article>
+                  </article>
+                ))}
+                {!group.bookings.length && <p>{group.empty}</p>}
+              </section>
             ))}
-            {!visibleHistory.length && (
-              <p>
-                No {intent === "amend" || intent === "cancel" ? "open " : ""}
-                appointments for this client.
-              </p>
-            )}
           </section>
           <section className="panel">
             <h2>Change history</h2>
