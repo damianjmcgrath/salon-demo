@@ -2381,6 +2381,7 @@ export default function App() {
         ) : ["reporting-placeholder"].includes(view) &&
           canAccess(activeRole, view) ? (
           <Reporting
+            allowSandbox={activeRole === "admin"}
             key={`${session?.user.id || "local"}-${view}`}
             db={db}
             onHome={() => setView(roleHome(activeRole))}

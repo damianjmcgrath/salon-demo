@@ -1,3 +1,4 @@
+import RevolutSandbox from "./RevolutSandbox";
 import { useRef, useState } from "react";
 import StaffReports, { staffReportNames } from "./StaffReports";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -39,10 +40,13 @@ const money = (n: number) =>
 export default function Reporting({
   db,
   onHome,
+  allowSandbox = false,
 }: {
   db: SupabaseClient | null;
   onHome: () => void;
+  allowSandbox?: boolean;
 }) {
+  const [sandbox, setSandbox] = useState(false);
   const [staffReport, setStaffReport] = useState<
     keyof typeof staffReportNames | null
   >(null);
@@ -151,6 +155,7 @@ export default function Reporting({
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  if (sandbox && allowSandbox) return <RevolutSandbox db={db} onBack={() => setSandbox(false)} />;
   if (staffReport)
     return (
       <StaffReports
@@ -172,6 +177,7 @@ export default function Reporting({
       {!period ? (
         <>
           <h2>Active Reports</h2>
+          {allowSandbox && <p><button onClick={() => setSandbox(true)}>Revolut Sandbox Test</button></p>}
           <div className="workspace-grid">
             {(
               Object.entries(staffReportNames) as [
