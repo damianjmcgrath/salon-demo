@@ -16,8 +16,10 @@ Deno.serve(async (req: Request) => {
  const bearer=req.headers.get("Authorization")?.replace(/^Bearer\s+/i,"") || "";
  const {data:auth,error:authError}=await db.auth.getUser(bearer);
  if(authError || !auth.user) return reply({error:"Please sign in."},401);
- const {data:role,error:roleError}=await db.from("staff_users").select("role").eq("user_id",auth.user.id).maybeSingle();
- if(roleError || role?.role!=="admin") return reply({error:"Admin access required."},403);
+ const userDb=createClient(Deno.env.get("SUPABASE_URL")!,Deno.env.get("SUPABASE_ANON_KEY")!,{global:{headers:{Authorization:"Bearer "+bearer}},auth:{persistSession:false,autoRefreshToken:false}});
+ const {data:isAdmin,error:roleError}=await userDb.rpc("is_salon_admin");
+ if(roleError) return reply({error:"Unable to verify admin access: "+roleError.message},503);
+ if(isAdmin!==true) return reply({error:"Admin access required. Sign out and select Aoife in the Staff Portal."},403);
  async function api(path:string, body?:unknown) {
   const r=await fetch("https://sandbox-merchant.revolut.com/api"+path,{method:body?"POST":"GET",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json","Revolut-Api-Version":"2023-09-01"},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
   const value=await r.json();
