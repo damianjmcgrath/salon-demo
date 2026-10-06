@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export default function RevolutSandbox({db,onBack}:{db:SupabaseClient|null;onBack:()=>void}) {
  const [consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
  const [testId,setTestId]=useState(""),[ready,setReady]=useState(false),[saved,setSaved]=useState(false),[attempted,setAttempted]=useState(false);
+ const [cardholderName,setCardholderName]=useState("Damian McGrath");
  const target=useRef<HTMLDivElement>(null);
  const card=useRef<ReturnType<Awaited<ReturnType<typeof RevolutCheckout>>["createCardField"]>|null>(null);
  useEffect(()=>()=>{card.current?.destroy();},[]);
@@ -29,8 +30,9 @@ export default function RevolutSandbox({db,onBack}:{db:SupabaseClient|null;onBac
  <p><a href="https://developer.revolut.com/docs/guides/merchant/test-and-go-live/testing/test-cards" target="_blank" rel="noreferrer">Open official Sandbox test cards</a></p>
  <label><input type="checkbox" checked={consent} disabled={ready||busy} onChange={e=>setConsent(e.target.checked)}/> I agree to save this test card for a subsequent €10 Sandbox charge.</label>
  <p><button className="primary" disabled={!consent||busy||ready} onClick={()=>void start()}>1. Start €0 Card Setup</button></p>
+ {ready&&<label>Cardholder full name<input value={cardholderName} disabled={busy} autoComplete="cc-name" onChange={e=>setCardholderName(e.target.value)}/></label>}
  <div ref={target} style={{minHeight:100}}/>
- {ready&&<button className="primary" disabled={busy} onClick={()=>{setBusy(true);try{card.current?.submit({savePaymentMethodFor:"merchant"});}catch(e){setMessage(String(e));setBusy(false);}}}>Save Test Card</button>}
+ {ready&&<button className="primary" disabled={busy} onClick={()=>{if(cardholderName.trim().split(/\s+/).length<2){setMessage("Enter the cardholder’s first and last name.");return;}setBusy(true);try{card.current?.submit({name:cardholderName.trim(),email:"sandbox-card-setup@example.com",savePaymentMethodFor:"merchant"});}catch(e){setMessage(String(e));setBusy(false);}}}>Save Test Card</button>}
  {testId&&<p><button disabled={busy} onClick={()=>void check()}>Check Saved Card / Payment Status</button></p>}
  <button className="primary" disabled={!saved||busy||attempted} onClick={()=>void run(async()=>{setAttempted(true);const data=await call("charge");setMessage("Sandbox payment result: "+data.payment_state+". Check payment status to confirm.");})}>2. Test €10 Charge</button>
  <p role="status">{busy?"Contacting Revolut Sandbox…":message}</p>
