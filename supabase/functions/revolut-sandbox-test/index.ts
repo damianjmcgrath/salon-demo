@@ -21,9 +21,9 @@ Deno.serve(async (req: Request) => {
  if(roleError) return reply({error:"Unable to verify admin access: "+roleError.message},503);
  if(isAdmin!==true) return reply({error:"Admin access required. Sign out and select Aoife in the Staff Portal."},403);
  async function api(path:string, body?:unknown) {
-  const r=await fetch("https://sandbox-merchant.revolut.com/api"+path,{method:body?"POST":"GET",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json","Revolut-Api-Version":"2023-09-01"},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
+  const r=await fetch("https://sandbox-merchant.revolut.com/api"+path,{method:body?"POST":"GET",headers:{Authorization:"Bearer "+key,"Content-Type":"application/json","Revolut-Api-Version":path.startsWith("/customers/")?"2026-08-17":"2023-09-01"},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
   const value=await r.json();
-  if(!r.ok) throw new Error("Revolut "+r.status+": "+(typeof value.message==="string"?value.message.slice(0,300):"Request rejected."));
+  if(!r.ok) throw new Error((path.startsWith("/customers/")?"Saved-card lookup":body?"Payment request":"Order lookup")+" — Revolut "+r.status+": "+(typeof value.message==="string"?value.message.slice(0,300):"Request rejected."));
   return value;
  }
  try {
