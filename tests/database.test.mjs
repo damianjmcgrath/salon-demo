@@ -992,3 +992,21 @@ test('database: proxy bookings reuse email identity and are visible to creator a
  assert.equal((await pg.query("select * from search_clients('Damian','','')")).rows.length,1);
  await assert.rejects(pg.query("select create_client('Duplicate','DAMIAN@EXAMPLE.COM','07891039749')"), /already exists/);
 });
+
+test('activity reports include empty periods, aggregate recorded methods and protect financial access', async () => {
+ await pg.exec('reset role');
+ await pg.exec(await readFile(new URL('../supabase/012_activity_reports.sql',import.meta.url),'utf8'));
+ const c=await one("select id from clients where auth_user_id=$1",[clientUser]);
+ for(const [day,minute,status,method,price] of [
+  ['2090-01-01',600,'completed','card',99],['2090-01-01',660,'completed','cash',40],['2090-01-01',720,'completed','voucher',25],['2090-01-01',780,'completed','credit',10],['2090-01-01',840,'booked',null,50],['2090-01-01',900,'cancelled',null,50],['2090-01-01',960,'no_show',null,50],['2090-02-01',600,'completed','card',100]
+ ]) await pg.query("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status,payment_method,completed_at) values($1,$2,1,$3,$4,$5,15,'Activity test','123','Test',$6,$7,$8,case when $7='completed' then ($4::date::text || ' 12:00:00+00')::timestamptz else null end)",[c.id,clientUser,treatmentId,day,minute,price,status,method]);
+ await as(staffA);
+ const daily=(await pg.query("select * from get_activity_report('2090-01-01','2090-01-06','day')")).rows;
+ assert.equal(daily.length,6);assert.equal(Number(daily[0].appointments_scheduled),6);assert.equal(Number(daily[0].appointments_completed),4);
+ assert.equal(Number(daily[0].card_terminal_fee),1.49);assert.equal(Number(daily[0].retained_card_payments),97.51);assert.equal(Number(daily[0].total_payments),172.51);assert.equal(Number(daily[5].total_payments),0);
+ const months=(await pg.query("select * from get_activity_report('2090-01-01','2090-03-31','month')")).rows;
+ assert.equal(months.length,3);assert.equal(Number(months[1].card_terminal_fee),1.5);assert.equal(Number(months[2].appointments_completed),0);
+ await assert.rejects(pg.query("select * from get_activity_report('2090-01-06','2090-01-01','day')"),/valid date range/);
+ await as(accountant);assert.equal((await pg.query("select * from get_activity_report('2090-01-01','2090-01-06','day')")).rows.length,6);
+ for(const uid of [staffB,clientUser]) {await as(uid);await assert.rejects(pg.query("select * from get_activity_report('2090-01-01','2090-01-06','day')"),/Reporting access required/);}
+});

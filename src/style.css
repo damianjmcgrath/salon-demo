@@ -1487,3 +1487,55 @@ nav .logout-link {
     width: 210px;
   }
 }
+
+.report-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin: 24px 0;
+}
+.report-filters label {
+  min-width: 190px;
+}
+.report-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 24px 0;
+}
+.report-table-scroll {
+  overflow-x: auto;
+}
+.activity-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.activity-report-table th,
+.activity-report-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #e2ddd3;
+  text-align: right;
+}
+.activity-report-table thead th {
+  background: #f0ece4;
+  max-width: 130px;
+}
+.activity-report-table th:first-child {
+  text-align: left;
+  white-space: nowrap;
+}
+.activity-report-table td {
+  white-space: nowrap;
+}
+.activity-report-table tfoot {
+  font-weight: 700;
+  background: #f0ece4;
+}
+.activity-report-table caption {
+  text-align: left;
+  padding-bottom: 12px;
+}

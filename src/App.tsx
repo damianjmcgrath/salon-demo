@@ -24,6 +24,7 @@ import {
 } from "./availability.js";
 type Treatment = (typeof catalog)[number];
 import StaffWorkspace from "./StaffWorkspace";
+import Reporting from "./Reporting";
 import type {
   Staff,
   Appointment,
@@ -2332,7 +2333,7 @@ export default function App() {
                 onClick={() => setView("reporting-placeholder")}
               >
                 <h2>Reporting</h2>
-                <p>Reporting tools coming next.</p>
+                <p>View activity reports and export to CSV.</p>
                 <span>Open →</span>
               </button>
             </div>
@@ -2356,23 +2357,11 @@ export default function App() {
           />
         ) : ["reporting-placeholder"].includes(view) &&
           canAccess(activeRole, view) ? (
-          <section className="panel">
-            <button
-              className="back"
-              onClick={() => setView(roleHome(activeRole))}
-            >
-              ← Home
-            </button>
-            <h1>
-              {view === "staff-admin" ? "Staff Administration" : "Reporting"}
-            </h1>
-            <p>We’ll build out this page in the next iteration.</p>
-            {view === "reporting-placeholder" && (
-              <button className="primary" onClick={() => setView("report")}>
-                View existing daily report
-              </button>
-            )}
-          </section>
+          <Reporting
+            key={`${session?.user.id || "local"}-${view}`}
+            db={db}
+            onHome={() => setView(roleHome(activeRole))}
+          />
         ) : !canAccess(activeRole, view) ? (
           <section className="panel login">
             <h2>Sign in to continue.</h2>

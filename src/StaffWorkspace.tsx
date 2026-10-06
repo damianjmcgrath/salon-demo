@@ -527,7 +527,11 @@ export default function StaffWorkspace({
                 onStaffAdmin,
               )}
             {role === "admin" &&
-              tile("Reporting", "Reporting tools coming next.", onReporting)}
+              tile(
+                "Reporting",
+                "View activity reports and export to CSV.",
+                onReporting,
+              )}
           </div>
         </>
       ) : screen === "vouchers" ? (
