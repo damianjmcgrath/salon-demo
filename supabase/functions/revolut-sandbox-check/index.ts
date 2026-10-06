@@ -1,14 +1,16 @@
 // Temporary backend-only diagnostic: creates one sandbox EUR 0 order.
-// Invoke from Supabase's dashboard with the service-role Authorization header.
-// Never put the service-role key in frontend code.
+// Invoke from the dashboard with x-revolut-test-secret matching REVOLUT_TEST_SECRET.
+// Disable gateway Verify JWT; this function checks its own private diagnostic secret.
 Deno.serve(async (req: Request) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   const reply = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers });
   if (req.method !== "POST") return reply({ error: "Use POST." }, 405);
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!serviceKey || req.headers.get("Authorization") !== "Bearer " + serviceKey)
-    return reply({ error: "Use the dashboard service-role Authorization header." }, 401);
+  const testSecret = Deno.env.get("REVOLUT_TEST_SECRET");
+  if (!testSecret || testSecret.length < 32)
+    return reply({ error: "Set REVOLUT_TEST_SECRET to a private random value of at least 32 characters." }, 503);
+  if (req.headers.get("x-revolut-test-secret") !== testSecret)
+    return reply({ error: "The x-revolut-test-secret header does not match REVOLUT_TEST_SECRET." }, 401);
   if (Deno.env.get("REVOLUT_ENVIRONMENT") !== "sandbox")
     return reply({ error: "This diagnostic only runs in sandbox." }, 403);
   const key = Deno.env.get("REVOLUT_SECRET_KEY");
