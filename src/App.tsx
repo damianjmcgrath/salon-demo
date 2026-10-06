@@ -1269,27 +1269,42 @@ export default function App() {
               Reports
             </button>
           )}
-          {activeRole && (
+          {activeRole && activeRole !== "client" && (
             <span className="role-badge">
               {roleLabels[activeRole]}
               {!live ? " · preview" : ""}
             </span>
           )}
-          <button
-            disabled={busy}
-            onClick={() => {
-              if (activeRole || session) void signOut();
-              else setView("login");
-            }}
-          >
-            {staffAccess
-              ? "Log Out"
-              : activeRole || session
-                ? activeRole === "client"
-                  ? "Sign Out"
-                  : "Sign out / lock"
-                : "Sign in"}
-          </button>
+          <div className={activeRole === "client" ? "client-sign-in" : ""}>
+            {activeRole === "client" && (
+              <span>
+                Signed in as{" "}
+                {(live
+                  ? ownClient?.name ||
+                    session?.user.user_metadata.full_name ||
+                    session?.user.email
+                  : localClient(staffData).name
+                )
+                  ?.trim()
+                  .split(/\s+/)[0] || "you"}
+              </span>
+            )}
+            <button
+              disabled={busy}
+              onClick={() => {
+                if (activeRole || session) void signOut();
+                else setView("login");
+              }}
+            >
+              {staffAccess
+                ? "Log Out"
+                : activeRole || session
+                  ? activeRole === "client"
+                    ? "Sign Out"
+                    : "Sign out / lock"
+                  : "Sign in"}
+            </button>
+          </div>
         </nav>
       </header>
       {error && !selected && !breakDraft && (

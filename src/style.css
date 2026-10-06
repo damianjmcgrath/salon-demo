@@ -1441,3 +1441,17 @@ textarea {
     grid-template-columns: minmax(0, 540px);
   }
 }
+
+.client-sign-in {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.client-sign-in span {
+  font-size: 13px;
+  color: #6e6257;
+}
+.client-sign-in button {
+  margin: 0;
+}
