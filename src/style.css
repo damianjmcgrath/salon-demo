@@ -1565,3 +1565,13 @@ nav .logout-link {
   margin: 0;
   flex-shrink: 0;
 }
+
+.booking-recipient-label {
+  font-weight: 700;
+  color: #4b6654;
+}
+.booking-recipient-guidance {
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}

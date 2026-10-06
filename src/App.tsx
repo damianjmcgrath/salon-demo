@@ -1584,6 +1584,22 @@ export default function App() {
                   ← Who are you booking for?
                 </button>
                 <h2>{forSelf ? "Your contact details" : "Their details"}</h2>
+                {!forSelf && (
+                  <div className="booking-recipient-guidance">
+                    <p>
+                      If the person you are booking for isn't an existing
+                      client, and you are booking a treatment that requires a
+                      Patch Test, please be aware that you will need to book 2
+                      sessions — one to perform the Patch Test, and then the
+                      Treatment Booking at least 24 hours after the Patch Test.
+                    </p>
+                    <p>
+                      If the person you are booking for is an existing client,
+                      we will have their Patch Test records already and our
+                      online booking system will advise accordingly.
+                    </p>
+                  </div>
+                )}
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -2273,6 +2289,11 @@ export default function App() {
                         <article className="history-card" key={a.id}>
                           <div>
                             <h3>{a.treatment_name}</h3>
+                            {a.booked_for_self === false && (
+                              <p className="booking-recipient-label">
+                                Booked by you, for {a.client_name}
+                              </p>
+                            )}
                             <p>
                               {a.appointment_date} · {time(a.start_minute)} ·{" "}
                               {staff.find((s) => s.id === a.staff_id)?.name}

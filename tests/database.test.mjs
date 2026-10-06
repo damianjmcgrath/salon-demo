@@ -1044,3 +1044,26 @@ test('patch tests preserve snapshots, deduplicate treatment selections and restr
  await as(staffB);assert.equal((await pg.query('select * from client_patch_tests where client_id=$1',[c.id])).rows.length,1);
  for(const uid of [clientUser,accountant]){await as(uid);assert.equal((await pg.query('select * from client_patch_tests where client_id=$1',[c.id])).rows.length,0);await assert.rejects(pg.query('select record_client_patch_test($1,1,array[$2]::integer[])',[c.id,treatmentId]),/Staff access required/);}
 });
+
+test('verified signup claims proxy attendee history; credit notes and client values remain staff only',async()=>{
+ await pg.exec('reset role');
+ const lily='b0000000-0000-0000-0000-000000000001';
+ await pg.query("insert into auth.users(id,email,raw_user_meta_data) values($1,'lily@example.com','{\"full_name\":\"Lily McGrath\"}')",[lily]);
+ const attendee=await one("insert into clients(name,email,phone) values('Lily McGrath','LILY@example.com','07891000000') returning *");
+ const original=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ const booking=await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,booked_for_self,attendee_email) values($1,$2,1,$3,'2095-01-02',600,15,'Lily McGrath','123','Test',25,false,'lily@example.com') returning *",[original.id,clientUser,treatmentId]);
+ // Historical creator/attendee mix-up is repaired without altering booking ownership.
+ await pg.exec(await readFile(new URL('../supabase/015_client_account_values.sql',import.meta.url),'utf8'));
+ let fixed=await one('select * from appointments where id=$1',[booking.id]);assert.equal(fixed.client_id,attendee.id);assert.equal(fixed.user_id,clientUser);
+ await as(lily);const own=await one('select ensure_own_client() id');assert.equal(own.id,attendee.id);assert.equal((await pg.query('select * from get_my_appointments()')).rows.length,1);
+ await as(clientUser);assert((await pg.query('select * from get_my_appointments()')).rows.some(a=>a.id===booking.id));
+ await as(staffA);const note=await one("select * from create_client_credit_note($1,35.50,'Goodwill adjustment')",[attendee.id]);assert.equal(Number(note.amount),35.5);assert.equal(note.created_by,staffA);
+ await assert.rejects(pg.query("select create_client_credit_note($1,-1,'Invalid')",[attendee.id]),/positive euro/);
+ await assert.rejects(pg.query("select create_client_credit_note($1,10,' ')",[attendee.id]),/reason/);
+ const gift=await one("select * from create_voucher(25,'2100-01-01',$1)",[attendee.id]);
+ const values=await one('select get_client_values($1) data',[attendee.id]);assert.equal(values.data.credit_notes.length,1);assert.equal(Number(values.data.credit_notes[0].balance),35.5);assert(values.data.vouchers.some(v=>v.id===gift.id));assert.equal(values.data.redemptions.length,0);
+ for(const uid of [lily,accountant]){await as(uid);await assert.rejects(pg.query('select get_client_values($1)',[attendee.id]),/Staff access required/);await assert.rejects(pg.query("select create_client_credit_note($1,10,'No')",[attendee.id]),/Staff access required/);}
+ // Unconfirmed email cannot claim an existing person's record.
+ await pg.exec('reset role');const unverified='b0000000-0000-0000-0000-000000000002';await pg.query("insert into auth.users(id,email,email_confirmed_at) values($1,'unverified-guest@example.com',null)",[unverified]);const guest=await one("insert into clients(name,email,phone) values('Guest','unverified-guest@example.com','123') returning *");await as(unverified);const unconfirmed=await one('select ensure_own_client() id');assert.notEqual(unconfirmed.id,guest.id);
+ await pg.exec('reset role');await pg.query('update auth.users set email_confirmed_at=now() where id=$1',[unverified]);await as(unverified);const confirmed=await one('select ensure_own_client() id');assert.equal(confirmed.id,unconfirmed.id);await pg.exec('reset role');assert.equal((await one('select merged_into from clients where id=$1',[guest.id])).merged_into,confirmed.id);
+});

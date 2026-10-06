@@ -1,5 +1,6 @@
 import ClientSearch from "./ClientSearch";
 import ClientPatchTests from "./ClientPatchTests";
+import ClientValues from "./ClientValues";
 import VoucherManagement from "./VoucherManagement";
 import {
   useEffect,
@@ -666,8 +667,10 @@ export default function StaffWorkspace({
               {[
                 "Personal Details",
                 "Notes",
-                "Appointments",
                 "Patch Tests",
+                "Vouchers",
+                "Credit Notes",
+                "Appointments",
                 "Change History",
               ].map((tab) => (
                 <button
@@ -770,6 +773,22 @@ export default function StaffWorkspace({
                     </article>
                   ))}
                 </section>
+              )}
+              {(clientTab === "Vouchers" || clientTab === "Credit Notes") && (
+                <ClientValues
+                  key={`${client.id}-${clientTab}`}
+                  db={db}
+                  clientId={client.id}
+                  kind={clientTab === "Vouchers" ? "vouchers" : "credit"}
+                  onSaved={() => {
+                    if (db)
+                      void db
+                        .rpc("get_client_activity", { p_client_id: client.id })
+                        .then(({ data }) => {
+                          if (data) setActivity(data);
+                        });
+                  }}
+                />
               )}
               {clientTab === "Patch Tests" && (
                 <ClientPatchTests
