@@ -990,5 +990,5 @@ test('database: proxy bookings reuse email identity and are visible to creator a
  assert.equal((await pg.query('select * from appointments where id=$1',[a.id])).rows.length,0);
  await as(staffA);
  assert.equal((await pg.query("select * from search_clients('Damian','','')")).rows.length,1);
- await assert.rejects(pg.query("select create_client('Duplicate',' DAMIAN@EXAMPLE.COM ','07891039749')"), /already exists/);
+ await assert.rejects(pg.query("select create_client('Duplicate','DAMIAN@EXAMPLE.COM','07891039749')"), /already exists/);
 });
