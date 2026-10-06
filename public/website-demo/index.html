@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Sculpted by Aoife Clare | Beauty Studio</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#fff;color:#080808;font-family:Georgia,'Times New Roman',serif}
+    .site-header{min-height:216px;padding:45px 5%;display:flex;align-items:center;justify-content:space-between;gap:45px;background:white}
+    .header-logo{display:block;width:290px;height:auto;flex-shrink:0}
+    nav{display:flex;align-items:center;justify-content:flex-end;gap:clamp(20px,2.2vw,44px);flex-wrap:wrap}
+    nav a,nav span{color:#625d5a;text-decoration:none;font-size:clamp(18px,1.3vw,25px);white-space:nowrap}
+    nav .current{color:#c6c2be}
+    nav a:hover,nav a:focus-visible{color:#111;text-decoration:underline;text-underline-offset:6px}
+    nav a:focus-visible{outline:2px solid #625d5a;outline-offset:8px}
+    .bag{position:relative;width:31px;height:31px;border-radius:3px;background:#8c9296;color:white;text-align:center;padding-top:5px;font-size:17px;margin:12px 4px 0 18px;flex-shrink:0}
+    .bag:before{content:'';position:absolute;width:16px;height:18px;border:1.5px solid #8c9296;border-radius:10px 10px 0 0;left:7px;top:-14px}
+    .hero{min-height:max(660px,calc(100svh - 216px));background:#e9e4dd url('../images/salon-interior.jpg') center top/cover no-repeat;display:flex;align-items:center;flex-direction:column;justify-content:flex-end;padding:250px 24px 30px;text-align:center}
+    .hero-logo{display:block;width:min(940px,77vw);height:auto;mix-blend-mode:multiply}
+    .welcome{max-width:920px;margin:30px auto 0;font-size:21px;line-height:1.3;font-weight:bold;text-wrap:balance}
+    @media(max-width:1200px){.site-header{min-height:185px;padding:30px 4%;gap:30px}.header-logo{width:240px}nav{gap:20px}.hero{min-height:calc(100svh - 185px);padding-top:180px;padding-bottom:36px}.welcome{font-size:19px}}
+    @media(max-width:760px){.site-header{min-height:0;flex-direction:column;padding:24px 18px;gap:24px}.header-logo{width:225px}nav{justify-content:center;gap:16px 22px}nav a,nav span{font-size:17px}.bag{display:none}.hero{min-height:620px;background-position:46% top;padding:200px 20px 55px;justify-content:center}.hero-logo{width:min(600px,96vw)}.welcome{margin-top:26px;font-size:18px;line-height:1.5}}
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <img class="header-logo" src="../images/salon-logo.png" alt="Sculpted by Aoife Clare">
+    <nav aria-label="Main navigation">
+      <span class="current">Home</span>
+      <span>About</span>
+      <span>Treatments</span>
+      <span>Courses</span>
+      <span>Contact</span>
+      <a href="https://damianjmcgrath.github.io/salon-demo/">Book Appointment</a>
+      <span>Buy a Voucher</span>
+      <span class="bag" aria-label="Shopping bag, 0 items">0</span>
+    </nav>
+  </header>
+  <main>
+    <section class="hero" aria-label="Welcome to Sculpted">
+      <img class="hero-logo" src="../images/salon-logo.png" alt="Sculpted by Aoife Clare">
+      <p class="welcome">Welcome to Sculpted by Aoife Clare beauty studio. From the moment you step through the door, you are greeted by an atmosphere of relaxation and impeccable attention to detail.</p>
+    </section>
+  </main>
+</body>
+</html>
