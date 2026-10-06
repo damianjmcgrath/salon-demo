@@ -48,6 +48,12 @@ before(async () => {
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
+  // Use explicit appointment dates: module-time demo seeds may capture the real clock.
+  localStorage.setItem("sculpted-demo-v1", JSON.stringify([
+    { id:"sample-1", staff_id:1, start_minute:570, duration:60, client_name:"Emma Demo", treatment_name:"BIAB / BIAB Refill", price:45, status:"booked", appointment_date:"2026-10-05" },
+    { id:"sample-2", staff_id:2, start_minute:630, duration:45, client_name:"Grace Demo", treatment_name:"Lash Lift", price:48, status:"checked_in", appointment_date:"2026-10-05" },
+    { id:"sample-3", staff_id:2, start_minute:600, duration:15, client_name:"Sophie Demo", treatment_name:"Brow Wax & Tint", price:20, status:"completed", payment_method:"cash", appointment_date:"2026-10-05" },
+  ]));
   render(React.createElement(React.StrictMode, null, React.createElement(App)));
 });
 afterEach(() => {

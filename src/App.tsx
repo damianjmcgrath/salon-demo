@@ -1,5 +1,6 @@
 import ClientProfile from "./ClientProfile";
 import BookingGuarantee from "./BookingGuarantee";
+import AppointmentCheckout, { CheckoutHistory } from "./AppointmentCheckout";
 import VoucherPurchase from "./VoucherPurchase";
 import { localClient } from "./clientModel";
 import StaffAdministration from "./StaffAdministration";
@@ -2916,25 +2917,25 @@ export default function App() {
                 Check client in
               </button>
             )}
+            {selected.status === "completed" && (
+              <CheckoutHistory
+                key={selected.id}
+                db={live ? db : null}
+                appointment={selected}
+              />
+            )}
             {selected.status === "checked_in" && (
-              <>
-                <h3>Complete & record payment</h3>
-                <div className="payment-buttons">
-                  {["card", "cash", "voucher", "credit"].map((p) => (
-                    <button
-                      disabled={busy}
-                      key={p}
-                      onClick={() => void changeStatus("completed", p)}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                <p className="small">
-                  Voucher and credit are labels in this first slice; balances
-                  are not redeemed.
-                </p>
-              </>
+              <AppointmentCheckout
+                key={selected.id}
+                db={live ? db : null}
+                appointment={selected}
+                onSaved={async () => {
+                  const operation = identityVersion.current;
+                  await refresh();
+                  if (operation !== identityVersion.current) return;
+                  setSelected(null);
+                }}
+              />
             )}
             {["booked", "checked_in"].includes(selected.status) && (
               <button

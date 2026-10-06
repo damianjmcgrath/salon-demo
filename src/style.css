@@ -1575,3 +1575,36 @@ nav .logout-link {
   line-height: 1.6;
   margin-bottom: 24px;
 }
+
+.checkout-panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--line, #ddd);
+  border-radius: 12px;
+}
+.checkout-panel label {
+  display: block;
+  margin: 0.8rem 0;
+}
+.checkout-panel select,
+.checkout-panel input {
+  width: 100%;
+}
+.checkout-panel .payment-buttons button[aria-pressed="true"] {
+  background: #242424;
+  color: white;
+}
+.checkout-breakdown {
+  width: 100%;
+  margin: 0.8rem 0;
+  border-collapse: collapse;
+}
+.checkout-breakdown td,
+.checkout-breakdown th {
+  padding: 0.5rem;
+  text-align: left;
+}
+.checkout-breakdown td:last-child,
+.checkout-breakdown th:last-child {
+  text-align: right;
+}

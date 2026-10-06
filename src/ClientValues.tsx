@@ -156,7 +156,16 @@ export default function ClientValues({
           <h3>Used Vouchers</h3>
           <Table
             rows={data.redemptions.filter((r) => r.voucher_id)}
-            columns={used}
+            columns={[
+              [
+                "Voucher Code",
+                (r) =>
+                  r.voucher_code ??
+                  data.vouchers.find((v) => v.id === r.voucher_id)?.code ??
+                  r.voucher_id,
+              ],
+              ...used,
+            ]}
             empty="No voucher redemptions recorded."
           />
           <h3>Expired Vouchers</h3>

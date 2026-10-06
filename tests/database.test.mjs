@@ -1144,3 +1144,67 @@ test('Sandbox testing permits future no-shows and disabling the switch restores 
  await as(clientUser);assert.equal((await one('select sandbox_no_show_testing_enabled() enabled')).enabled,false);
  await assert.rejects(pg.query('select * from sandbox_testing_settings'),/permission denied/);
 });
+
+test('split checkout redeems balances atomically, rejects duplicates and reports each tender separately', async()=>{
+ await pg.exec('reset role');
+ await pg.exec(await readFile(new URL('../supabase/020_split_checkout.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ let minute=480;
+ async function ap(price=80,status='checked_in'){
+  await pg.exec('reset role');minute+=20;
+  return one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,2,$3,'2021-04-01',$4,15,'Checkout client','123','Checkout treatment',$5,$6) returning *",[c.id,clientUser,treatmentId,minute,price,status]);
+ }
+ const sql='select * from checkout_appointment($1,$2,$3,$4,$5,$6,$7)';
+ const a=await ap();await as(staffA);
+ const voucher=await one("select * from create_voucher(100,'2100-01-01',$1)",[c.id]);
+ await assert.rejects(pg.query("select update_appointment_status($1,'completed','card',0,null)",[a.id]),/Check Client Out/);
+ await pg.query(sql,[a.id,0,'voucher',voucher.code,null,null,80]);
+ await assert.rejects(pg.query(sql,[a.id,0,'voucher',voucher.code,null,null,80]),/appointment changed/);
+ let values=(await one('select get_client_values($1) data',[c.id])).data;
+ assert.equal(Number(values.vouchers.find(v=>v.id===voucher.id).balance),20);
+ const redemption=values.redemptions.find(r=>r.appointment_id===a.id);assert.equal(Number(redemption.amount),80);assert.equal(redemption.voucher_id,voucher.id);assert.equal(redemption.staff_name,'Leah');
+ assert.equal(Number((await one('select * from search_vouchers($1,null)',[voucher.code])).balance),20);
+ await as(clientUser);assert.equal(Number((await one('select get_my_vouchers() data')).data.find(v=>v.id===voucher.id).balance),20);
+ const b=await ap();await as(staffB);
+ // Failed split checkout leaves the appointment and value balance intact.
+ await assert.rejects(pg.query(sql,[b.id,0,'voucher',voucher.code,null,null,20]),/remaining balance/);
+ await assert.rejects(pg.query(sql,[b.id,0,'voucher',voucher.code,null,'card',80]),/balance changed/);
+ assert.equal((await one('select status from appointments where id=$1',[b.id])).status,'checked_in');
+ assert.equal(Number((await one('select * from search_vouchers($1,null)',[voucher.code])).balance),20);
+ await pg.query(sql,[b.id,0,'voucher',voucher.code,null,'card',20]);
+ assert.equal((await one('select payment_method from appointments where id=$1',[b.id])).payment_method,'split');
+ assert.deepEqual((await pg.query('select method,amount::float8 amount from appointment_payments where appointment_id=$1 order by method',[b.id])).rows,[{method:'card',amount:60},{method:'voucher',amount:20}]);
+ await assert.rejects(pg.query('select reassign_voucher($1,$2,2)',[voucher.id,c.id]),/already assigned|remaining value/);
+ const d=await ap(80);await as(staffA);
+ const note=await one("select * from create_client_credit_note($1,100,'Checkout test')",[c.id]);
+ await pg.query(sql,[d.id,0,'credit',null,note.id,null,80]);
+ values=(await one('select get_client_values($1) data',[c.id])).data;
+ assert.equal(Number(values.credit_notes.find(n=>n.id===note.id).balance),20);
+ const e=await ap(80);await as(staffA);
+ await pg.query(sql,[e.id,0,'credit',null,note.id,'cash',20]);
+ const f=await ap(25);await as(staffA);await pg.query(sql,[f.id,0,'card',null,null,null,null]);
+ const g=await ap(10);await as(staffA);await pg.query(sql,[g.id,0,'cash',null,null,null,null]);
+ const zero=await ap(0);await as(staffA);await pg.query(sql,[zero.id,0,'cash',null,null,null,null]);
+ const bad=await ap(25);await as(staffA);
+ await assert.rejects(pg.query(sql,[bad.id,0,'voucher',voucher.code,null,'cash',0]),/remaining value/);
+ const expired=await one("select * from create_voucher(30,'2100-01-01',$1)",[c.id]);await pg.exec('reset role');await pg.query("update vouchers set expires_on='2000-01-01' where id=$1",[expired.id]);await as(staffA);
+ await assert.rejects(pg.query(sql,[bad.id,0,'voucher',expired.code,null,null,25]),/expired/);
+ const other=await one("select * from create_client('Other checkout','other-checkout@example.com','12345')");
+ const otherNote=await one("select * from create_client_credit_note($1,30,'Other person')",[other.id]);
+ await assert.rejects(pg.query(sql,[bad.id,0,'credit',null,otherNote.id,null,25]),/assigned to this client/);
+ // Exact-code vouchers can be used as physical gift vouchers, even when assigned elsewhere.
+ const gift=await one("select * from create_voucher(30,'2100-01-01',$1)",[other.id]);
+ const found=(await one('select get_checkout_options($1,$2) data',[bad.id,gift.code.toLowerCase()])).data.found_voucher;assert.equal(found.id,gift.id);
+ await pg.query(sql,[bad.id,0,'voucher',gift.code,null,null,25]);
+ for(const uid of [clientUser,accountant]){await as(uid);await assert.rejects(pg.query(sql,[bad.id,1,'cash',null,null,null,null]),/Staff access/);await assert.rejects(pg.query('select get_checkout_options($1)',[bad.id]),/Staff access/);assert.equal((await pg.query('select * from appointment_payments')).rows.length,0);}
+ await as(staffA);await assert.rejects(pg.query("insert into appointment_payments(appointment_id,method,amount,recorded_by) values($1,'card',5,$2)",[bad.id,staffA]),/permission denied/);
+ await pg.exec('reset role');await pg.exec("update appointments set completed_at='2021-04-01 12:00:00Z' where appointment_date='2021-04-01' and status='completed'");
+ await as(accountant);
+ const report=await one("select * from get_activity_report('2021-04-01','2021-04-01','day')");
+ assert.equal(Number(report.card_payments),85);assert.equal(Number(report.cash_payments),70);assert.equal(Number(report.vouchers_used),125);assert.equal(Number(report.credit_notes_used),100);assert.equal(Number(report.appointments_completed),8);
+ assert.equal(Number(report.total_payments),378.72); // 380 gross less rounded 1.5% fee on 85.
+ const monthly=await one("select * from get_activity_report('2021-04-01','2021-04-30','month')");assert.equal(Number(monthly.card_payments),85);
+ await pg.exec('reset role');assert.equal((await pg.query('select * from no_show_fees where appointment_id=$1',[b.id])).rows.length,0);
+ // History identifies voucher use and its original code; audit stores both split amounts.
+ await as(staffA);assert((await pg.query('select * from get_client_activity($1)',[c.id])).rows.some(e=>e.action==='appointment_checked_out'&&e.details.payment_method==='split'));
+});
