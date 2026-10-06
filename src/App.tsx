@@ -342,7 +342,11 @@ export default function App() {
     state: string;
     comments?: string;
     error?: string;
+    provider_state?: string | null;
+    status_error?: string | null;
   } | null>(null);
+  const [feeChecking, setFeeChecking] = useState(false);
+  const [feeCheckMessage, setFeeCheckMessage] = useState("");
   async function feeCall(action: string, id: string) {
     if (!db) throw new Error("Supabase connection required.");
     const { data, error } = await db.functions.invoke("booking-guarantee", {
@@ -357,18 +361,47 @@ export default function App() {
   }
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setFeeInfo(null);
-    if (live && selected?.status === "no_show")
-      void feeCall("fee_status", selected.id)
-        .then((data) => {
-          if (!cancelled) setFeeInfo(data);
-        })
-        .catch((e) => {
-          if (!cancelled)
-            setFeeInfo({ state: "unavailable", error: e.message });
-        });
+    setFeeChecking(false);
+    setFeeCheckMessage("");
+    if (live && selected?.status === "no_show") {
+      const id = selected.id;
+      let checks = 0;
+      async function check() {
+        if (cancelled) return;
+        setFeeChecking(true);
+        try {
+          const data = await feeCall("fee_status", id);
+          if (cancelled) return;
+          setFeeInfo(data);
+          checks++;
+          if (["pending", "processing"].includes(data.state) && checks < 8) {
+            setFeeCheckMessage(
+              "Waiting for Revolut to confirm the payment. Checking automatically…",
+            );
+            timer = setTimeout(() => void check(), 2000);
+          } else {
+            setFeeChecking(false);
+            setFeeCheckMessage(
+              ["pending", "processing"].includes(data.state)
+                ? "Payment is still awaiting confirmation. It has not been recorded as paid. You can check again or inspect it in Revolut Merchant."
+                : "",
+            );
+          }
+        } catch (e) {
+          if (cancelled) return;
+          setFeeChecking(false);
+          setFeeCheckMessage(
+            "Unable to check the payment: " + (e as Error).message,
+          );
+        }
+      }
+      void check();
+    }
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [selected?.id, selected?.status, live]);
   async function recordNoShow(applyFee: boolean) {
@@ -2969,27 +3002,74 @@ export default function App() {
                             ? "Needs review — payment not confirmed"
                             : feeInfo?.state === "not_recorded"
                               ? "No fee decision recorded"
-                              : feeInfo?.state || "Loading…"}
+                              : feeInfo?.state === "processing"
+                                ? "Payment pending — not yet confirmed"
+                                : feeInfo?.state === "pending"
+                                  ? "Fee approved — awaiting submission"
+                                  : feeInfo?.state || "Loading…"}
                   </strong>
                 </p>
                 {feeInfo?.comments && <p>Comments: {feeInfo.comments}</p>}
                 {feeInfo?.error && <p role="alert">{feeInfo.error}</p>}
-                <button
-                  className="secondary"
-                  disabled={busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    try {
-                      setFeeInfo(await feeCall("charge", selected.id));
-                    } catch (e) {
-                      setError((e as Error).message);
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  Check / finish approved fee
-                </button>
+                {feeInfo?.provider_state && (
+                  <p className="small">
+                    Revolut order status: {feeInfo.provider_state}
+                  </p>
+                )}
+                {feeInfo?.status_error && (
+                  <p role="alert">
+                    Status check failed: {feeInfo.status_error}
+                  </p>
+                )}
+                <p role="status" aria-live="polite">
+                  {feeChecking
+                    ? "Checking the payment with Revolut…"
+                    : feeCheckMessage}
+                </p>
+                {!feeInfo ||
+                !["completed", "waived", "failed", "not_recorded"].includes(
+                  feeInfo.state,
+                ) ? (
+                  <button
+                    className="secondary"
+                    disabled={busy || feeChecking}
+                    onClick={async () => {
+                      const id = selected.id;
+                      const operation = identityVersion.current;
+                      setFeeChecking(true);
+                      setFeeCheckMessage("");
+                      try {
+                        const result = await feeCall(
+                          feeInfo?.state === "pending"
+                            ? "charge"
+                            : "fee_status",
+                          id,
+                        );
+                        if (operation !== identityVersion.current) return;
+                        setFeeInfo(result);
+                        setFeeCheckMessage(
+                          ["pending", "processing"].includes(result.state)
+                            ? "Checked just now — Revolut has not confirmed payment yet."
+                            : "Payment status updated.",
+                        );
+                      } catch (e) {
+                        if (operation !== identityVersion.current) return;
+                        setFeeCheckMessage(
+                          "Unable to check the payment: " +
+                            (e as Error).message,
+                        );
+                      } finally {
+                        setFeeChecking(false);
+                      }
+                    }}
+                  >
+                    {feeChecking
+                      ? "Checking…"
+                      : feeInfo?.state === "pending"
+                        ? "Finish approved €10 charge"
+                        : "Check payment status again"}
+                  </button>
+                ) : null}
               </div>
             )}
             {statusAction && (

@@ -209,11 +209,14 @@ Deno.serve(async (req: Request) => {
               .single(),
           );
       }
+      let providerState: string | null = null;
+      let statusError: string | null = null;
       if (row.order_id && ["processing", "review"].includes(row.state)) {
         try {
           const order = await api(
             "/orders/" + encodeURIComponent(row.order_id),
           );
+          providerState = order.state || "unknown";
           const state = feeState(order);
           row = await saveFee(row, {
             state,
@@ -223,12 +226,16 @@ Deno.serve(async (req: Request) => {
                 : null,
             updated_at: new Date().toISOString(),
           });
-        } catch {
-          /* Leave the recorded uncertain state intact; never repeat a charge. */
+        } catch (e) {
+          // Surface lookup errors instead of silently leaving processing on screen.
+          statusError =
+            e instanceof Error ? e.message : "Payment status lookup failed.";
         }
       }
       return reply({
         state: row.state,
+        provider_state: providerState,
+        status_error: statusError,
         comments: row.comments,
         error: row.error,
         apply_fee: row.apply_fee,

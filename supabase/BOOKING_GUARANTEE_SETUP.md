@@ -35,7 +35,9 @@ Revolut. Physical terminal treatment payments remain recording actions only.
   Repeated clicks do not submit another payment. An uncertain network outcome is
   recorded for review; staff can check the order but cannot blindly charge again.
 - The system records a payment as completed only after Revolut confirms it.
-  The status check reads Revolut directly. Automated webhook reconciliation,
+  The website automatically checks pending payments and shows lookup errors
+  and provider order state. Status checks read Revolut directly and do not
+  submit another charge. Automated webhook reconciliation,
   consent withdrawal/card deletion, live-mode approval and no-show financial
   report columns remain future work before production.
 - Declining a fee releases no funds: the €0 setup created no hold. Saved card

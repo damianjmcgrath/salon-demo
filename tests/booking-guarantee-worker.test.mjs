@@ -178,7 +178,9 @@ test("waived fees and missing guarantee cards never submit payments", async () =
 test("a lost response is recorded for review and cannot produce another charge", async () => {
   reset();
   mode = "timeout";
-  assert.equal((await invoke()).data.state, "review");
+  const uncertain = await invoke();
+  assert.equal(uncertain.data.state, "review");
+  assert.equal(uncertain.data.status_error, "Order lookup unavailable");
   await invoke();
   await invoke("fee_status");
   assert.equal(calls.filter((c) => c.url.endsWith("/payments")).length, 1);
