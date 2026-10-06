@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import StaffReports, { staffReportNames } from "./StaffReports";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Row = {
@@ -42,6 +43,9 @@ export default function Reporting({
   db: SupabaseClient | null;
   onHome: () => void;
 }) {
+  const [staffReport, setStaffReport] = useState<
+    keyof typeof staffReportNames | null
+  >(null);
   const [period, setPeriod] = useState<"day" | "month" | null>(null);
   const [from, setFrom] = useState(today()),
     [to, setTo] = useState(today());
@@ -147,6 +151,14 @@ export default function Reporting({
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  if (staffReport)
+    return (
+      <StaffReports
+        kind={staffReport}
+        db={db}
+        onBack={() => setStaffReport(null)}
+      />
+    );
   return (
     <section className="panel reporting-page">
       <button className="back" onClick={() => (period ? open(null) : onHome())}>
@@ -161,6 +173,28 @@ export default function Reporting({
         <>
           <h2>Active Reports</h2>
           <div className="workspace-grid">
+            {(
+              Object.entries(staffReportNames) as [
+                keyof typeof staffReportNames,
+                string,
+              ][]
+            ).map(([key, name]) => (
+              <button
+                className="panel workspace-card"
+                key={key}
+                onClick={() => setStaffReport(key)}
+              >
+                <h2>{name}</h2>
+                <p>
+                  {key === "payroll"
+                    ? "Expected hours, worked hours and hourly pay."
+                    : key === "hr"
+                      ? "Staff notes and attendance exceptions."
+                      : "First arrival and final departure against scheduled shifts."}
+                </p>
+                <span>Open →</span>
+              </button>
+            ))}
             {(["day", "month"] as const).map((p) => (
               <button
                 key={p}

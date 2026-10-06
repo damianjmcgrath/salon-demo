@@ -1539,3 +1539,9 @@ nav .logout-link {
   text-align: left;
   padding-bottom: 12px;
 }
+
+.activity-report-table .hr-report-notes {
+  white-space: pre-wrap;
+  min-width: 260px;
+  text-align: left;
+}

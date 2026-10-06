@@ -1010,3 +1010,22 @@ test('activity reports include empty periods, aggregate recorded methods and pro
  await as(accountant);assert.equal((await pg.query("select * from get_activity_report('2090-01-01','2090-01-06','day')")).rows.length,6);
  for(const uid of [staffB,clientUser]) {await as(uid);await assert.rejects(pg.query("select * from get_activity_report('2090-01-01','2090-01-06','day')"),/Reporting access required/);}
 });
+
+test('staff reports use first arrival, final departure, sum multiple sessions and strictly filter HR exceptions',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/013_staff_reports.sql',import.meta.url),'utf8'));
+ await pg.query("update staff_details set employment_type='hourly',hourly_rate=12,salary=null,commission_rate=null where staff_id=1");
+ for(const day of ['2027-01-04','2027-01-05','2027-01-06','2027-01-07']) await pg.query("insert into staff_day_shifts(staff_id,shift_date,start_minute,end_minute) values(1,$1,540,1020) on conflict(staff_id,shift_date) do update set start_minute=540,end_minute=1020",[day]);
+ for(const [start,end] of [['2027-01-04T09:20:00Z','2027-01-04T13:00:00Z'],['2027-01-04T13:30:00Z','2027-01-04T17:00:00Z'],['2027-01-05T09:15:00Z','2027-01-05T16:45:00Z'],['2027-01-07T09:00:00Z','2027-01-07T13:00:00Z']]) await pg.query("insert into work_sessions(user_id,staff_id,staff_name,clocked_in_at,clocked_out_at) values($1,1,'Aoife',$2,$3)",[staffA,start,end]);
+ // Re-open after lunch: final departure must not be mistaken for the lunch clock-out.
+ await pg.query("update work_sessions set clocked_out_at=clocked_in_at where staff_id=1 and clocked_out_at is null");
+ await pg.query("insert into work_sessions(user_id,staff_id,staff_name,clocked_in_at) values($1,1,'Aoife','2027-01-07T13:30:00Z')",[staffA]);
+ await pg.query("insert into staff_notes(staff_id,body,created_at,created_by) values(1,'Report note without clocks','2027-01-06T12:00:00Z',$1)",[staffA]);
+ await as(staffA);
+ let r=await one("select get_staff_report('clock',1,'2027-01-04','2027-01-07') data");
+ assert.equal(r.data.length,4);assert.equal(Number(r.data[0].worked_minutes),430);assert.equal(Number(r.data[0].start_difference),20);assert.equal(Number(r.data[0].end_difference),0);assert.equal(new Date(r.data[0].first_clock_in).toISOString(),"2027-01-04T09:20:00.000Z");assert.equal(new Date(r.data[0].last_clock_out).toISOString(),"2027-01-04T17:00:00.000Z");assert.equal(r.data[3].last_clock_out,null);assert.equal(Number(r.data[3].open_sessions),1);
+ r=await one("select get_staff_report('payroll',null,'2027-01-04','2027-01-05') data");const aoife=r.data.find(s=>s.id===1);assert.equal(Number(aoife.actual_minutes),880);assert.equal(Number(aoife.expected_minutes),960);assert.equal(Number(aoife.total_pay),176);
+ r=await one("select get_staff_report('hr',1) data");assert(r.data.some(d=>d.day==='2027-01-04'));assert(!r.data.some(d=>d.day==='2027-01-05'));assert(r.data.some(d=>d.day==='2027-01-06'&&d.notes.includes('Report note')));
+ await assert.rejects(pg.query("select * from staff_report_days(1,'2027-01-04','2027-01-05')"),/permission denied/);
+ await as(accountant);assert((await one("select get_staff_report('payroll',null,'2027-01-04','2027-01-05') data")).data.length>=2);
+ for(const uid of [clientUser,staffB]){await as(uid);await assert.rejects(pg.query("select get_staff_report('hr',1)"),/Reporting access required/);await assert.rejects(pg.query("select * from report_staff_options()"),/Reporting access required/);}
+});
