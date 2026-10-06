@@ -1886,14 +1886,35 @@ export default function App() {
                   {amending ? "APPOINTMENT UPDATED" : "YOU’RE ALL BOOKED"}
                 </p>
                 <h2>See you soon, {confirmation.client_name.split(" ")[0]}.</h2>
-                <p>{confirmation.treatment_name}</p>
-                <h3>
-                  {confirmation.appointment_date} ·{" "}
-                  {time(confirmation.start_minute)}
-                </h3>
                 <p>
-                  {staff.find((s) => s.id === confirmation.staff_id)?.name} ·{" "}
-                  {money(confirmation.price)}
+                  <strong>Salon Address:</strong> Williams St., Mulladrillen,
+                  Ardee, Co. Louth A92 HW30
+                </p>
+                <p>
+                  <strong>Treatment Booked:</strong>{" "}
+                  {confirmation.treatment_name}
+                </p>
+                <p>
+                  <strong>Date and Time:</strong>{" "}
+                  {new Date(
+                    confirmation.appointment_date + "T12:00:00Z",
+                  ).toLocaleDateString("en-GB", {
+                    timeZone: "Europe/Dublin",
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                  ,{" "}
+                  {String(
+                    Math.floor(confirmation.start_minute / 60) % 12 || 12,
+                  ).padStart(2, "0")}
+                  :{String(confirmation.start_minute % 60).padStart(2, "0")}{" "}
+                  {confirmation.start_minute < 720 ? "am" : "pm"}
+                </p>
+                <p>
+                  <strong>With:</strong>{" "}
+                  {staff.find((s) => s.id === confirmation.staff_id)?.name}
                 </p>
                 <p className="small">
                   Booking saved. This demo does not send confirmation emails.
