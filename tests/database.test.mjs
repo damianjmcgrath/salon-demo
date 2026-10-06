@@ -1126,3 +1126,21 @@ test('guarantee worker has only the required client and appointment read permiss
  await assert.rejects(pg.query('select * from booking_guarantee_cards'),/permission denied/);
  await assert.rejects(pg.query('select * from no_show_fees'),/permission denied/);
 });
+
+test('Sandbox testing permits future no-shows and disabling the switch restores the date rule',async()=>{
+ await pg.exec('reset role');
+ await pg.exec(await readFile(new URL('../supabase/019_sandbox_no_show_testing.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ const future=[];
+ for(const minute of [600,720])future.push(await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,1,$3,'2095-01-06',$4,15,'Future test','123','Test',40,'booked') returning *",[c.id,clientUser,treatmentId,minute]));
+ await as(staffB);assert.equal((await one('select sandbox_no_show_testing_enabled() enabled')).enabled,true);
+ await pg.query("select record_no_show_decision($1,0,false,'Sandbox future appointment test')",[future[0].id]);
+ const activity=(await pg.query('select * from get_client_activity($1)',[c.id])).rows;
+ assert(activity.some(e=>e.action==='status_changed'&&e.details.sandbox_future_no_show===true));
+ await assert.rejects(pg.query('update sandbox_testing_settings set allow_future_no_shows=false'),/permission denied/);
+ await pg.exec('reset role');await pg.exec('update sandbox_testing_settings set allow_future_no_shows=false');
+ await as(staffA);assert.equal((await one('select sandbox_no_show_testing_enabled() enabled')).enabled,false);
+ await assert.rejects(pg.query("select record_no_show_decision($1,0,false,'Testing disabled')",[future[1].id]),/future appointment/);
+ await as(clientUser);assert.equal((await one('select sandbox_no_show_testing_enabled() enabled')).enabled,false);
+ await assert.rejects(pg.query('select * from sandbox_testing_settings'),/permission denied/);
+});

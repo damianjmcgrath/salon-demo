@@ -46,3 +46,18 @@ Revolut. Physical terminal treatment payments remain recording actions only.
   terminal takings when adding financial reporting.
 - The current tested policy covers no-shows only. Late-cancellation enforcement
   needs the salon's final policy and is not enabled here.
+
+## Optional: test no-shows before the appointment starts
+
+Run `019_sandbox_no_show_testing.sql` to enable the Sandbox testing switch.
+Refresh the staff portal. Booked future appointments can then be marked no-show.
+These early status changes are labelled in the audit log. Existing no-show fee
+consent/decision and duplicate-charge protections still apply. To restore the
+normal rule, run:
+
+```sql
+update public.sandbox_testing_settings
+set allow_future_no_shows=false where id=true;
+```
+
+Refresh the portal afterwards. Disable this switch before production.

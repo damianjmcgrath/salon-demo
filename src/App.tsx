@@ -220,6 +220,18 @@ export default function App() {
   const authUser = useRef<string | null>(null);
   const activeRole = live ? role : localRole;
   const staffAccess = ["staff", "admin"].includes(activeRole || "");
+  const [sandboxNoShowTesting, setSandboxNoShowTesting] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setSandboxNoShowTesting(false);
+    if (live && db && staffAccess)
+      void db.rpc("sandbox_no_show_testing_enabled").then(({ data }) => {
+        if (!cancelled) setSandboxNoShowTesting(data === true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [live, staffAccess, session?.user.id]);
   const reportAccess = ["admin", "accountant"].includes(activeRole || "");
   const [local, setLocal] = useState<Appointment[]>(() => {
       try {
@@ -2889,28 +2901,35 @@ export default function App() {
                 Cancel appointment
               </button>
             )}
+            {sandboxNoShowTesting && selected.status === "booked" && (
+              <p className="small">
+                <strong>Sandbox testing:</strong> future appointments can be
+                marked as no-shows.
+              </p>
+            )}
             {selected.status === "booked" && (
               <button
                 className="danger"
                 disabled={
                   busy ||
-                  selected.appointment_date > today() ||
-                  (selected.appointment_date === today() &&
-                    selected.start_minute >
-                      Number(
-                        new Intl.DateTimeFormat("en-GB", {
-                          timeZone: "Europe/Dublin",
-                          hour: "2-digit",
-                          hourCycle: "h23",
-                        }).format(new Date()),
-                      ) *
-                        60 +
-                        Number(
-                          new Intl.DateTimeFormat("en-GB", {
-                            timeZone: "Europe/Dublin",
-                            minute: "2-digit",
-                          }).format(new Date()),
-                        ))
+                  (!sandboxNoShowTesting &&
+                    (selected.appointment_date > today() ||
+                      (selected.appointment_date === today() &&
+                        selected.start_minute >
+                          Number(
+                            new Intl.DateTimeFormat("en-GB", {
+                              timeZone: "Europe/Dublin",
+                              hour: "2-digit",
+                              hourCycle: "h23",
+                            }).format(new Date()),
+                          ) *
+                            60 +
+                            Number(
+                              new Intl.DateTimeFormat("en-GB", {
+                                timeZone: "Europe/Dublin",
+                                minute: "2-digit",
+                              }).format(new Date()),
+                            ))))
                 }
                 onClick={() => {
                   setStatusAction("no_show");

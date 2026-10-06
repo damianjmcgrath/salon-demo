@@ -21,6 +21,8 @@ export default function BookingGuarantee({
     [name, setName] = useState(""),
     [setup, setSetup] = useState(""),
     [ready, setReady] = useState(false);
+  const started = useRef(false);
+  const [retryCheck, setRetryCheck] = useState(false);
   const target = useRef<HTMLDivElement>(null),
     mounted = useRef(true);
   const card = useRef<ReturnType<
@@ -59,6 +61,9 @@ export default function BookingGuarantee({
         setCards(data.cards);
         setOwner({ name: data.owner_name, email: data.owner_email });
         setName(data.owner_name);
+        const defaultChoice = data.cards[0]?.id || "new";
+        setChoice(defaultChoice);
+        onChange(defaultChoice === "new" ? "" : defaultChoice, false);
       })
       .catch((e) => {
         if (mounted.current) setMessage(e.message);
@@ -69,11 +74,25 @@ export default function BookingGuarantee({
     };
   }, [clientId, db]);
   async function verify(id = setup) {
-    const data = await call("verify", { card_id: id });
-    if (!mounted.current) return;
-    if (!data.verified) {
+    setRetryCheck(false);
+    let data;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      if (!mounted.current) return;
+      try {
+        data = await call("verify", { card_id: id });
+      } catch (error) {
+        if (mounted.current) setRetryCheck(true);
+        throw error;
+      }
+      if (!mounted.current) return;
+      if (data.verified) break;
+      if (attempt < 7)
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+    }
+    if (!data?.verified) {
+      setRetryCheck(true);
       setMessage(
-        "Card setup is not confirmed yet. Click Check Card Setup to check again.",
+        "Revolut has not confirmed your card yet. Please try checking again.",
       );
       return;
     }
@@ -89,8 +108,10 @@ export default function BookingGuarantee({
     setMessage("Card verified. You can now confirm your appointment.");
   }
   async function start() {
+    started.current = true;
     await run(async () => {
       const data = await call("create", { consent });
+      if (!mounted.current) return;
       setSetup(data.id);
       const instance = await RevolutCheckout(data.token, "sandbox");
       if (!mounted.current) return;
@@ -120,6 +141,17 @@ export default function BookingGuarantee({
       setReady(true);
     });
   }
+  useEffect(() => {
+    if (
+      choice === "new" &&
+      consent &&
+      owner.email &&
+      !started.current &&
+      !busy
+    ) {
+      void start();
+    }
+  }, [choice, consent, owner.email, busy]);
   return (
     <div className="guarantee">
       <p>
@@ -143,6 +175,8 @@ export default function BookingGuarantee({
           value={choice}
           onChange={(e) => {
             const next = e.target.value;
+            started.current = false;
+            setRetryCheck(false);
             setChoice(next);
             setSetup("");
             setReady(false);
@@ -185,14 +219,14 @@ export default function BookingGuarantee({
               autoComplete="cc-name"
             />
           </label>
-          {!ready && (
+          {!ready && started.current && !busy && (
             <button
               type="button"
               className="primary"
               disabled={!consent || busy}
               onClick={() => void start()}
             >
-              Set up guarantee card
+              Retry card setup
             </button>
           )}
         </>
@@ -224,14 +258,14 @@ export default function BookingGuarantee({
           Save guarantee card
         </button>
       )}
-      {setup && choice === "new" && (
+      {setup && choice === "new" && retryCheck && (
         <button
           type="button"
           className="secondary"
           disabled={busy}
           onClick={() => void run(() => verify())}
         >
-          Check Card Setup
+          Check card again
         </button>
       )}
       <p role="status">{busy ? "Contacting Revolut Sandbox…" : message}</p>
