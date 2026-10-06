@@ -1545,3 +1545,23 @@ nav .logout-link {
   min-width: 260px;
   text-align: left;
 }
+
+.patch-category {
+  border: 1px solid #e2ddd3;
+  border-radius: 12px;
+  padding: 18px;
+  margin: 20px 0;
+}
+.patch-check {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: center;
+  margin: 12px 0;
+}
+.patch-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+}

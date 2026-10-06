@@ -1463,6 +1463,8 @@ export default function App() {
         ) : view === "staff-workspace" && staffAccess ? (
           <StaffWorkspace
             key={`${live}-${session?.user.id || localStaffId}-${initialStaffAppointment?.id || "home"}-${workspaceNavigation}`}
+            treatments={treatments}
+            staff={staff}
             initialScreen={workspaceScreen}
             role={activeRole || "staff"}
             onReporting={() => setView("reporting-placeholder")}

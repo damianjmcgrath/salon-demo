@@ -106,11 +106,14 @@ test("UI: client search, audited contact edit, notes and cancellation", async ()
   });
   fireEvent.click(screen.getByRole("button", { name: "Save details" }));
   await screen.findByRole("heading", { name: "Emma Updated" });
+  assert.equal(screen.queryByLabelText("Add a note"), null);
+  fireEvent.click(screen.getByRole("button", { name: "Notes", exact: true }));
   fireEvent.change(screen.getByLabelText("Add a note"), {
     target: { value: "Prefers morning appointments." },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save note" }));
   await screen.findByText("Prefers morning appointments.");
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Client record sections" })).getByRole("button", { name: "Appointments", exact: true }));
   fireEvent.click(screen.getByRole("button", { name: "Cancel", exact: true }));
   const dialog = screen.getByRole("dialog", { name: "Cancel appointment" });
   fireEvent.change(within(dialog).getByLabelText("Reason"), {
@@ -228,6 +231,9 @@ test("UI: diary hides staff takings, has date arrows, and changes only own daily
 test("UI: amendment revalidates slots and records a reason without creating a second booking", async () => {
   await login();
   await findEmma();
+  fireEvent.click(screen.getByRole("button", { name: "Patch Tests", exact: true }));
+  assert(screen.getByRole("heading", { name: "Patch Test History" }));
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Client record sections" })).getByRole("button", { name: "Appointments", exact: true }));
   fireEvent.click(screen.getByRole("button", { name: "Amend", exact: true }));
   fireEvent.click(screen.getByRole("button", { name: /BIAB \/ BIAB Refill/ }));
   fireEvent.click(screen.getByRole("button", { name: /Morning ·/ }));

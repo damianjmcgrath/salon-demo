@@ -1029,3 +1029,18 @@ test('staff reports use first arrival, final departure, sum multiple sessions an
  await as(accountant);assert((await one("select get_staff_report('payroll',null,'2027-01-04','2027-01-05') data")).data.length>=2);
  for(const uid of [clientUser,staffB]){await as(uid);await assert.rejects(pg.query("select get_staff_report('hr',1)"),/Reporting access required/);await assert.rejects(pg.query("select * from report_staff_options()"),/Reporting access required/);}
 });
+
+test('patch tests preserve snapshots, deduplicate treatment selections and restrict history to salon staff',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/014_client_patch_tests.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ await as(staffA);
+ const r=await one('select * from record_client_patch_test($1,1,array[$2,$2]::integer[])',[c.id,treatmentId]);
+ assert.equal(r.treatments_covered.length,1);assert.equal(r.client_id,c.id);assert.equal(r.recorded_by,staffA);assert(r.recorded_at);assert(r.staff_name);
+ assert((await pg.query('select * from get_client_activity($1)',[c.id])).rows.some(a=>a.action==='patch_test_recorded'));
+ await assert.rejects(pg.query('select record_client_patch_test($1,1,array[$2,999999]::integer[])',[c.id,treatmentId]),/valid treatments/);
+ await assert.rejects(pg.query('select record_client_patch_test($1,1,array[]::integer[])',[c.id]),/valid treatments/);
+ await assert.rejects(pg.query('select record_client_patch_test($1,999999,array[$2]::integer[])',[c.id,treatmentId]),/active staff member/);
+ await assert.rejects(pg.query('delete from client_patch_tests where id=$1',[r.id]),/permission denied/);
+ await as(staffB);assert.equal((await pg.query('select * from client_patch_tests where client_id=$1',[c.id])).rows.length,1);
+ for(const uid of [clientUser,accountant]){await as(uid);assert.equal((await pg.query('select * from client_patch_tests where client_id=$1',[c.id])).rows.length,0);await assert.rejects(pg.query('select record_client_patch_test($1,1,array[$2]::integer[])',[c.id,treatmentId]),/Staff access required/);}
+});

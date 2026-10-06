@@ -1,4 +1,5 @@
 import ClientSearch from "./ClientSearch";
+import ClientPatchTests from "./ClientPatchTests";
 import VoucherManagement from "./VoucherManagement";
 import {
   useEffect,
@@ -31,11 +32,15 @@ export default function StaffWorkspace({
   initialAppointment,
   role,
   initialScreen = "home",
+  treatments,
+  staff,
   onReporting,
   onStaffAdmin,
 }: {
   role: string;
   initialScreen?: string;
+  treatments: { id: number; name: string; category: string }[];
+  staff: { id: number; name: string; active?: boolean }[];
   onReporting: () => void;
   onStaffAdmin: () => void;
   db: SupabaseClient | null;
@@ -65,6 +70,7 @@ export default function StaffWorkspace({
     [message, setMessage] = useState(""),
     [cancel, setCancel] = useState<Appointment | null>(null),
     [reason, setReason] = useState("");
+  const [clientTab, setClientTab] = useState("Personal Details");
   const generation = useRef(0),
     mounted = useRef(true);
   useEffect(() => {
@@ -91,6 +97,7 @@ export default function StaffWorkspace({
   async function loadClient(c: Client, nextIntent = intent) {
     const version = ++generation.current;
     setClient(c);
+    setClientTab("Personal Details");
     setDraft({ name: c.name, email: c.email, phone: c.phone });
     setScreen("record");
     setError("");
@@ -655,176 +662,221 @@ export default function StaffWorkspace({
           </div>
           {busy && <p role="status">Loading / saving…</p>}
           {intent === "profile" && (
-            <div className="client-record-grid">
-              <section className="panel">
-                <h2>Personal details</h2>
-                <form onSubmit={(e) => void saveClient(e)}>
-                  {(["name", "email", "phone"] as const).map((k) => (
-                    <label key={k}>
-                      {k === "name"
-                        ? "Name"
-                        : k === "email"
-                          ? "Contact email"
-                          : "Phone"}
-                      <input
-                        type={
-                          k === "email"
-                            ? "email"
-                            : k === "phone"
-                              ? "tel"
-                              : "text"
-                        }
-                        required
-                        value={draft[k]}
-                        onChange={(e) =>
-                          setDraft({ ...draft, [k]: e.target.value })
-                        }
-                      />
-                    </label>
-                  ))}
-                  <button className="primary" disabled={busy}>
-                    Save details
-                  </button>
-                </form>
-                <p className="small">
-                  Contact changes are audited. Existing appointments keep their
-                  original booking details. Changing contact email does not
-                  change the verified sign-in email.
-                </p>
-                {!client.auth_user_id && live && (
-                  <>
-                    <h3>Create login account</h3>
-                    <label>
-                      Temporary password
-                      <input
-                        type="password"
-                        minLength={12}
-                        autoComplete="new-password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                    </label>
-                    <button
-                      className="secondary"
-                      disabled={busy || password.length < 12}
-                      onClick={() => void provision()}
-                    >
-                      Create login account
-                    </button>
-                  </>
-                )}
-              </section>
-              <section className="panel">
-                <h2>Client notes</h2>
-                <label>
-                  Add a note
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                  />
-                </label>
+            <nav className="admin-tabs" aria-label="Client record sections">
+              {[
+                "Personal Details",
+                "Notes",
+                "Appointments",
+                "Patch Tests",
+                "Change History",
+              ].map((tab) => (
                 <button
-                  className="secondary"
-                  disabled={busy || !note.trim()}
-                  onClick={() => void saveNote()}
+                  key={tab}
+                  className={clientTab === tab ? "active" : ""}
+                  aria-current={clientTab === tab ? "page" : undefined}
+                  onClick={() => setClientTab(tab)}
                 >
-                  Save note
+                  {tab}
                 </button>
-                {notes.map((n) => (
-                  <article className="client-note" key={n.id}>
-                    <p>{n.body}</p>
-                    <small>
-                      {n.author_name} ·{" "}
-                      {new Date(n.created_at).toLocaleString("en-IE")}
-                    </small>
-                  </article>
-                ))}
-              </section>
-            </div>
+              ))}
+            </nav>
           )}
-          <section className="panel">
-            {appointmentGroups.map((group) => (
-              <section
-                className={
-                  appointmentSelection ? undefined : "appointment-section"
-                }
-                key={group.heading}
-              >
-                <h2>
-                  {group.heading}
-                  {!appointmentSelection && (
-                    <span>{group.bookings.length}</span>
+          {intent === "profile" && (
+            <>
+              {clientTab === "Personal Details" && (
+                <section className="panel">
+                  <h2>Personal details</h2>
+                  <form onSubmit={(e) => void saveClient(e)}>
+                    {(["name", "email", "phone"] as const).map((k) => (
+                      <label key={k}>
+                        {k === "name"
+                          ? "Name"
+                          : k === "email"
+                            ? "Contact email"
+                            : "Phone"}
+                        <input
+                          type={
+                            k === "email"
+                              ? "email"
+                              : k === "phone"
+                                ? "tel"
+                                : "text"
+                          }
+                          required
+                          value={draft[k]}
+                          onChange={(e) =>
+                            setDraft({ ...draft, [k]: e.target.value })
+                          }
+                        />
+                      </label>
+                    ))}
+                    <button className="primary" disabled={busy}>
+                      Save details
+                    </button>
+                  </form>
+                  <p className="small">
+                    Contact changes are audited. Existing appointments keep
+                    their original booking details. Changing contact email does
+                    not change the verified sign-in email.
+                  </p>
+                  {!client.auth_user_id && live && (
+                    <>
+                      <h3>Create login account</h3>
+                      <label>
+                        Temporary password
+                        <input
+                          type="password"
+                          minLength={12}
+                          autoComplete="new-password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                        />
+                      </label>
+                      <button
+                        className="secondary"
+                        disabled={busy || password.length < 12}
+                        onClick={() => void provision()}
+                      >
+                        Create login account
+                      </button>
+                    </>
                   )}
-                </h2>
-                {group.bookings.map((a) => (
-                  <article className="history-card" key={a.id}>
-                    <div>
-                      <h3>{a.treatment_name}</h3>
-                      <p>
-                        {a.appointment_date} · {time(a.start_minute)} ·{" "}
-                        {a.client_name}
-                      </p>
-                      <span className={`status ${a.status}`}>
-                        {a.status.replace("_", " ")}
-                      </span>
-                    </div>
-                    {["booked", "checked_in"].includes(a.status) && (
-                      <div className="record-actions">
-                        {intent !== "cancel" && (
-                          <button
-                            className="secondary"
-                            disabled={busy}
-                            onClick={() => onBook(client, a)}
-                          >
-                            Amend
-                          </button>
-                        )}
-                        {intent !== "amend" && (
-                          <button
-                            className="danger"
-                            disabled={busy}
-                            onClick={() => {
-                              setCancel(a);
-                              setReason("");
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
+                </section>
+              )}
+              {clientTab === "Notes" && (
+                <section className="panel">
+                  <h2>Client notes</h2>
+                  <label>
+                    Add a note
+                    <textarea
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="secondary"
+                    disabled={busy || !note.trim()}
+                    onClick={() => void saveNote()}
+                  >
+                    Save note
+                  </button>
+                  {notes.map((n) => (
+                    <article className="client-note" key={n.id}>
+                      <p>{n.body}</p>
+                      <small>
+                        {n.author_name} ·{" "}
+                        {new Date(n.created_at).toLocaleString("en-IE")}
+                      </small>
+                    </article>
+                  ))}
+                </section>
+              )}
+              {clientTab === "Patch Tests" && (
+                <ClientPatchTests
+                  key={client.id}
+                  db={db}
+                  clientId={client.id}
+                  treatments={treatments}
+                  staff={staff}
+                  onSaved={() => {
+                    if (db)
+                      void db
+                        .rpc("get_client_activity", { p_client_id: client.id })
+                        .then(({ data }) => {
+                          if (data) setActivity(data);
+                        });
+                  }}
+                />
+              )}
+            </>
+          )}
+          {(intent !== "profile" || clientTab === "Appointments") && (
+            <section className="panel">
+              {appointmentGroups.map((group) => (
+                <section
+                  className={
+                    appointmentSelection ? undefined : "appointment-section"
+                  }
+                  key={group.heading}
+                >
+                  <h2>
+                    {group.heading}
+                    {!appointmentSelection && (
+                      <span>{group.bookings.length}</span>
                     )}
-                  </article>
-                ))}
-                {!group.bookings.length && <p>{group.empty}</p>}
-              </section>
-            ))}
-          </section>
-          <section className="panel">
-            <h2>Change history</h2>
-            {activity.map((a) => (
-              <article className="activity-entry" key={a.id}>
-                <strong>{a.action.replaceAll("_", " ")}</strong>
-                <p>
-                  {a.actor_name} ·{" "}
-                  {new Date(a.created_at).toLocaleString("en-IE")}
-                </p>
-                {a.details?.reason && <p>Reason: {a.details.reason}</p>}
-                {a.details?.before && a.details?.after && (
-                  <details>
-                    <summary>Before / after details</summary>
-                    <pre>
-                      {JSON.stringify(
-                        { before: a.details.before, after: a.details.after },
-                        null,
-                        2,
+                  </h2>
+                  {group.bookings.map((a) => (
+                    <article className="history-card" key={a.id}>
+                      <div>
+                        <h3>{a.treatment_name}</h3>
+                        <p>
+                          {a.appointment_date} · {time(a.start_minute)} ·{" "}
+                          {a.client_name}
+                        </p>
+                        <span className={`status ${a.status}`}>
+                          {a.status.replace("_", " ")}
+                        </span>
+                      </div>
+                      {["booked", "checked_in"].includes(a.status) && (
+                        <div className="record-actions">
+                          {intent !== "cancel" && (
+                            <button
+                              className="secondary"
+                              disabled={busy}
+                              onClick={() => onBook(client, a)}
+                            >
+                              Amend
+                            </button>
+                          )}
+                          {intent !== "amend" && (
+                            <button
+                              className="danger"
+                              disabled={busy}
+                              onClick={() => {
+                                setCancel(a);
+                                setReason("");
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       )}
-                    </pre>
-                  </details>
-                )}
-              </article>
-            ))}
-            {!activity.length && <p>No recorded changes yet.</p>}
-          </section>
+                    </article>
+                  ))}
+                  {!group.bookings.length && <p>{group.empty}</p>}
+                </section>
+              ))}
+            </section>
+          )}
+          {(intent !== "profile" || clientTab === "Change History") && (
+            <section className="panel">
+              <h2>Change history</h2>
+              {activity.map((a) => (
+                <article className="activity-entry" key={a.id}>
+                  <strong>{a.action.replaceAll("_", " ")}</strong>
+                  <p>
+                    {a.actor_name} ·{" "}
+                    {new Date(a.created_at).toLocaleString("en-IE")}
+                  </p>
+                  {a.details?.reason && <p>Reason: {a.details.reason}</p>}
+                  {a.details?.before && a.details?.after && (
+                    <details>
+                      <summary>Before / after details</summary>
+                      <pre>
+                        {JSON.stringify(
+                          { before: a.details.before, after: a.details.after },
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </details>
+                  )}
+                </article>
+              ))}
+              {!activity.length && <p>No recorded changes yet.</p>}
+            </section>
+          )}
         </>
       ) : null}
       {cancel && (
