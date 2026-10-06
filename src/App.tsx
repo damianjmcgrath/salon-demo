@@ -212,6 +212,20 @@ export default function App() {
     [breakEnd, setBreakEnd] = useState("13:30");
   const [statusAction, setStatusAction] = useState(""),
     [statusReason, setStatusReason] = useState("");
+  const statusSection = useRef<HTMLDivElement>(null);
+  const statusComments = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!statusAction) return;
+    statusComments.current?.focus({ preventScroll: true });
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    )?.matches;
+    statusSection.current?.scrollIntoView?.({
+      behavior: reducedMotion ? "instant" : "smooth",
+      block: "start",
+    });
+  }, [statusAction]);
+
   const [requiresPasswordChange, setRequiresPasswordChange] = useState(false),
     [newPassword, setNewPassword] = useState(""),
     [confirmPassword, setConfirmPassword] = useState("");
@@ -2979,7 +2993,7 @@ export default function App() {
               </div>
             )}
             {statusAction && (
-              <div className="guarantee">
+              <div className="guarantee" ref={statusSection}>
                 <h3>
                   {statusAction === "no_show"
                     ? "Record a no-show"
@@ -2998,6 +3012,7 @@ export default function App() {
                     : "Reason"}
                   <textarea
                     required
+                    ref={statusComments}
                     maxLength={2000}
                     value={statusReason}
                     onChange={(e) => setStatusReason(e.target.value)}
