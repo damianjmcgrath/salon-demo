@@ -961,3 +961,34 @@ test("database: confirmations queue once, stay private and serialize retry claim
   await pg.query("delete from appointments where id=$1",[id]);
   assert.equal((await one("select count(*)::integer as n from booking_email_queue where appointment_id=$1",[id])).n,0);
 });
+
+test('database: proxy bookings reuse email identity and are visible to creator and attendee only', async()=>{
+ await pg.exec('reset role');
+ const recipient='90000000-0000-0000-0000-000000000003';
+ const original=await one("select * from clients where auth_user_id=$1",[recipient]);
+ // Two historical unlinked duplicate attendees, as the old trigger created.
+ for(let i=0;i<2;i++) {
+  const dup=await one("insert into clients(name,email,phone) values('Damian McGrath','damian@example.com','07891039749') returning id");
+  await pg.query("insert into appointments(user_id,client_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,booked_for_self,attendee_email) values($1,$2,1,$3,'2089-01-02',$4,15,'Damian McGrath','07891039749','Test',25,false,'damian@example.com')",[clientUser,dup.id,treatmentId,600+i*60]);
+ }
+ await pg.exec(await readFile(new URL('../supabase/011_client_email_matching.sql',import.meta.url),'utf8'));
+ const repair=await readFile(new URL('../supabase/repair_damian_duplicate_clients.sql',import.meta.url),'utf8');
+ await pg.exec(repair);await pg.exec(repair);
+ assert.equal((await one('select count(*)::int n from appointments where client_id=$1',[original.id])).n,2);
+ assert.equal((await one("select count(*)::int n from clients where merged_into=$1",[original.id])).n,2);
+ await pg.exec('reset role');
+ const a=await one("insert into appointments(user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,booked_for_self,attendee_email) values($1,1,$2,'2089-01-02',780,15,'Damian McGrath','07891 039749','Test',25,false,' DAMIAN@EXAMPLE.COM ') returning *",[clientUser,treatmentId]);
+ assert.equal(a.client_id,original.id);
+ assert.equal((await one('select phone from clients where id=$1',[original.id])).phone,original.phone);
+ await as(recipient);
+ assert.equal((await pg.query('select * from get_my_appointments()')).rows.length,3);
+ assert.equal((await pg.query('select * from appointments where id=$1',[a.id])).rows.length,1);
+ await as(clientUser);
+ assert.equal((await pg.query('select * from get_my_appointments()')).rows.length,3);
+ await as('90000000-0000-0000-0000-000000000001');
+ assert.equal((await pg.query('select * from get_my_appointments()')).rows.length,0);
+ assert.equal((await pg.query('select * from appointments where id=$1',[a.id])).rows.length,0);
+ await as(staffA);
+ assert.equal((await pg.query("select * from search_clients('Damian','','')")).rows.length,1);
+ await assert.rejects(pg.query("select create_client('Duplicate',' DAMIAN@EXAMPLE.COM ','07891039749')"), /already exists/);
+});

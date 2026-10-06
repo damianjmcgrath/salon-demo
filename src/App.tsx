@@ -726,16 +726,12 @@ export default function App() {
     }
     let cancelled = false;
     setBookingHistoryLoaded(false);
-    db.from("appointments")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("appointment_date", { ascending: false })
-      .order("start_minute")
+    db.rpc("get_my_appointments")
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) setError(error.message);
         else {
-          setMyBookings(data || []);
+          setMyBookings((data || []).map((a: Appointment) => a.user_id !== session.user.id ? { ...a, booked_for_self: true } : a));
           setBookingHistoryLoaded(true);
         }
       });
