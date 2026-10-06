@@ -51,7 +51,13 @@ export default function ClientPatchTests({
       current = false;
     };
   }, [db, clientId]);
-  const groups = [...new Set(treatments.map((t) => t.category))];
+  const eligibleTreatments = treatments.filter(
+    (t) =>
+      !["patch test", "training academy"].includes(
+        t.category.trim().toLowerCase(),
+      ),
+  );
+  const groups = [...new Set(eligibleTreatments.map((t) => t.category))];
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!db || busy) return;
@@ -96,7 +102,9 @@ export default function ClientPatchTests({
         <form onSubmit={save}>
           <p>Select the treatments covered by this patch test.</p>
           {groups.map((category) => {
-            const items = treatments.filter((t) => t.category === category);
+            const items = eligibleTreatments.filter(
+              (t) => t.category === category,
+            );
             const all = items.every((t) => selected.includes(t.id));
             return (
               <fieldset className="patch-category" key={category}>
