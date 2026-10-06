@@ -1455,3 +1455,35 @@ textarea {
 .client-sign-in button {
   margin: 0;
 }
+
+.brand .salon-logo {
+  display: block;
+  width: 260px;
+  max-width: 100%;
+  height: auto;
+}
+.brand {
+  flex-shrink: 0;
+}
+nav {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+nav .logout-link {
+  font-weight: 700;
+}
+@media (max-width: 1100px) {
+  header {
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  nav {
+    gap: 16px;
+  }
+}
+@media (max-width: 650px) {
+  .brand .salon-logo {
+    width: 210px;
+  }
+}

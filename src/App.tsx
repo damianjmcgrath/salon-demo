@@ -345,7 +345,11 @@ export default function App() {
       ],
     }));
   }
-  function staffHome() {
+  const [workspaceScreen, setWorkspaceScreen] = useState("home");
+  const [workspaceNavigation, setWorkspaceNavigation] = useState(0);
+  function staffHome(screen = "home") {
+    setWorkspaceScreen(screen);
+    setWorkspaceNavigation((n) => n + 1);
     setInitialStaffAppointment(null);
     setStaffClient(null);
     setAmending(null);
@@ -1198,7 +1202,11 @@ export default function App() {
                 : setView("login")
           }
         >
-          SCULPTED<span>BY AOIFE CLAIRE</span>
+          <img
+            className="salon-logo"
+            src={`${env.BASE_URL}images/salon-logo.png`}
+            alt="Sculpted by Aoife Claire"
+          />
         </a>
         {activeRole === "client" && (
           <button
@@ -1247,12 +1255,31 @@ export default function App() {
           )}
           {staffAccess && (
             <button
-              className={view === "staff-workspace" ? "active" : ""}
-              onClick={staffHome}
+              className={
+                view === "staff-workspace" && workspaceScreen === "home"
+                  ? "active"
+                  : ""
+              }
+              onClick={() => staffHome()}
             >
-              Staff home
+              Staff Home
             </button>
           )}
+          {staffAccess &&
+            (["Appointments", "Clients"] as const).map((label) => (
+              <button
+                key={label}
+                className={
+                  view === "staff-workspace" &&
+                  workspaceScreen === label.toLowerCase()
+                    ? "active"
+                    : ""
+                }
+                onClick={() => staffHome(label.toLowerCase())}
+              >
+                {label}
+              </button>
+            ))}
           {staffAccess && (
             <button
               className={view === "diary" ? "active" : ""}
@@ -1264,19 +1291,33 @@ export default function App() {
               Staff Diary
             </button>
           )}
+          {staffAccess && (
+            <button
+              className={
+                view === "staff-workspace" && workspaceScreen === "vouchers"
+                  ? "active"
+                  : ""
+              }
+              onClick={() => staffHome("vouchers")}
+            >
+              Vouchers
+            </button>
+          )}
+          {activeRole === "admin" && (
+            <button
+              className={view === "staff-admin" ? "active" : ""}
+              onClick={() => setView("staff-admin")}
+            >
+              Staff Management
+            </button>
+          )}
           {reportAccess && (
             <button
-              className={view === "report" ? "active" : ""}
-              onClick={() => setView("report")}
+              className={view === "reporting-placeholder" ? "active" : ""}
+              onClick={() => setView("reporting-placeholder")}
             >
               Reports
             </button>
-          )}
-          {activeRole && activeRole !== "client" && (
-            <span className="role-badge">
-              {roleLabels[activeRole]}
-              {!live ? " · preview" : ""}
-            </span>
           )}
           <div className={activeRole === "client" ? "client-sign-in" : ""}>
             {activeRole === "client" && (
@@ -1293,6 +1334,7 @@ export default function App() {
               </span>
             )}
             <button
+              className={staffAccess ? "logout-link" : ""}
               disabled={busy}
               onClick={() => {
                 if (activeRole || session) void signOut();
@@ -1419,7 +1461,8 @@ export default function App() {
           </section>
         ) : view === "staff-workspace" && staffAccess ? (
           <StaffWorkspace
-            key={`${live}-${session?.user.id || localStaffId}-${initialStaffAppointment?.id || "home"}`}
+            key={`${live}-${session?.user.id || localStaffId}-${initialStaffAppointment?.id || "home"}-${workspaceNavigation}`}
+            initialScreen={workspaceScreen}
             role={activeRole || "staff"}
             onReporting={() => setView("reporting-placeholder")}
             onStaffAdmin={() => setView("staff-admin")}

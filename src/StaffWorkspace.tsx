@@ -30,10 +30,12 @@ export default function StaffWorkspace({
   onCancel,
   initialAppointment,
   role,
+  initialScreen = "home",
   onReporting,
   onStaffAdmin,
 }: {
   role: string;
+  initialScreen?: string;
   onReporting: () => void;
   onStaffAdmin: () => void;
   db: SupabaseClient | null;
@@ -47,7 +49,7 @@ export default function StaffWorkspace({
   onCancel: (appointment: Appointment, reason: string) => Promise<void>;
   initialAppointment?: Appointment | null;
 }) {
-  const [screen, setScreen] = useState("home"),
+  const [screen, setScreen] = useState(initialScreen),
     [intent, setIntent] = useState("profile"),
     [query, setQuery] = useState({ name: "", email: "", phone: "" }),
     [results, setResults] = useState<Client[]>([]),
