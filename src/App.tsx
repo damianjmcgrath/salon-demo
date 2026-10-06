@@ -726,15 +726,18 @@ export default function App() {
     }
     let cancelled = false;
     setBookingHistoryLoaded(false);
-    db.rpc("get_my_appointments")
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) setError(error.message);
-        else {
-          setMyBookings((data || []).map((a: Appointment) => a.user_id !== session.user.id ? { ...a, booked_for_self: true } : a));
-          setBookingHistoryLoaded(true);
-        }
-      });
+    db.rpc("get_my_appointments").then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) setError(error.message);
+      else {
+        setMyBookings(
+          (data || []).map((a: Appointment) =>
+            a.user_id !== session.user.id ? { ...a, booked_for_self: true } : a,
+          ),
+        );
+        setBookingHistoryLoaded(true);
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -776,8 +779,11 @@ export default function App() {
       events.forEach((e) => window.removeEventListener(e, reset));
     };
   }, [staffAccess, session?.user.id, localStaffId]);
-  async function loginWithPin() {
-    if (!db) return;
+  const pinLoginInFlight = useRef(false);
+  async function loginWithPin(enteredPin = pin) {
+    if (!db || pinLoginInFlight.current || !/^[0-9]{4}$/.test(enteredPin))
+      return;
+    pinLoginInFlight.current = true;
     setBusy(true);
     setError("");
     try {
@@ -785,7 +791,7 @@ export default function App() {
       if (!selected?.profile_key)
         throw Error("Reload the profiles and try again.");
       const r = await db.functions.invoke("staff-pin-login", {
-        body: { profile: selected.profile_key, pin },
+        body: { profile: selected.profile_key, pin: enteredPin },
       });
       if (r.error)
         throw Error(
@@ -799,6 +805,7 @@ export default function App() {
       setError((e as Error).message);
       setPin("");
     } finally {
+      pinLoginInFlight.current = false;
       setBusy(false);
     }
   }
@@ -2028,9 +2035,15 @@ export default function App() {
                               value={pin}
                               required
                               autoComplete="off"
-                              onChange={(e) =>
-                                setPin(e.target.value.replace(/\D/g, ""))
-                              }
+                              disabled={busy}
+                              onChange={(e) => {
+                                const enteredPin = e.target.value
+                                  .replace(/\D/g, "")
+                                  .slice(0, 4);
+                                setPin(enteredPin);
+                                if (enteredPin.length === 4)
+                                  void loginWithPin(enteredPin);
+                              }}
                             />
                           </label>
                           <button className="primary" disabled={busy}>
