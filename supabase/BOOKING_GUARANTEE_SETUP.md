@@ -4,6 +4,8 @@ This connects the tested Sandbox flow to bookings. It cannot connect to live
 Revolut. Physical terminal treatment payments remain recording actions only.
 
 1. Run `017_booking_guarantees.sql` in the Supabase SQL Editor (after 016).
+   If you already applied the original 017 and see “permission denied for table
+   clients”, run `018_booking_guarantee_permissions.sql` once. Do not rerun 017.
 2. Create an Edge Function named `booking-guarantee`. Add both files from
    `supabase/functions/booking-guarantee/`: `index.ts` and `payment-state.ts`.
    Preserve the relative import `./payment-state.ts`.

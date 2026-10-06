@@ -1111,3 +1111,18 @@ test('booking guarantees enforce card ownership and atomically audit no-show dec
  await as(accountant);await assert.rejects(pg.query("select record_no_show_decision($1,0,true,'No')",[past[2].id]),/Staff access/);
  await assert.rejects(pg.query('select * from no_show_fees'),/permission denied/);
 });
+
+
+test('guarantee worker has only the required client and appointment read permissions',async()=>{
+ await pg.exec('reset role');
+ await pg.exec(await readFile(new URL('../supabase/018_booking_guarantee_permissions.sql',import.meta.url),'utf8'));
+ await as(null,'service_role');
+ assert((await pg.query('select id,name,email from clients limit 1')).rows.length);
+ assert((await pg.query('select id,status,guarantee_card_id from appointments limit 1')).rows.length);
+ await assert.rejects(pg.query('select phone from clients limit 1'),/permission denied/);
+ await assert.rejects(pg.query("update clients set name='Unauthorised'"),/permission denied/);
+ await assert.rejects(pg.query("update appointments set status='no_show'"),/permission denied/);
+ await as(clientUser);
+ await assert.rejects(pg.query('select * from booking_guarantee_cards'),/permission denied/);
+ await assert.rejects(pg.query('select * from no_show_fees'),/permission denied/);
+});

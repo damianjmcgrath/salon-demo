@@ -31,6 +31,9 @@ alter table public.booking_guarantee_cards enable row level security;
 alter table public.no_show_fees enable row level security;
 revoke all on public.booking_guarantee_cards,public.no_show_fees from anon,authenticated;
 grant all on public.booking_guarantee_cards,public.no_show_fees to service_role;
+-- BYPASSRLS does not itself grant table/column privileges.
+grant select (id, name, email) on public.clients to service_role;
+grant select (id, status, guarantee_card_id) on public.appointments to service_role;
 
 -- Wrap the established booking functions: guarantee validation and appointment
 -- creation/linking happen in one database transaction. Legacy RPCs are private.
