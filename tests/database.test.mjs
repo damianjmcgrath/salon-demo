@@ -104,6 +104,7 @@ before(async () => {
     ),
   );
   await pg.exec(await readFile(new URL("../supabase/009_admin_breaks.sql", import.meta.url), "utf8"));
+  await pg.exec(await readFile(new URL("../supabase/010_booking_confirmation_emails.sql", import.meta.url), "utf8"));
   clientId = (
     await one("select id from clients where auth_user_id=$1", [clientUser])
   ).id;
@@ -932,4 +933,31 @@ test("database: testing reset requires all three clients and preserves staff and
   assert.equal((await one("select count(*)::integer as n from appointments")).n,0);
   assert.equal((await one("select count(*)::integer as n from staff_users")).n,before);
   assert.equal((await one("select count(*)::integer as n from audit_events where action='testing_data_reset'")).n,1);
+});
+
+test("database: confirmations queue once, stay private and serialize retry claims", async () => {
+  await pg.exec("reset role");
+  const id='91000000-0000-0000-0000-000000000001';
+  await pg.query("insert into appointments(id,user_id,client_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price) values($1,$2,$4,1,$3,'2088-01-05',600,60,'Jacqui Durnin','123','Glam Package',99)",[id,clientUser,treatmentId,clientId]);
+  assert.equal((await one("select count(*)::integer as n from booking_email_queue where appointment_id=$1",[id])).n,1);
+  await pg.query("update appointments set client_name='Changed' where id=$1",[id]);
+  assert.equal((await one("select snapshot from booking_email_queue where appointment_id=$1",[id])).snapshot.client_name,'Jacqui Durnin');
+  await as(clientUser);
+  await assert.rejects(pg.query("select * from booking_email_queue"),/permission denied/);
+  await assert.rejects(pg.query("select claim_booking_emails()"),/permission denied/);
+  await as(null,'service_role');
+  const claimed=(await pg.query("select * from claim_booking_emails()")).rows;
+  assert.equal(claimed.length,1);
+  assert.equal(claimed[0].attempts,1);
+  assert.equal((await pg.query("select * from claim_booking_emails()")).rows.length,0);
+  await pg.query("update booking_email_queue set locked_until=now()-interval '1 minute' where appointment_id=$1",[id]);
+  const retry=(await pg.query("select * from claim_booking_emails()")).rows[0];
+  assert.equal(retry.id,claimed[0].id);
+  assert.notEqual(retry.claim_token,claimed[0].claim_token);
+  await pg.query("update booking_email_queue set locked_until=now()-interval '1 minute',first_attempt_at=now()-interval '24 hours' where appointment_id=$1",[id]);
+  assert.equal((await pg.query("select * from claim_booking_emails()")).rows.length,0);
+  assert.equal((await one("select status from booking_email_queue where appointment_id=$1",[id])).status,'review');
+  await pg.exec("reset role");
+  await pg.query("delete from appointments where id=$1",[id]);
+  assert.equal((await one("select count(*)::integer as n from booking_email_queue where appointment_id=$1",[id])).n,0);
 });

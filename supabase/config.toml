@@ -5,3 +5,7 @@ verify_jwt = false
 [functions.staff-pin-login]
 # Public entry point verifies the PIN server-side with rate limiting.
 verify_jwt = false
+
+[functions.send-booking-confirmations]
+# Database webhook/Cron only. Handler checks the private worker secret.
+verify_jwt = false

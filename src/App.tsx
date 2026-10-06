@@ -1896,15 +1896,15 @@ export default function App() {
                 </p>
                 <p>
                   <strong>Date and Time:</strong>{" "}
-                  {new Date(
-                    confirmation.appointment_date + "T12:00:00Z",
-                  ).toLocaleDateString("en-GB", {
-                    timeZone: "Europe/Dublin",
-                    weekday: "long",
-                    day: "2-digit",
-                    month: "long",
-                    year: "numeric",
-                  })}
+                  {new Date(confirmation.appointment_date + "T12:00:00Z")
+                    .toLocaleDateString("en-GB", {
+                      timeZone: "Europe/Dublin",
+                      weekday: "long",
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    })
+                    .replace(",", "")}
                   ,{" "}
                   {String(
                     Math.floor(confirmation.start_minute / 60) % 12 || 12,
@@ -1916,9 +1916,7 @@ export default function App() {
                   <strong>With:</strong>{" "}
                   {staff.find((s) => s.id === confirmation.staff_id)?.name}
                 </p>
-                <p className="small">
-                  Booking saved. This demo does not send confirmation emails.
-                </p>
+                <p className="small">Your booking is saved.</p>
                 <button
                   className="primary"
                   onClick={() => {
