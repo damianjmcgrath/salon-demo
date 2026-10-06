@@ -267,10 +267,10 @@ test("UI: diary no-show is visibly marked and records no guarantee charge", asyn
   fireEvent.click(screen.getByRole("button", { name: /Staff Diary Today/ }));
   fireEvent.click(screen.getByRole("button", { name: /09:30 · Emma Demo/ }));
   fireEvent.click(screen.getByRole("button", { name: "Mark as no-show" }));
-  fireEvent.change(screen.getByLabelText("Reason"), {
+  fireEvent.change(screen.getByLabelText(/Comments/), {
     target: { value: "Client did not attend" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Confirm no-show" }));
+  fireEvent.click(screen.getByRole("button", { name: "No — waive fee" }));
   await waitFor(() =>
     assert(!screen.queryByRole("dialog", { name: "Appointment details" })),
   );

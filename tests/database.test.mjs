@@ -1067,3 +1067,47 @@ test('verified signup claims proxy attendee history; credit notes and client val
  await pg.exec('reset role');const unverified='b0000000-0000-0000-0000-000000000002';await pg.query("insert into auth.users(id,email,email_confirmed_at) values($1,'unverified-guest@example.com',null)",[unverified]);const guest=await one("insert into clients(name,email,phone) values('Guest','unverified-guest@example.com','123') returning *");await as(unverified);const unconfirmed=await one('select ensure_own_client() id');assert.notEqual(unconfirmed.id,guest.id);
  await pg.exec('reset role');await pg.query('update auth.users set email_confirmed_at=now() where id=$1',[unverified]);await as(unverified);const confirmed=await one('select ensure_own_client() id');assert.equal(confirmed.id,unconfirmed.id);await pg.exec('reset role');assert.equal((await one('select merged_into from clients where id=$1',[guest.id])).merged_into,confirmed.id);
 });
+
+test('booking guarantees enforce card ownership and atomically audit no-show decisions',async()=>{
+ await pg.exec('reset role');
+ await pg.exec(await readFile(new URL('../supabase/017_booking_guarantees.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ const other=await one("insert into clients(name,email,phone) values('Card owner','card-owner@example.com','12345') returning id");
+ const card=await one("insert into booking_guarantee_cards(client_id,created_by,setup_order_id,customer_id,payment_method_id,verified_at) values($1,$2,'test-setup','customer-1','method-1',now()) returning id",[c.id,clientUser]);
+ const wrong=await one("insert into booking_guarantee_cards(client_id,created_by,setup_order_id,verified_at) values($1,$2,'other-setup',now()) returning id",[other.id,clientUser]);
+ const unverified=await one("insert into booking_guarantee_cards(client_id,created_by,setup_order_id) values($1,$2,'unfinished-setup') returning id",[c.id,clientUser]);
+ await as(clientUser);
+ await assert.rejects(pg.query('select * from booking_guarantee_cards'),/permission denied/);
+ await assert.rejects(pg.query("select book_appointment($1,1,'2080-01-09',600,'Client','123',true,true,'client@example.com','saved_demo')",[treatmentId]),/permission denied/);
+ const sql="select * from book_guaranteed_appointment($1,1,'2080-01-09',600,'Guest','12345',false,'proxy-guest@example.com',$2,true,null)";
+ for(const id of [wrong.id,unverified.id])await assert.rejects(pg.query(sql,[treatmentId,id]),/verified card/);
+ await assert.rejects(pg.query("select book_guaranteed_appointment($1,1,'2080-01-09',600,'Guest','12345',false,'proxy-guest@example.com',$2,true,$3)",[treatmentId,card.id,other.id]),/another card owner/);
+ const slot=await one("select * from get_available_slots($1,'2080-01-09',1) limit 1",[treatmentId]);assert(slot);
+ const a=await one("select * from book_guaranteed_appointment($1,1,'2080-01-09',$2,'Guest','12345',false,'proxy-guest@example.com',$3,true,null)",[treatmentId,slot.start_minute,card.id]);
+ assert.equal(a.guarantee_card_id,card.id);assert.equal(a.user_id,clientUser);assert.notEqual(a.client_id,c.id);assert.equal(a.demo_card,null);
+ await assert.rejects(pg.query("select record_no_show_decision($1,0,true,'Charge fee')",[a.id]),/Staff access/);
+ await as(staffA);
+ await assert.rejects(pg.query("select record_no_show_decision($1,0,true,'Charge fee')",[a.id]),/future appointment/);
+ await pg.exec('reset role');
+ const past=[];
+ for(const minute of [600,720,840])past.push(await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status,guarantee_card_id) values($1,$2,1,$3,'2020-01-06',$4,15,'Client','123','Test',40,'booked',$5) returning *",[c.id,clientUser,treatmentId,minute,card.id]));
+ await as(staffB);
+ await assert.rejects(pg.query("select record_no_show_decision($1,0,false,' ')",[past[0].id]),/comments/);
+ await pg.query("select record_no_show_decision($1,0,false,'Waived for illness')",[past[0].id]);
+ await assert.rejects(pg.query("select record_no_show_decision($1,1,true,'Second attempt')",[past[0].id]),/already been recorded/);
+ await pg.query("select record_no_show_decision($1,0,true,'No contact from client')",[past[1].id]);
+ // Recording a terminal payment has no relationship to the online fee worker.
+ await pg.query("select update_appointment_status($1,'checked_in',null,0,null)",[past[2].id]);
+ await pg.query("select update_appointment_status($1,'completed','card',1,null)",[past[2].id]);
+ await pg.exec('reset role');
+ assert.equal((await one('select state from no_show_fees where appointment_id=$1',[past[0].id])).state,'waived');
+ assert.equal((await one('select state from no_show_fees where appointment_id=$1',[past[1].id])).state,'pending');
+ assert.equal((await one('select status from appointments where id=$1',[past[1].id])).status,'no_show');
+ assert.equal((await pg.query('select * from no_show_fees where appointment_id=$1',[past[2].id])).rows.length,0);
+ assert.equal((await one('select payment_method from appointments where id=$1',[past[2].id])).payment_method,'card');
+ await pg.query("update no_show_fees set state='completed' where appointment_id=$1",[past[1].id]);
+ await as(staffA);
+ assert((await pg.query('select * from get_client_activity($1)',[c.id])).rows.some(e=>e.action==='no_show_fee_status'&&e.details.after==='completed'));
+ await as(accountant);await assert.rejects(pg.query("select record_no_show_decision($1,0,true,'No')",[past[2].id]),/Staff access/);
+ await assert.rejects(pg.query('select * from no_show_fees'),/permission denied/);
+});

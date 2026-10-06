@@ -1,4 +1,5 @@
 import ClientProfile from "./ClientProfile";
+import BookingGuarantee from "./BookingGuarantee";
 import VoucherPurchase from "./VoucherPurchase";
 import { localClient } from "./clientModel";
 import StaffAdministration from "./StaffAdministration";
@@ -311,6 +312,90 @@ export default function App() {
     : activeRole === "accountant"
       ? local.filter((a) => a.status === "completed")
       : local;
+  const [feeInfo, setFeeInfo] = useState<{
+    state: string;
+    comments?: string;
+    error?: string;
+  } | null>(null);
+  async function feeCall(action: string, id: string) {
+    if (!db) throw new Error("Supabase connection required.");
+    const { data, error } = await db.functions.invoke("booking-guarantee", {
+      body: { action, appointment_id: id },
+    });
+    if (error) {
+      const detail = await error.context?.json?.().catch(() => null);
+      throw new Error(detail?.error || error.message);
+    }
+    if (data.error) throw new Error(data.error);
+    return data;
+  }
+  useEffect(() => {
+    let cancelled = false;
+    setFeeInfo(null);
+    if (live && selected?.status === "no_show")
+      void feeCall("fee_status", selected.id)
+        .then((data) => {
+          if (!cancelled) setFeeInfo(data);
+        })
+        .catch((e) => {
+          if (!cancelled)
+            setFeeInfo({ state: "unavailable", error: e.message });
+        });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id, selected?.status, live]);
+  async function recordNoShow(applyFee: boolean) {
+    if (!selected || busy || !statusReason.trim()) return;
+    if (!live) {
+      await changeStatus("no_show");
+      return;
+    }
+    const appointment = selected;
+    const operation = identityVersion.current;
+    setBusy(true);
+    setError("");
+    try {
+      if (!db) throw new Error("Supabase connection required.");
+      const { error } = await db.rpc("record_no_show_decision", {
+        p_id: appointment.id,
+        p_revision: appointment.revision || 0,
+        p_apply_fee: applyFee,
+        p_comments: statusReason,
+      });
+      if (error) throw error;
+      if (operation !== identityVersion.current) return;
+      setStatusAction("");
+      setStatusReason("");
+      setFeeInfo({ state: applyFee ? "pending" : "waived" });
+      try {
+        const result = await feeCall(
+          applyFee ? "charge" : "fee_status",
+          appointment.id,
+        );
+        if (operation !== identityVersion.current) return;
+        setFeeInfo(result);
+      } catch (e) {
+        if (operation !== identityVersion.current) return;
+        setFeeInfo({
+          state: applyFee ? "pending" : "waived",
+          error:
+            "No-show recorded. Payment result unavailable; check its status. " +
+            (e as Error).message,
+        });
+      }
+      setSelected({
+        ...appointment,
+        status: "no_show",
+        revision: (appointment.revision || 0) + 1,
+      });
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const breaks: DiaryBreak[] = live
     ? remoteBreaks
     : effectiveBreaks(
@@ -980,28 +1065,19 @@ export default function App() {
               p_revision: amending.revision || 0,
               p_reason: changeReason,
             })
-          : staffClient
-            ? await db.rpc("staff_book_appointment", {
-                p_client_id: staffClient.id,
-                p_treatment_id: treatment.id,
-                p_staff_id: slot.staff_id,
-                p_date: date,
-                p_start: slot.start_minute,
-                p_demo_card: card,
-                p_demo_consent: consent,
-              })
-            : await db.rpc("book_appointment", {
-                p_treatment_id: treatment.id,
-                p_staff_id: slot.staff_id,
-                p_date: date,
-                p_start: slot.start_minute,
-                p_client_name: name.trim(),
-                p_phone: phone.trim(),
-                p_demo_consent: consent,
-                p_booked_for_self: forSelf,
-                p_attendee_email: email.trim(),
-                p_demo_card: card,
-              });
+          : await db.rpc("book_guaranteed_appointment", {
+              p_treatment_id: treatment.id,
+              p_staff_id: slot.staff_id,
+              p_date: date,
+              p_start: slot.start_minute,
+              p_client_name: name.trim(),
+              p_phone: phone.trim(),
+              p_consent: consent,
+              p_booked_for_self: forSelf,
+              p_attendee_email: email.trim(),
+              p_guarantee_id: card,
+              p_client_id: staffClient?.id || null,
+            });
         if (r.error) throw r.error;
         if (operation !== identityVersion.current) return;
         a = r.data;
@@ -1862,6 +1938,16 @@ export default function App() {
                         onChange={(e) => setChangeReason(e.target.value)}
                       />
                     </label>
+                  ) : live && db ? (
+                    <BookingGuarantee
+                      key={staffClient?.id || session?.user.id}
+                      db={db}
+                      clientId={staffClient?.id}
+                      onChange={(id, agreed) => {
+                        setCard(id);
+                        setConsent(agreed);
+                      }}
+                    />
                   ) : (
                     <div className="guarantee">
                       <p>
@@ -2717,6 +2803,7 @@ export default function App() {
             <button
               className="close"
               aria-label="Close appointment"
+              disabled={busy}
               onClick={() => setSelected(null)}
             >
               ×
@@ -2833,6 +2920,45 @@ export default function App() {
                 Mark as no-show
               </button>
             )}
+            {selected.status === "no_show" && (
+              <div className="guarantee">
+                <h3>No-show fee</h3>
+                <p>
+                  Sandbox payment:{" "}
+                  <strong>
+                    {feeInfo?.state === "completed"
+                      ? "€10 paid"
+                      : feeInfo?.state === "waived"
+                        ? "Waived — no payment taken"
+                        : feeInfo?.state === "failed"
+                          ? "Failed — no payment taken"
+                          : feeInfo?.state === "review"
+                            ? "Needs review — payment not confirmed"
+                            : feeInfo?.state === "not_recorded"
+                              ? "No fee decision recorded"
+                              : feeInfo?.state || "Loading…"}
+                  </strong>
+                </p>
+                {feeInfo?.comments && <p>Comments: {feeInfo.comments}</p>}
+                {feeInfo?.error && <p role="alert">{feeInfo.error}</p>}
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      setFeeInfo(await feeCall("charge", selected.id));
+                    } catch (e) {
+                      setError((e as Error).message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Check / finish approved fee
+                </button>
+              </div>
+            )}
             {statusAction && (
               <div className="guarantee">
                 <h3>
@@ -2840,27 +2966,55 @@ export default function App() {
                     ? "Record a no-show"
                     : "Confirm cancellation"}
                 </h3>
+                {statusAction === "no_show" && (
+                  <p>
+                    Do you want to apply the €10 no-show fee? This is a Revolut
+                    Sandbox charge. Either choice marks the appointment as a
+                    no-show.
+                  </p>
+                )}
                 <label>
-                  Reason
+                  {statusAction === "no_show"
+                    ? "Comments — explain why the fee is applied or waived"
+                    : "Reason"}
                   <textarea
                     required
+                    maxLength={2000}
                     value={statusReason}
                     onChange={(e) => setStatusReason(e.target.value)}
                   />
                 </label>
-                <p className="small">
-                  This action is audited. No guarantee charge will be taken in
-                  this iteration.
-                </p>
+                {statusAction === "no_show" ? (
+                  <>
+                    <button
+                      className="danger"
+                      disabled={busy || !statusReason.trim()}
+                      onClick={() => void recordNoShow(true)}
+                    >
+                      Yes — apply €10 fee
+                    </button>
+                    <button
+                      className="secondary"
+                      disabled={busy || !statusReason.trim()}
+                      onClick={() => void recordNoShow(false)}
+                    >
+                      No — waive fee
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="danger"
+                    disabled={busy || !statusReason.trim()}
+                    onClick={() => void changeStatus(statusAction)}
+                  >
+                    Confirm cancellation
+                  </button>
+                )}
                 <button
-                  className="danger"
-                  disabled={busy || !statusReason.trim()}
-                  onClick={() => void changeStatus(statusAction)}
+                  className="back"
+                  disabled={busy}
+                  onClick={() => setStatusAction("")}
                 >
-                  Confirm{" "}
-                  {statusAction === "no_show" ? "no-show" : "cancellation"}
-                </button>
-                <button className="back" onClick={() => setStatusAction("")}>
                   Keep appointment
                 </button>
               </div>
