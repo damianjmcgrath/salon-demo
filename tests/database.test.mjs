@@ -1445,3 +1445,9 @@ test('cancel check-in clears active timestamp, restores booked state and records
  await assert.rejects(pg.query('select cancel_appointment_check_in($1,1)',[a.id]),/Only checked-in/);
  await pg.exec('reset role');assert.equal((await one("select count(*) n from audit_events where appointment_id=$1 and action='appointment_check_in_cancelled'",[a.id])).n,1);
 });
+
+test('custom voucher amounts enforce decimal syntax and €5–€500 limits on the server',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/031_custom_voucher_amounts.sql',import.meta.url),'utf8'));await as(clientUser);
+ for(const value of ['abc','5e1','45.999','4.99','500.01','-10'])await assert.rejects(pg.query("select purchase_demo_voucher($1,null,true,'','','saved_demo',true,gen_random_uuid())",[value]),/voucher amount/);
+ for(const value of ['5','45.99','500.00']){const row=(await one("select purchase_demo_voucher($1,null,true,'','','saved_demo',true,gen_random_uuid()) data",[value])).data;assert.equal(Number(row.original_amount),Number(value));}
+});

@@ -625,8 +625,8 @@ test("UI: client profile, voucher purchase, print and simulated email work toget
     fireEvent.click(
       screen.getByRole("button", { name: "Buy a Voucher", exact: true }),
     );
-    fireEvent.click(screen.getByRole("radio", { name: "€50", exact: true }));
-    fireEvent.change(screen.getByLabelText("Card for your voucher"), {
+    fireEvent.change(screen.getByLabelText("Voucher amount (€)"), { target: { value: "50" } });
+    fireEvent.change(screen.getByLabelText("Payment Method"), {
       target: { value: "saved_demo" },
     });
     fireEvent.click(
@@ -699,7 +699,7 @@ test("UI: treatment-priced gift vouchers use the selected price and recipient de
     fireEvent.change(screen.getByLabelText("Recipient email address"), {
       target: { value: "gift@example.com" },
     });
-    fireEvent.change(screen.getByLabelText("Card for your voucher"), {
+    fireEvent.change(screen.getByLabelText("Payment Method"), {
       target: { value: "new_demo" },
     });
     fireEvent.click(

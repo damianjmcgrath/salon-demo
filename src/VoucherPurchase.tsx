@@ -29,7 +29,8 @@ export default function VoucherPurchase({
   onProfile: () => void;
 }) {
   const own = live ? client : localClient(data);
-  const [option, setOption] = useState("25"),
+  const [option, setOption] = useState("custom"),
+    [customAmount, setCustomAmount] = useState(""),
     [treatmentId, setTreatmentId] = useState(""),
     [forSelf, setForSelf] = useState(true),
     [name, setName] = useState(""),
@@ -53,11 +54,14 @@ export default function VoucherPurchase({
     };
   }, []);
   const selected = treatments.find((t) => t.id === Number(treatmentId)),
-    amount = option === "treatment" ? selected?.price || 0 : Number(option);
+    amount = option === "treatment" ? selected?.price || 0 : Number(customAmount);
   async function buy() {
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
+      if (option === "custom" && (!/^\d+(\.\d{1,2})?$/.test(customAmount) || amount < 5 || amount > 500))
+        throw Error("Enter an amount between €5.00 and €500.00, with up to two decimal places.");
       if (!amount || !card || !ack)
         throw Error(
           "Choose a value, a demo card and confirm this is a demo purchase.",
@@ -75,7 +79,7 @@ export default function VoucherPurchase({
       let v: Voucher;
       if (live) {
         const r = await db!.rpc("purchase_demo_voucher", {
-          p_option: option,
+          p_option: option === "custom" ? customAmount : option,
           p_treatment_id: option === "treatment" ? Number(treatmentId) : null,
           p_for_self: forSelf,
           p_recipient_name: name,
@@ -266,8 +270,7 @@ export default function VoucherPurchase({
             <fieldset className="voucher-amount-options">
               <legend>Voucher amount</legend>
               {[
-                { value: "25", label: "€25" },
-                { value: "50", label: "€50" },
+                { value: "custom", label: "Custom amount" },
                 { value: "treatment", label: "Full-treatment-price" },
               ].map((o) => (
                 <label key={o.value}>
@@ -281,6 +284,12 @@ export default function VoucherPurchase({
                 </label>
               ))}
             </fieldset>
+            {option === "custom" && (
+              <div><label htmlFor="custom-voucher-amount">Voucher amount (€)</label>
+                <input id="custom-voucher-amount" type="text" inputMode="decimal" required pattern="[0-9]+([.][0-9]{1,2})?" value={customAmount} aria-describedby="voucher-amount-help" onChange={(e) => { if (/^\d*(\.\d{0,2})?$/.test(e.target.value)) setCustomAmount(e.target.value); }} />
+                <span id="voucher-amount-help" className="small">Minimum €5.00 · Maximum €500.00. Use up to two decimal places.</span>
+              </div>
+            )}
             {option === "treatment" && (
               <label>
                 Treatment
@@ -344,7 +353,7 @@ export default function VoucherPurchase({
               </div>
             )}
             <label>
-              Card for your voucher
+              Payment Method
               <select
                 required
                 value={card}
