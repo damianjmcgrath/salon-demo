@@ -1608,3 +1608,43 @@ nav .logout-link {
 .checkout-breakdown th:last-child {
   text-align: right;
 }
+
+.management-page {
+  max-width: 1100px;
+  margin: 1.5rem auto;
+}
+.management-page label {
+  display: block;
+  margin: 0.8rem 0;
+}
+.permission-section {
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+.permission-section .check {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.permission-section input[type="checkbox"] {
+  width: auto;
+}
+.management-list {
+  display: grid;
+  gap: 0.5rem;
+}
+.treatment-management-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+  justify-content: space-between;
+  width: 100%;
+  padding: 1rem;
+  text-align: left;
+}
+.treatment-management-row strong {
+  flex: 1 1 250px;
+}

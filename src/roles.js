@@ -9,7 +9,20 @@ export function roleHome(role) {
       ? "reporting-home"
       : "book";
 }
-export function canAccess(role, view) {
+export function canAccess(role, view, permissions) {
+  if (permissions && ["staff", "admin", "accountant"].includes(role)) {
+    const key = {
+      diary: "view.diary",
+      book: "view.appointments",
+      "staff-admin": "view.staff",
+      "treatment-management": "view.treatments",
+      "permission-management": "view.permissions",
+      report: "view.reporting",
+      "reporting-home": "view.reporting",
+      "reporting-placeholder": "view.reporting",
+    }[view];
+    if (key) return !!permissions[key];
+  }
   if (["login", "recovery"].includes(view)) return true;
   if (view === "book") return ["client", "staff", "admin"].includes(role);
   if (["staff-workspace", "diary"].includes(view))
@@ -25,7 +38,12 @@ export function canAccess(role, view) {
     return role === "client";
   if (["report", "reporting-home", "reporting-placeholder"].includes(view))
     return ["admin", "accountant"].includes(role);
-  if (view === "staff-admin") return role === "admin";
+  if (
+    ["staff-admin", "treatment-management", "permission-management"].includes(
+      view,
+    )
+  )
+    return role === "admin";
   return false;
 }
 export const roleLabels = {

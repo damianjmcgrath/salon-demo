@@ -28,6 +28,10 @@ export function confirmationPayload(
     .replace(",", "");
   const minute = Number(s.start_minute);
   const time = `${String(Math.floor(minute / 60) % 12 || 12).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")} ${minute < 720 ? "am" : "pm"}`;
+  const guaranteeText =
+    s.guarantee_required === false
+      ? "No payment is taken now. No card guarantee is required for this booking. Payment is made in the salon after treatment."
+      : "No payment is taken now. Payment is made in the salon after treatment. The booking guarantee is €10 for no-shows or late cancellations.";
   const lines = [
     "TEST EMAIL — routed to Damian during salon testing.",
     `See you soon, ${String(s.client_name).trim().split(/\s+/)[0]}.`,
@@ -37,13 +41,16 @@ export function confirmationPayload(
     `With: ${s.staff_name}`,
     `Price: €${Number(s.price).toFixed(2)}`,
     `Booking Reference: ${s.id}`,
-    "No payment is taken now. Payment is made in the salon after treatment. The booking guarantee is €10 for no-shows or late cancellations.",
+    guaranteeText,
   ];
   return {
     from,
     to: [testRecipient],
     subject: "[TEST] Sculpted — Appointment confirmation",
-    text: [...lines, "View my appointments: https://damianjmcgrath.github.io/salon-demo/"].join("\n\n"),
+    text: [
+      ...lines,
+      "View my appointments: https://damianjmcgrath.github.io/salon-demo/",
+    ].join("\n\n"),
     html: `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Appointment confirmed</title></head>
 <body style="margin:0;padding:0;background-color:#f3f1eb;color:#292822;font-family:Arial,Helvetica,sans-serif;">
@@ -66,7 +73,12 @@ ${[
   ["Time", time + " (Ireland local time)"],
   ["With", s.staff_name],
   ["Treatment price", "€" + Number(s.price).toFixed(2)],
-].map(([label, value]) => `<tr><td style="padding:14px 18px;border-bottom:1px solid #e4e0d6;"><p style="margin:0 0 5px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#73766b;">${escape(label)}</p><p style="margin:0;font-size:16px;line-height:1.5;color:#292822;">${escape(value)}</p></td></tr>`).join("")}
+]
+  .map(
+    ([label, value]) =>
+      `<tr><td style="padding:14px 18px;border-bottom:1px solid #e4e0d6;"><p style="margin:0 0 5px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:#73766b;">${escape(label)}</p><p style="margin:0;font-size:16px;line-height:1.5;color:#292822;">${escape(value)}</p></td></tr>`,
+  )
+  .join("")}
 </table></td></tr>
 <tr><td style="padding:0 24px 26px;">
 <p style="margin:0 0 8px;font-size:11px;font-weight:bold;letter-spacing:1px;color:#63705b;">SALON ADDRESS</p>
@@ -78,7 +90,7 @@ ${[
 </td></tr>
 <tr><td style="padding:22px 24px;background-color:#f2f0e8;">
 <p style="margin:0 0 8px;font-size:12px;font-weight:bold;">Your booking guarantee</p>
-<p style="margin:0;font-size:12px;line-height:1.8;color:#66645e;">No payment is taken now. Payment is made in the salon after your treatment. The booking guarantee is €10 for no-shows or late cancellations.</p>
+<p style="margin:0;font-size:12px;line-height:1.8;color:#66645e;">${escape(guaranteeText)}</p>
 </td></tr>
 <tr><td align="center" style="padding:22px 24px;">
 <p style="margin:0;font-size:10px;line-height:1.7;color:#858279;word-break:break-all;">Booking reference: ${escape(s.id)}</p>

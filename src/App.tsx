@@ -1,3 +1,6 @@
+import PermissionManagement from "./PermissionManagement";
+import TreatmentManagement from "./TreatmentManagement";
+import { defaultPermissions, type Permissions } from "./permissions";
 import ClientProfile from "./ClientProfile";
 import BookingGuarantee from "./BookingGuarantee";
 import AppointmentCheckout, { CheckoutHistory } from "./AppointmentCheckout";
@@ -24,7 +27,11 @@ import {
   periodSlots,
   attendedTreatmentIds,
 } from "./availability.js";
-type Treatment = (typeof catalog)[number];
+type Treatment = (typeof catalog)[number] & {
+  description?: string;
+  revision?: number;
+  active?: boolean;
+};
 import StaffWorkspace from "./StaffWorkspace";
 import Reporting from "./Reporting";
 import type {
@@ -235,6 +242,43 @@ export default function App() {
   const authUser = useRef<string | null>(null);
   const activeRole = live ? role : localRole;
   const staffAccess = ["staff", "admin"].includes(activeRole || "");
+  const [permissionGrants, setPermissionGrants] = useState<Permissions>({});
+  const [permissionVersion, setPermissionVersion] = useState(0);
+  const permissions = live
+    ? permissionGrants
+    : defaultPermissions(activeRole || "");
+  const allowed = (key: string) => !!permissions[key];
+  useEffect(() => {
+    setPermissionGrants({});
+  }, [session?.user.id, activeRole]);
+  useEffect(() => {
+    let active = true;
+    if (live && db && session && activeRole && activeRole !== "client") {
+      const load = () =>
+        db!.rpc("get_my_permissions").then(({ data, error }) => {
+          if (!active) return;
+          if (error) {
+            setPermissionGrants({});
+            setError(error.message);
+          } else setPermissionGrants(data ?? {});
+        });
+      void load();
+      const onFocus = () => {
+        void load();
+      };
+      window.addEventListener("focus", onFocus);
+      const timer = window.setInterval(onFocus, 30000);
+      return () => {
+        active = false;
+        window.removeEventListener("focus", onFocus);
+        window.clearInterval(timer);
+      };
+    }
+    return () => {
+      active = false;
+    };
+  }, [live, session?.user.id, activeRole, permissionVersion]);
+
   const [sandboxNoShowTesting, setSandboxNoShowTesting] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -247,7 +291,7 @@ export default function App() {
       cancelled = true;
     };
   }, [live, staffAccess, session?.user.id]);
-  const reportAccess = ["admin", "accountant"].includes(activeRole || "");
+  const reportAccess = allowed("view.reporting");
   const [local, setLocal] = useState<Appointment[]>(() => {
       try {
         return (
@@ -278,6 +322,9 @@ export default function App() {
     [step, setStep] = useState(0),
     [confirmation, setConfirmation] = useState<Appointment | null>(null);
   const [forSelf, setForSelf] = useState(true);
+  const [guaranteeNeeded, setGuaranteeNeeded] = useState<boolean | null>(null);
+  const [guaranteeError, setGuaranteeError] = useState("");
+
   const [email, setEmail] = useState("");
   const [period, setPeriod] = useState("");
   const [card, setCard] = useState("");
@@ -581,7 +628,12 @@ export default function App() {
   function openBreak(b?: DiaryBreak) {
     const draft = b || {
       id: null,
-      staff_id: ownStaffId || (activeRole === "admin" ? staff[0]?.id : 0) || 0,
+      staff_id:
+        (activeRole === "admin" && !allowed("perform.own_breaks")
+          ? staff.find((s) => s.id !== ownStaffId)?.id
+          : ownStaffId) ||
+        (activeRole === "admin" ? staff[0]?.id : 0) ||
+        0,
       kind: "break",
       start_minute: 840,
       duration: 15,
@@ -795,7 +847,10 @@ export default function App() {
     const result =
       activeRole === "accountant"
         ? await db.rpc("get_daily_report", { p_date: date })
-        : staffAccess
+        : staffAccess &&
+            (allowed("view.diary") ||
+              allowed("view.appointments") ||
+              allowed("view.clients"))
           ? await db
               .from("appointments")
               .select("*")
@@ -806,7 +861,7 @@ export default function App() {
       if (result.error) setError(result.error.message);
       else setRemote(result.data as Appointment[]);
     }
-    if (staffAccess) {
+    if (staffAccess && allowed("view.diary")) {
       const b = await db.rpc("get_diary_breaks", { p_date: date });
       if (version === requestVersion.current) {
         if (b.error) setError(b.error.message);
@@ -863,12 +918,12 @@ export default function App() {
   }, [session?.user.id, live]);
   useEffect(() => {
     if (roleLoading || !activeRole || view === "recovery") return;
-    if (view === "login" || !canAccess(activeRole, view))
+    if (view === "login" || !canAccess(activeRole, view, permissions))
       setView(roleHome(activeRole));
-  }, [activeRole, roleLoading, view]);
+  }, [activeRole, roleLoading, view, permissions]);
   useEffect(() => {
     void refresh();
-  }, [live, session?.user.id, date, activeRole, roleLoading]);
+  }, [live, session?.user.id, date, activeRole, roleLoading, permissionGrants]);
   useEffect(() => {
     if (!live || !db || !session || activeRole !== "client") {
       setMyBookings([]);
@@ -1088,6 +1143,38 @@ export default function App() {
     remoteBreaks,
     amending?.id,
   ]);
+  useEffect(() => {
+    let active = true;
+    setGuaranteeNeeded(null);
+    setGuaranteeError("");
+    if (step !== 3 || amending) return;
+    if (!live) {
+      setGuaranteeNeeded(true);
+      return;
+    }
+    if (!db || !session) return;
+    void db
+      .rpc("booking_requires_guarantee", {
+        p_attendee_email: forSelf ? null : email.trim(),
+        p_client_id: staffClient?.id ?? null,
+      })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) setGuaranteeError(error.message);
+        else setGuaranteeNeeded(data === true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    step,
+    amending?.id,
+    live,
+    session?.user.id,
+    staffClient?.id,
+    forSelf,
+    email,
+  ]);
   const eligibleStaff = staff.filter(
     (s) =>
       !treatment ||
@@ -1103,7 +1190,9 @@ export default function App() {
     if (
       !treatment ||
       !slot ||
-      (!amending && (!consent || !card)) ||
+      (!amending &&
+        (guaranteeNeeded === null ||
+          (guaranteeNeeded && (!consent || !card)))) ||
       (!staffClient && activeRole !== "client") ||
       requiresPasswordChange
     )
@@ -1135,7 +1224,7 @@ export default function App() {
               p_consent: consent,
               p_booked_for_self: forSelf,
               p_attendee_email: email.trim(),
-              p_guarantee_id: card,
+              p_guarantee_id: guaranteeNeeded ? card : null,
               p_client_id: staffClient?.id || null,
             });
         if (r.error) throw r.error;
@@ -1403,21 +1492,29 @@ export default function App() {
             </button>
           )}
           {staffAccess &&
-            (["Appointments", "Clients"] as const).map((label) => (
-              <button
-                key={label}
-                className={
-                  view === "staff-workspace" &&
-                  workspaceScreen === label.toLowerCase()
-                    ? "active"
-                    : ""
-                }
-                onClick={() => staffHome(label.toLowerCase())}
-              >
-                {label}
-              </button>
-            ))}
-          {staffAccess && (
+            (["Appointments", "Clients"] as const)
+              .filter((label) =>
+                allowed(
+                  label === "Appointments"
+                    ? "view.appointments"
+                    : "view.clients",
+                ),
+              )
+              .map((label) => (
+                <button
+                  key={label}
+                  className={
+                    view === "staff-workspace" &&
+                    workspaceScreen === label.toLowerCase()
+                      ? "active"
+                      : ""
+                  }
+                  onClick={() => staffHome(label.toLowerCase())}
+                >
+                  {label}
+                </button>
+              ))}
+          {staffAccess && allowed("view.diary") && (
             <button
               className={view === "diary" ? "active" : ""}
               onClick={() => {
@@ -1428,7 +1525,7 @@ export default function App() {
               Staff Diary
             </button>
           )}
-          {staffAccess && (
+          {staffAccess && allowed("view.vouchers") && (
             <button
               className={
                 view === "staff-workspace" && workspaceScreen === "vouchers"
@@ -1440,12 +1537,22 @@ export default function App() {
               Vouchers
             </button>
           )}
-          {activeRole === "admin" && (
+          {staffAccess && allowed("view.staff") && (
             <button
               className={view === "staff-admin" ? "active" : ""}
               onClick={() => setView("staff-admin")}
             >
               Staff Management
+            </button>
+          )}
+          {staffAccess && allowed("view.treatments") && (
+            <button onClick={() => setView("treatment-management")}>
+              Treatment Management
+            </button>
+          )}
+          {staffAccess && allowed("view.permissions") && (
+            <button onClick={() => setView("permission-management")}>
+              Permission Management
             </button>
           )}
           {reportAccess && (
@@ -1603,6 +1710,9 @@ export default function App() {
             staff={staff}
             initialScreen={workspaceScreen}
             role={activeRole || "staff"}
+            permissions={permissions}
+            onTreatments={() => setView("treatment-management")}
+            onPermissions={() => setView("permission-management")}
             onReporting={() => setView("reporting-placeholder")}
             onStaffAdmin={() => setView("staff-admin")}
             db={db}
@@ -1842,6 +1952,7 @@ export default function App() {
                       >
                         <span className="eyebrow">{t.category}</span>
                         <h3>{t.name}</h3>
+                        {t.description && <p>{t.description}</p>}
                         <div>
                           <span>
                             {t.duration} min <small>· demo duration</small>
@@ -1978,9 +2089,11 @@ export default function App() {
                   <h2>
                     {amending
                       ? "Review appointment changes"
-                      : "Booking Guarantee"}
+                      : guaranteeNeeded === false
+                        ? "Confirm Appointment"
+                        : "Booking Guarantee"}
                   </h2>
-                  {!amending && (
+                  {!amending && guaranteeNeeded === true && (
                     <p>
                       Guarantee your booking using your saved card details, or
                       supply new card details.
@@ -1998,6 +2111,17 @@ export default function App() {
                         onChange={(e) => setChangeReason(e.target.value)}
                       />
                     </label>
+                  ) : guaranteeError ? (
+                    <p role="alert" className="auth-error">
+                      {guaranteeError}
+                    </p>
+                  ) : guaranteeNeeded === null ? (
+                    <p>Checking booking guarantee requirements…</p>
+                  ) : guaranteeNeeded === false ? (
+                    <p>
+                      No card guarantee is required for this client. Payment
+                      will be made in the salon after the treatment.
+                    </p>
                   ) : live && db ? (
                     <BookingGuarantee
                       key={staffClient?.id || session?.user.id}
@@ -2070,7 +2194,10 @@ export default function App() {
                     className="primary"
                     disabled={
                       busy ||
-                      (amending ? !changeReason.trim() : !consent || !card) ||
+                      (amending
+                        ? !changeReason.trim()
+                        : guaranteeNeeded === null ||
+                          (guaranteeNeeded && (!consent || !card))) ||
                       !name.trim() ||
                       (live && (!session || !phone.trim()))
                     }
@@ -2507,7 +2634,23 @@ export default function App() {
               </button>
             </div>
           </section>
-        ) : view === "staff-admin" && activeRole === "admin" ? (
+        ) : view === "permission-management" &&
+          staffAccess &&
+          allowed("view.permissions") ? (
+          <PermissionManagement
+            db={db}
+            onHome={staffHome}
+            onChanged={() => setPermissionVersion((v) => v + 1)}
+          />
+        ) : view === "treatment-management" &&
+          staffAccess &&
+          allowed("view.treatments") ? (
+          <TreatmentManagement
+            db={db}
+            onHome={staffHome}
+            onChanged={() => setCatalogVersion((v) => v + 1)}
+          />
+        ) : view === "staff-admin" && staffAccess && allowed("view.staff") ? (
           <StaffAdministration
             key={`${live}-${session?.user.id || ownStaffId}`}
             live={live}
@@ -2525,14 +2668,14 @@ export default function App() {
             }}
           />
         ) : ["reporting-placeholder"].includes(view) &&
-          canAccess(activeRole, view) ? (
+          canAccess(activeRole, view, permissions) ? (
           <Reporting
             allowSandbox={activeRole === "admin"}
             key={`${session?.user.id || "local"}-${view}`}
             db={db}
             onHome={() => setView(roleHome(activeRole))}
           />
-        ) : !canAccess(activeRole, view) ? (
+        ) : !canAccess(activeRole, view, permissions) ? (
           <section className="panel login">
             <h2>Sign in to continue.</h2>
             <p>Your account determines which salon features you can access.</p>
@@ -2620,7 +2763,9 @@ export default function App() {
                   <button
                     className="secondary"
                     disabled={
-                      activeRole === "admin" ? !staff.length : !ownStaffId
+                      activeRole === "admin"
+                        ? !staff.length
+                        : !ownStaffId || !allowed("perform.own_breaks")
                     }
                     onClick={() => openBreak()}
                   >
@@ -2816,7 +2961,16 @@ export default function App() {
                     }
                   >
                     {staff.map((s) => (
-                      <option key={s.id} value={s.id}>
+                      <option
+                        key={s.id}
+                        value={s.id}
+                        disabled={
+                          breakDraft.kind === "break" &&
+                          !breakDraft.id &&
+                          s.id === ownStaffId &&
+                          !allowed("perform.own_breaks")
+                        }
+                      >
                         {s.name}
                       </option>
                     ))}
@@ -2888,16 +3042,18 @@ export default function App() {
             <p>
               {selected.attendee_email || ""} · {selected.phone || ""}
             </p>
-            <button
-              className="back"
-              onClick={() => {
-                setInitialStaffAppointment(selected);
-                setSelected(null);
-                setView("staff-workspace");
-              }}
-            >
-              Open client record →
-            </button>
+            {allowed("view.clients") && (
+              <button
+                className="back"
+                onClick={() => {
+                  setInitialStaffAppointment(selected);
+                  setSelected(null);
+                  setView("staff-workspace");
+                }}
+              >
+                Open client record →
+              </button>
+            )}
             <hr />
             {["booked", "checked_in"].includes(selected.status) && (
               <button
@@ -3082,9 +3238,9 @@ export default function App() {
                 </h3>
                 {statusAction === "no_show" && (
                   <p>
-                    Do you want to apply the €10 no-show fee? This is a Revolut
-                    Sandbox charge. Either choice marks the appointment as a
-                    no-show.
+                    {selected.guarantee_required === false
+                      ? "This appointment has no card guarantee. Record the no-show without a card charge."
+                      : "Do you want to apply the €10 no-show fee? This is a Revolut Sandbox charge. Either choice marks the appointment as a no-show."}
                   </p>
                 )}
                 <label>
@@ -3101,20 +3257,34 @@ export default function App() {
                 </label>
                 {statusAction === "no_show" ? (
                   <>
-                    <button
-                      className="danger"
-                      disabled={busy || !statusReason.trim()}
-                      onClick={() => void recordNoShow(true)}
-                    >
-                      Yes — apply €10 fee
-                    </button>
-                    <button
-                      className="secondary"
-                      disabled={busy || !statusReason.trim()}
-                      onClick={() => void recordNoShow(false)}
-                    >
-                      No — waive fee
-                    </button>
+                    {selected.guarantee_required !== false && (
+                      <button
+                        className="danger"
+                        disabled={busy || !statusReason.trim()}
+                        onClick={() => void recordNoShow(true)}
+                      >
+                        Yes — apply €10 fee
+                      </button>
+                    )}
+                    {(selected.guarantee_required === false ||
+                      allowed("perform.waive_fees")) && (
+                      <button
+                        className="secondary"
+                        disabled={busy || !statusReason.trim()}
+                        onClick={() => void recordNoShow(false)}
+                      >
+                        {selected.guarantee_required === false
+                          ? "Mark no-show — no card guarantee required"
+                          : "No — waive fee"}
+                      </button>
+                    )}
+                    {selected.guarantee_required !== false &&
+                      !allowed("perform.waive_fees") && (
+                        <p className="small">
+                          You do not have permission to waive this fee. Ask an
+                          authorised staff member if a waiver is needed.
+                        </p>
+                      )}
                   </>
                 ) : (
                   <button

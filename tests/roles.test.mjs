@@ -39,3 +39,11 @@ test("profile and voucher purchase screens are client-only", () => {
       assert.equal(canAccess(role, view), false);
   }
 });
+
+test('explicit page permissions allow delegation and override admin page defaults',()=>{
+ assert.equal(canAccess('staff','staff-admin',{'view.staff':true}),true);
+ assert.equal(canAccess('staff','reporting-placeholder',{'view.reporting':true}),true);
+ assert.equal(canAccess('admin','treatment-management',{'view.treatments':false}),false);
+ assert.equal(canAccess('staff','diary',{'view.diary':false}),false);
+ assert.equal(canAccess('client','permission-management',{'view.permissions':true}),false);
+});

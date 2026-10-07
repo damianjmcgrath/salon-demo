@@ -1208,3 +1208,49 @@ test('split checkout redeems balances atomically, rejects duplicates and reports
  // History identifies voucher use and its original code; audit stores both split amounts.
  await as(staffA);assert((await pg.query('select * from get_client_activity($1)',[c.id])).rows.some(e=>e.action==='appointment_checked_out'&&e.details.payment_method==='split'));
 });
+
+test('management permissions enforce delegated views/actions and client guarantee exemptions on the server', async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/021_management_permissions_deposits.sql',import.meta.url),'utf8'));
+ await as(staffA);let rows=(await one('select list_staff_permissions() data')).data;
+ const aoife=rows.find(s=>s.id===1),leah=rows.find(s=>s.id===2);assert(aoife&&leah);
+ assert.equal(aoife.permissions['view.permissions'],true);assert.equal(leah.permissions['view.treatments'],false);
+ await assert.rejects(pg.query('select save_staff_permissions(1,$1,0)',[{...aoife.permissions,'view.permissions':false}]),/cannot be disabled/);
+ await as(staffB);await assert.rejects(pg.query('select list_staff_permissions()'),/Permission denied/);
+ await assert.rejects(pg.query("select save_treatment($1,'Unauthorized','',30,10,false,0)",[treatmentId]),/Permission denied/);
+ await as(staffA);const grants={...leah.permissions,'view.treatments':true,'view.staff':true,'view.reporting':true,'perform.own_breaks':false,'perform.credit_notes':false,'perform.waive_fees':false};
+ await pg.query('select save_staff_permissions(2,$1,0)',[grants]);await assert.rejects(pg.query('select save_staff_permissions(2,$1,0)',[grants]),/Permissions changed/);
+ await as(staffB);assert.equal((await one("select has_permission('view.staff') allowed")).allowed,true);assert((await one('select list_admin_staff() data')).data.length);
+ const old=await one('select * from treatments where id=$1',[treatmentId]);
+ const edited=await one("select * from save_treatment($1,'Managed treatment','New treatment description',60,75.50,false,$2)",[treatmentId,old.revision]);assert.equal(Number(edited.price),75.5);assert.equal(edited.description,'New treatment description');
+ await assert.rejects(pg.query("select save_treatment($1,'Stale','',60,1,false,$2)",[treatmentId,old.revision]),/Treatment changed/);
+ await assert.rejects(pg.query("select save_treatment($1,'Bad','',0,1,false,$2)",[treatmentId,edited.revision]),/valid length/);
+ assert((await pg.query("select * from get_activity_report('2021-04-01','2021-04-01')")).rows.length);
+ assert((await pg.query('select * from report_staff_options()')).rows.length);
+ assert((await pg.query("select get_staff_report('payroll',null,'2021-04-01','2021-04-01')")).rows.length);
+ const c=await one('select * from clients where auth_user_id=$1',[clientUser]);
+ await assert.rejects(pg.query("select create_client_credit_note($1,10,'No permission')",[c.id]),/Permission denied/);
+ await assert.rejects(pg.query("select save_staff_break('2080-01-09',810,825,'break',null,0)"),/own breaks/);
+ await as(staffA);const changed=await one('select * from update_client_details($1,$2,$3,$4,$5,false)',[c.id,c.name,c.email,c.phone,c.revision]);assert.equal(changed.requires_deposit,false);
+ await as(clientUser);assert.equal((await one('select booking_requires_guarantee() required')).required,false);
+ await assert.rejects(pg.query('select update_client_details($1,$2,$3,$4,$5,false)',[c.id,c.name,c.email,c.phone,changed.revision]),/Permission denied/);
+ const slot=await one("select * from get_available_slots($1,'2080-01-09',1) limit 1",[treatmentId]);assert(slot);
+ const booked=await one("select * from book_guaranteed_appointment($1,1,'2080-01-09',$2,$3,$4,true,$5,null,false,null)",[treatmentId,slot.start_minute,c.name,c.phone,c.email]);assert.equal(booked.guarantee_required,false);assert.equal(booked.guarantee_card_id,null);await pg.exec('reset role');assert.equal((await one('select snapshot from booking_email_queue where appointment_id=$1',[booked.id])).snapshot.guarantee_required,false);await as(clientUser);assert.equal(Number(booked.price),75.5);assert.equal(booked.treatment_name,'Managed treatment');
+ // Exempt payer cannot bypass a different attendee's requirement.
+ assert.equal((await one("select booking_requires_guarantee('unknown-attendee@example.com',null) required")).required,true);
+ await assert.rejects(pg.query("select book_guaranteed_appointment($1,1,'2080-01-09',1020,'Unknown','12345',false,'unknown-attendee@example.com',null,false,null)",[treatmentId]),/Agree to the booking guarantee/);
+ await pg.exec('reset role');await pg.exec('update sandbox_testing_settings set allow_future_no_shows=true');
+ const required=await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price) values($1,$2,1,$3,'2022-01-01',600,15,'Required','123','Test',25) returning *",[c.id,clientUser,treatmentId]);
+ await as(staffB);await assert.rejects(pg.query("select record_no_show_decision($1,0,false,'Waive')",[required.id]),/permission to waive/);
+ await assert.rejects(pg.query("select update_appointment_status($1,'no_show',null,0,'Bypass')",[required.id]),/fee decision/);
+ await assert.rejects(pg.query("select record_no_show_decision($1,0,true,'Fee')",[booked.id]),/exempt/);
+ await pg.query("select record_no_show_decision($1,0,false,'Exempt client did not attend')",[booked.id]);
+ await pg.query("select record_no_show_decision($1,0,true,'Required fee')",[required.id]);
+ // Removing a page blocks direct RPC use and its private HR reads, not just the tile.
+ await as(staffA);await pg.query('select save_staff_permissions(2,$1,1)',[{...grants,'view.staff':false,'view.treatments':false,'view.reporting':false,'view.clients':false,'view.diary':false,'view.appointments':false,'view.vouchers':false}]);
+ await as(staffB);await assert.rejects(pg.query('select list_admin_staff()'),/Permission denied/);assert.equal((await pg.query('select * from staff_details')).rows.length,0);assert.equal((await pg.query('select * from appointments')).rows.length,0);
+ await assert.rejects(pg.query('select get_client_activity($1)',[c.id]),/Permission denied/);
+ await assert.rejects(pg.query("select get_activity_report('2021-01-01','2021-01-01')"),/Permission denied/);
+ await assert.rejects(pg.query("select search_clients('','','')"),/Permission denied/);
+ await assert.rejects(pg.query("select * from checkout_appointment($1,1,'cash')",[required.id]),/Permission denied/);
+ await as(accountant);assert((await pg.query("select * from get_activity_report('2021-04-01','2021-04-01')")).rows.length);await assert.rejects(pg.query('select list_staff_permissions()'),/Permission denied/);
+});

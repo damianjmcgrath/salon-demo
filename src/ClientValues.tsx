@@ -53,7 +53,9 @@ export default function ClientValues({
   db,
   clientId,
   onSaved,
+  canCreate = true,
 }: {
+  canCreate?: boolean;
   kind: "vouchers" | "credit";
   db: SupabaseClient | null;
   clientId: string;
@@ -177,7 +179,7 @@ export default function ClientValues({
         </>
       ) : (
         <>
-          {!creating && (
+          {!creating && canCreate && (
             <button
               className="primary"
               disabled={!db}

@@ -694,14 +694,14 @@ export default function StaffAdministration({
           } else onHome();
         }}
       >
-        ← {draft ? "Staff Administration" : "Staff home"}
+        ← {draft ? "Staff Management" : "Staff home"}
       </button>
       <h1>
         {draft
           ? draft.id
             ? draft.name
             : "Create New Staff Member"
-          : "Staff Administration"}
+          : "Staff Management"}
       </h1>
       {error && (
         <p role="alert" className="auth-error">
@@ -1220,7 +1220,9 @@ export default function StaffAdministration({
                           <th scope="row">
                             {dateLabel(w.clocked_in_at, false)}
                           </th>
-                          <td>{localClockInput(w.clocked_in_at).slice(11, 16)}</td>
+                          <td>
+                            {localClockInput(w.clocked_in_at).slice(11, 16)}
+                          </td>
                           <td>
                             {w.clocked_out_at
                               ? localClockInput(w.clocked_out_at).slice(11, 16)

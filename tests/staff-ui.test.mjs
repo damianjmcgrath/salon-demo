@@ -74,7 +74,7 @@ async function login(name = /Leah/) {
 }
 async function findEmma() {
   fireEvent.click(
-    screen.getByRole("button", { name: /Client Administration/ }),
+    screen.getByRole("button", { name: /Client Management/ }),
   );
   fireEvent.click(screen.getByRole("button", { name: /Search for a Client/ }));
   fireEvent.change(screen.getByLabelText("Name"), {
@@ -89,7 +89,7 @@ test("UI: staff tiles, PIN preview, home tiles and profile locking work", async 
   await login();
   for (const name of [
     "Appointment Management",
-    "Client Administration",
+    "Client Management",
     "Staff Diary",
   ])
     assert(screen.getByRole("heading", { name, exact: true }));
@@ -285,9 +285,9 @@ test("UI: diary no-show is visibly marked and records no guarantee charge", asyn
   assert.equal(data.activity.at(-1).details.guarantee_charged, false);
   assert.equal(data.activity.at(-1).details.after, "no_show");
 });
-test("UI: admin has six tiles, accountant only Reporting, and clocks remain profile specific", async () => {
+test("UI: admin has eight tiles, accountant only Reporting, and clocks remain profile specific", async () => {
   await login(/Aoife/);
-  assert.equal(document.querySelectorAll(".workspace-card").length, 6);
+  assert.equal(document.querySelectorAll(".workspace-card").length, 8);
   const out = screen.getByRole("button", { name: "Clock-Out" });
   assert(out.disabled);
   fireEvent.click(screen.getByRole("button", { name: "Clock-In" }));
@@ -425,9 +425,9 @@ test("UI: client choice screen leads directly to self treatments or recipient de
 test("UI: admin creates staff, edits notes and skills, archives with retained history", async () => {
   await login(/Aoife/);
   fireEvent.click(
-    screen.getByRole("button", { name: /Staff Administration Staff/ }),
+    screen.getByRole("button", { name: /Staff Management Staff/ }),
   );
-  await screen.findByRole("heading", { name: "Staff Administration" });
+  await screen.findByRole("heading", { name: "Staff Management" });
   fireEvent.click(
     screen.getByRole("button", {
       name: "Create New Staff Member",
@@ -496,7 +496,7 @@ test("UI: admin creates staff, edits notes and skills, archives with retained hi
 test("UI: newly created staff appears in login and uses its saved demo PIN", async () => {
   await login(/Aoife/);
   fireEvent.click(
-    screen.getByRole("button", { name: /Staff Administration Staff/ }),
+    screen.getByRole("button", { name: /Staff Management Staff/ }),
   );
   fireEvent.click(
     screen.getByRole("button", {
@@ -525,14 +525,14 @@ test("UI: newly created staff appears in login and uses its saved demo PIN", asy
   fireEvent.click(screen.getByRole("button", { name: "Open demo workspace" }));
   assert(await screen.findByRole("heading", { name: "Your salon workspace." }));
   assert.equal(
-    screen.queryByRole("button", { name: /Staff Administration Staff/ }),
+    screen.queryByRole("button", { name: /Staff Management Staff/ }),
     null,
   );
 });
 test("UI: admin can add and amend missed clock entries with a retained audit trail", async () => {
   await login(/Aoife/);
   fireEvent.click(
-    screen.getByRole("button", { name: /Staff Administration Staff/ }),
+    screen.getByRole("button", { name: /Staff Management Staff/ }),
   );
   fireEvent.click(screen.getByRole("button", { name: /Leah Staff/ }));
   await screen.findByRole("heading", { name: "Leah", exact: true });
@@ -847,4 +847,9 @@ test("UI: client login has a separate create account button and removes obsolete
   assert(screen.getByLabelText("Mobile number"));
   fireEvent.click(screen.getByRole("button", { name: "Already registered? Sign in" }));
   assert(screen.getByRole("heading", { name: "Welcome back." }));
+});
+
+test('UI: client deposit requirement defaults to Yes and can be saved as No',async()=>{
+ await login();await findEmma();const setting=screen.getByLabelText('Requires Deposit');assert.equal(setting.value,'yes');fireEvent.change(setting,{target:{value:'no'}});fireEvent.click(screen.getByRole('button',{name:'Save details'}));await waitFor(()=>assert.equal(screen.getByLabelText('Requires Deposit').value,'no'));
+ const client=JSON.parse(localStorage.getItem('sculpted-staff-data-v1')).clients.find(c=>c.name==='Emma Demo');assert.equal(client.requires_deposit,false);
 });

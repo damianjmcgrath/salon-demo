@@ -1,5 +1,6 @@
 export type Client = {
   id: string;
+  requires_deposit?: boolean;
   auth_user_id?: string | null;
   name: string;
   email: string;
@@ -32,6 +33,7 @@ export type Appointment = {
   treatment_name: string;
   price: number;
   status: string;
+  guarantee_required?: boolean;
   payment_method?: string;
   appointment_date: string;
   revision?: number;

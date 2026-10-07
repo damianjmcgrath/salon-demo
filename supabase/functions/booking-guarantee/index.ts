@@ -101,6 +101,16 @@ Deno.serve(async (req: Request) => {
   try {
     const input = await req.json();
     const isStaff = await checked(userDb.rpc("is_salon_staff"));
+    if (isStaff) {
+      const keys = ["charge", "fee_status"].includes(input.action)
+        ? ["view.diary", "view.appointments"]
+        : ["view.appointments"];
+      const access = await Promise.all(
+        keys.map((p_key) => checked(userDb.rpc("has_permission", { p_key }))),
+      );
+      if (!access.some((v) => v === true))
+        return reply({ error: "Permission denied for this feature." }, 403);
+    }
     if (["charge", "fee_status"].includes(input.action)) {
       if (!isStaff) return reply({ error: "Staff access required." }, 403);
       let row = await checked(

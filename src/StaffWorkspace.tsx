@@ -1,3 +1,4 @@
+import { defaultPermissions, type Permissions } from "./permissions";
 import ClientSearch from "./ClientSearch";
 import ClientPatchTests from "./ClientPatchTests";
 import ClientValues from "./ClientValues";
@@ -37,8 +38,14 @@ export default function StaffWorkspace({
   staff,
   onReporting,
   onStaffAdmin,
+  onTreatments,
+  onPermissions,
+  permissions,
 }: {
   role: string;
+  permissions?: Permissions;
+  onTreatments?: () => void;
+  onPermissions?: () => void;
   initialScreen?: string;
   treatments: { id: number; name: string; category: string }[];
   staff: { id: number; name: string; active?: boolean }[];
@@ -55,6 +62,8 @@ export default function StaffWorkspace({
   onCancel: (appointment: Appointment, reason: string) => Promise<void>;
   initialAppointment?: Appointment | null;
 }) {
+  const grants = permissions ?? defaultPermissions(role);
+  const [requiresDeposit, setRequiresDeposit] = useState(true);
   const [screen, setScreen] = useState(initialScreen),
     [intent, setIntent] = useState("profile"),
     [query, setQuery] = useState({ name: "", email: "", phone: "" }),
@@ -98,6 +107,7 @@ export default function StaffWorkspace({
   async function loadClient(c: Client, nextIntent = intent) {
     const version = ++generation.current;
     setClient(c);
+    setRequiresDeposit(c.requires_deposit !== false);
     setClientTab("Personal Details");
     setDraft({ name: c.name, email: c.email, phone: c.phone });
     setScreen("record");
@@ -294,18 +304,24 @@ export default function StaffWorkspace({
     try {
       let c: Client;
       if (live && db) {
-        const r = await db.rpc("update_client", {
+        const r = await db.rpc("update_client_details", {
           p_id: client.id,
           p_name: draft.name,
           p_email: draft.email,
           p_phone: draft.phone,
           p_revision: client.revision,
+          p_requires_deposit: requiresDeposit,
         });
         if (r.error) throw r.error;
         if (!mounted.current) return;
         c = r.data;
       } else {
-        c = { ...client, ...draft, revision: client.revision + 1 };
+        c = {
+          ...client,
+          ...draft,
+          requires_deposit: requiresDeposit,
+          revision: client.revision + 1,
+        };
         setData((d) => ({
           ...d,
           clients: d.clients.map((x) => (x.id === c.id ? c : x)),
@@ -471,13 +487,43 @@ export default function StaffWorkspace({
     if (intent === "book") onBook(c);
     else void loadClient(c);
   }
-  const tile = (title: string, description: string, action: () => void) => (
-    <button className="panel workspace-card" onClick={action}>
-      <h2>{title}</h2>
-      <p>{description}</p>
-      <span>Open →</span>
-    </button>
-  );
+  const tile = (title: string, description: string, action: () => void) => {
+    const key: Record<string, string> = {
+      "Appointment Management": "view.appointments",
+      "Client Management": "view.clients",
+      "Staff Diary": "view.diary",
+      "Voucher Management": "view.vouchers",
+      "Staff Management": "view.staff",
+      Reporting: "view.reporting",
+      "Treatment Management": "view.treatments",
+      "Permission Management": "view.permissions",
+    };
+    if (key[title] && !grants[key[title]]) return null;
+    return (
+      <button className="panel workspace-card" onClick={action}>
+        <h2>{title}</h2>
+        <p>{description}</p>
+        <span>Open →</span>
+      </button>
+    );
+  };
+  const screenKey: Record<string, string> = {
+    appointments: "view.appointments",
+    clients: "view.clients",
+    vouchers: "view.vouchers",
+  };
+  if (
+    (screenKey[screen] && !grants[screenKey[screen]]) ||
+    (screen === "record" && intent === "profile" && !grants["view.clients"])
+  )
+    return (
+      <section className="panel">
+        <h2>Permission required</h2>
+        <button className="back" onClick={() => setScreen("home")}>
+          ← Staff Home
+        </button>
+      </section>
+    );
   return (
     <section className="staff-workspace">
       <p className="eyebrow">STAFF PORTAL · {actor}</p>
@@ -514,7 +560,7 @@ export default function StaffWorkspace({
               () => setScreen("appointments"),
             )}
             {tile(
-              "Client Administration",
+              "Client Management",
               "Client details, notes and booking history.",
               () => setScreen("clients"),
             )}
@@ -528,18 +574,26 @@ export default function StaffWorkspace({
               "Create, assign, transfer and print vouchers.",
               () => setScreen("vouchers"),
             )}
-            {role === "admin" &&
-              tile(
-                "Staff Administration",
-                "Staff administration tools coming next.",
-                onStaffAdmin,
-              )}
-            {role === "admin" &&
-              tile(
-                "Reporting",
-                "View activity reports and export to CSV.",
-                onReporting,
-              )}
+            {tile(
+              "Staff Management",
+              "Staff profiles, shifts, clock history and qualifications.",
+              onStaffAdmin,
+            )}
+            {tile(
+              "Reporting",
+              "View activity reports and export to CSV.",
+              onReporting,
+            )}
+            {tile(
+              "Treatment Management",
+              "Edit treatment details, prices and patch test requirements.",
+              onTreatments ?? (() => {}),
+            )}
+            {tile(
+              "Permission Management",
+              "Choose which pages and actions staff can access.",
+              onPermissions ?? (() => {}),
+            )}
           </div>
         </>
       ) : screen === "vouchers" ? (
@@ -578,7 +632,7 @@ export default function StaffWorkspace({
         </>
       ) : screen === "clients" ? (
         <>
-          <h1>Client Administration</h1>
+          <h1>Client Management</h1>
           <div className="workspace-grid">
             {tile(
               "Search for a Client",
@@ -713,6 +767,24 @@ export default function StaffWorkspace({
                         />
                       </label>
                     ))}
+                    <label>
+                      Requires Deposit
+                      <select
+                        value={requiresDeposit ? "yes" : "no"}
+                        disabled={busy}
+                        onChange={(e) =>
+                          setRequiresDeposit(e.target.value === "yes")
+                        }
+                      >
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </label>
+                    <p className="small">
+                      Yes requires a saved card for the €10 booking guarantee.
+                      No allows future bookings without card details; no payment
+                      is taken at booking.
+                    </p>
                     <button className="primary" disabled={busy}>
                       Save details
                     </button>
@@ -780,6 +852,7 @@ export default function StaffWorkspace({
                   db={db}
                   clientId={client.id}
                   kind={clientTab === "Vouchers" ? "vouchers" : "credit"}
+                  canCreate={!!grants["perform.credit_notes"]}
                   onSaved={() => {
                     if (db)
                       void db

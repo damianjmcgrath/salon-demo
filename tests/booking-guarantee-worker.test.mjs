@@ -2,7 +2,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { transform } from "esbuild";
-let handler, fee, isStaff, mode, hasCard, calls;
+let handler, fee, isStaff, mode, hasCard, calls, permitted;
 const originalFetch = globalThis.fetch;
 const originalDeno = globalThis.Deno;
 const result = (data) => ({ data, error: null });
@@ -74,7 +74,7 @@ before(async () => {
   );
   globalThis.__guaranteeCreateClient = () => ({
     auth: { getUser: async () => result({ user: { id: "staff-id" } }) },
-    rpc: async () => result(isStaff),
+    rpc: async (name) => result(name === "has_permission" ? permitted : isStaff),
     from: (table) => new Query(table),
   });
   globalThis.Deno = {
@@ -133,6 +133,7 @@ function reset() {
     apply_fee: true,
   };
   isStaff = true;
+  permitted = true;
   mode = "success";
   hasCard = true;
   calls = [];
@@ -200,4 +201,9 @@ test("client/accountant requests cannot trigger no-show payments", async () => {
   isStaff = false;
   assert.equal((await invoke()).status, 403);
   assert.equal(calls.length, 0);
+});
+
+test("revoked operational permission blocks worker charges before any provider request", async () => {
+ reset(); permitted=false;
+ const r=await invoke(); assert.equal(r.status,403);assert.equal(calls.length,0);assert.equal(fee.state,"pending");
 });
