@@ -416,7 +416,7 @@ test("UI: client choice screen leads directly to self treatments or recipient de
       screen.getByRole("button", { name: "Someone Else", exact: true }),
     );
     assert(screen.getByRole("heading", { name: "Their details" }));
-    assert(screen.getByLabelText("Full name"));
+    assert(screen.getByLabelText("Their Full Name"));
   } finally {
     cleanup();
     window.history.replaceState({}, "", "?portal=staff");
@@ -599,12 +599,12 @@ test("UI: client profile, voucher purchase, print and simulated email work toget
   try {
     await clientScreen("voucher-profile");
     assert(screen.getByRole("button", { name: "Sign Out", exact: true }));
-    assert(screen.getByRole("button", { name: /You and Other People/ }));
-    fireEvent.click(
-      screen.getByRole("button", { name: /You and Other People/ }),
-    );
-    assert(screen.getByText("Multiple bookings are coming soon."));
-    fireEvent.click(screen.getByRole("button", { name: /Booking home/ }));
+    assert.equal(screen.queryByRole("button", { name: /You and Other People/ }), null);
+    const choices=document.querySelector(".recipient-options");
+    assert.equal(choices.querySelectorAll("button").length,3);
+    assert(within(choices).getByRole("button",{name:"Buy a Voucher"}));
+    assert.equal(screen.getByRole("link",{name:"087 1815137"}).getAttribute("href"),"tel:+353871815137");
+    assert.equal(screen.getByRole("link",{name:"sculptedbyac@gmail.com"}).getAttribute("href"),"mailto:sculptedbyac@gmail.com");
     fireEvent.click(
       screen.getByRole("button", { name: "My Profile", exact: true }),
     );
@@ -766,13 +766,13 @@ test("UI: attended self bookings default to Previous Bookings and say Rebook Tre
     fireEvent.click(
       screen.getByRole("button", { name: "Someone Else", exact: true }),
     );
-    fireEvent.change(screen.getByLabelText("Full name"), {
+    fireEvent.change(screen.getByLabelText("Their Full Name"), {
       target: { value: "Other Person" },
     });
-    fireEvent.change(screen.getByLabelText("Email address"), {
+    fireEvent.change(screen.getByLabelText("Their Email"), {
       target: { value: "other@example.com" },
     });
-    fireEvent.change(screen.getByLabelText("Phone number"), {
+    fireEvent.change(screen.getByLabelText("Their Phone Number"), {
       target: { value: "0800000000" },
     });
     fireEvent.click(

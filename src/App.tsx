@@ -355,6 +355,15 @@ export default function App() {
     setCard("");
   }
   function chooseRecipient(self: boolean) {
+    patchSelection.current++;
+    setPatchPlan(null);
+    setPatchChecking(false);
+    setTreatment(null);
+    setSlot(null);
+    setPeriod("");
+    setCard("");
+    setConsent(false);
+    setError("");
     setForSelf(self);
     defaultPrevious.current = self;
     setCategory(
@@ -1092,14 +1101,19 @@ export default function App() {
     if (!treatment) return;
     if (live && db && session) {
       db.rpc(
-        patchPlan && activeRole === "client" && forSelf
-          ? "get_self_booking_slots"
+        patchPlan && activeRole === "client"
+          ? forSelf
+            ? "get_self_booking_slots"
+            : "get_proxy_booking_slots"
           : amending
             ? "get_booking_slots"
             : "get_available_slots",
         {
-          ...(patchPlan && activeRole === "client" && forSelf
-            ? { p_requested_treatment: patchPlan.requested_treatment_id }
+          ...(patchPlan && activeRole === "client"
+            ? {
+                p_requested_treatment: patchPlan.requested_treatment_id,
+                ...(!forSelf ? { p_attendee_email: email.trim() } : {}),
+              }
             : { p_treatment_id: treatment.id }),
           p_date: date,
           p_staff_id: staffChoice || null,
@@ -1174,6 +1188,7 @@ export default function App() {
     remoteBreaks,
     amending?.id,
     patchPlan,
+    email,
     forSelf,
     activeRole,
   ]);
@@ -1221,12 +1236,16 @@ export default function App() {
     setConsent(false);
     setStaffChoice(0);
     setError("");
-    if (live && db && activeRole === "client" && self) {
+    if (live && db && activeRole === "client") {
       setPatchChecking(true);
       try {
-        const r = await db.rpc("get_self_booking_plan", {
-          p_requested_treatment: t.id,
-        });
+        const r = await db.rpc(
+          self ? "get_self_booking_plan" : "get_proxy_booking_plan",
+          {
+            p_requested_treatment: t.id,
+            ...(!self ? { p_attendee_email: email.trim() } : {}),
+          },
+        );
         if (r.error) throw r.error;
         if (
           selection !== patchSelection.current ||
@@ -1906,14 +1925,7 @@ export default function App() {
                   >
                     Someone Else
                   </button>
-                  <button
-                    className="secondary"
-                    onClick={() => setView("multiple-bookings")}
-                  >
-                    You and Other People <small>(multiple bookings)</small>
-                  </button>
-                </div>
-                <div className="recipient-voucher">
+
                   <button
                     className="secondary"
                     onClick={() => setView("voucher-purchase")}
@@ -1921,6 +1933,15 @@ export default function App() {
                     Buy a Voucher
                   </button>
                 </div>
+                <p className="multiple-booking-guidance">
+                  Want to make a booking for multiple people at the same time?
+                  Phone our salon on <a href="tel:+353871815137">087 1815137</a>{" "}
+                  or Email:{" "}
+                  <a href="mailto:sculptedbyac@gmail.com">
+                    sculptedbyac@gmail.com
+                  </a>
+                  , and our staff will be happy to assist.
+                </p>
               </section>
             ) : step === -1 ? (
               <section className="panel login">
@@ -1936,14 +1957,17 @@ export default function App() {
                     <p>
                       If the person you are booking for isn't an existing
                       client, and you are booking a treatment that requires a
-                      Patch Test, please be aware that you will need to book 2
-                      sessions — one to perform the Patch Test, and then the
-                      Treatment Booking at least 24 hours after the Patch Test.
+                      Patch Test, please be aware that you will only be able to
+                      book the Patch Test online. They can book their Treatment
+                      in-salon after completing the Patch Test. If the Treatment
+                      does not require a Patch Test, then you can book the
+                      treatment session immediately.
                     </p>
                     <p>
                       If the person you are booking for is an existing client,
                       we will have their Patch Test records already and our
-                      online booking system will advise accordingly.
+                      online booking system will advise accordingly on the next
+                      screen.
                     </p>
                   </div>
                 )}
@@ -1954,7 +1978,7 @@ export default function App() {
                   }}
                 >
                   <label>
-                    Full name
+                    {forSelf ? "Full name" : "Their Full Name"}
                     <input
                       required
                       value={name}
@@ -1962,7 +1986,7 @@ export default function App() {
                     />
                   </label>
                   <label>
-                    Email address
+                    {forSelf ? "Email address" : "Their Email"}
                     <input
                       type="email"
                       required
@@ -1972,7 +1996,7 @@ export default function App() {
                     />
                   </label>
                   <label>
-                    Phone number
+                    {forSelf ? "Phone number" : "Their Phone Number"}
                     <input
                       type="tel"
                       required
@@ -2094,11 +2118,9 @@ export default function App() {
                         Patch Test for {patchPlan.requested_treatment_name}
                       </h3>
                       <p>
-                        Booking this treatment will require a patch test first.
-                        The Patch Test must be done at least 24 hours before the
-                        Treatment. You can book in your Patch Test online now,
-                        and when you visit the salon, the staff can book your
-                        treatment appointment for you.
+                        {forSelf
+                          ? "Booking this treatment will require a patch test first. The Patch Test must be done at least 24 hours before the Treatment. You can book in your Patch Test online now, and when you visit the salon, the staff can book your treatment appointment for you."
+                          : "A Patch Test is required, please select a time/date for that appointment. After your Patch Test, the salon staff can book your treatment session with you"}
                       </p>
                     </div>
                   )}

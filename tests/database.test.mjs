@@ -1293,3 +1293,48 @@ test('self booking routes missing patch clearance to a named patch appointment a
  await as(accountant);await assert.rejects(pg.query('select get_self_booking_plan(8001)'),/Client sign-in/);
  await as(null,'anon');await assert.rejects(pg.query('select get_self_booking_plan(8001)'),/permission denied/);
 });
+
+test('proxy patch bookings match normalized attendee email, retain payer ownership and require exact-treatment clearance',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/023_proxy_patch_test_booking.sql',import.meta.url),'utf8'));
+ const service=(await one('select treatment_id id from patch_booking_settings')).id;
+ await pg.query('update treatments set guarantee_required=false where id=$1',[service]);
+ await pg.exec('insert into staff_treatments(staff_id,treatment_id) values(1,8002),(2,8002) on conflict do nothing');
+ const patient=(await one("select * from clients where email='patch-client@example.com'"));
+ const booker=await one('select * from clients where auth_user_id=$1',[clientUser]);
+ const card=await one("insert into booking_guarantee_cards(client_id,created_by,setup_order_id,customer_id,payment_method_id,verified_at) values($1,$2,'proxy-payer-setup','proxy-payer','proxy-card',now()) returning id",[booker.id,clientUser]);
+ await as(clientUser);
+ // Existing attendee has clearance for 8001, but not 8002. No client identity or history is returned.
+ let plan=(await one("select get_proxy_booking_plan(8001,' PATCH-CLIENT@EXAMPLE.COM ') data")).data;
+ assert.equal(plan.patch_needed,false);assert.equal(plan.treatment.id,8001);assert.equal(plan.guarantee_required,true);assert.equal(plan.client_id,undefined);assert.equal(plan.email,undefined);
+ assert.equal((await pg.query("select * from get_proxy_booking_slots(8001,'patch-client@example.com','2080-01-09',1)")).rows.length,0);
+ await assert.rejects(pg.query("select book_guaranteed_appointment(8001,1,'2080-01-10',539,'Patch Client','123456789',false,'patch-client@example.com',$1,true,null)",[card.id]),/24 hours/);
+ const slot=await one("select * from get_proxy_booking_slots(8001,' PATCH-CLIENT@EXAMPLE.COM ','2080-01-11',1) limit 1");assert(slot);
+ const normal=await one("select * from book_guaranteed_appointment(8001,1,'2080-01-11',$1,'Patch Client','07891039749',false,' PATCH-CLIENT@EXAMPLE.COM ',$2,true,null)",[slot.start_minute,card.id]);
+ assert.equal(normal.client_id,patient.id);assert.equal(normal.user_id,clientUser);assert.equal(normal.guarantee_card_id,card.id);assert.equal(normal.treatment_name,'Sensitive Treatment');
+ plan=(await one("select get_proxy_booking_plan(8002,'patch-client@example.com') data")).data;assert.equal(plan.patch_needed,true);
+ const ps=await one("select * from get_proxy_booking_slots(8002,'patch-client@example.com','2080-01-11',1) limit 1");assert(ps);
+ const patch=await one("select * from book_guaranteed_appointment($1,1,'2080-01-11',$2,'Patch Client','123456789',false,'patch-client@example.com',null,false,null,8002)",[service,ps.start_minute]);
+ assert.equal(patch.client_id,patient.id);assert.equal(patch.treatment_name,'Patch Test for Other Sensitive Treatment');assert.equal(patch.guarantee_required,false);assert.equal(patch.patch_for_treatment_id,8002);
+ await assert.rejects(pg.query("select book_guaranteed_appointment(8002,1,'2080-01-12',600,'Patch Client','123456789',false,'patch-client@example.com',$1,true,null)",[card.id]),/recorded patch test/);
+ // Unknown attendee: plan does not create a record. Actual patch booking creates just one email-matched record.
+ const unknown='new-patch-guest@example.com';
+ plan=(await one('select get_proxy_booking_plan(8002,$1) data',[unknown])).data;assert.equal(plan.patch_needed,true);assert.equal(plan.guarantee_required,false);
+ const nslot=await one("select * from get_proxy_booking_slots(8002,$1,'2080-01-12',1) limit 1",[unknown]);assert(nslot);
+ const guest=await one("select * from book_guaranteed_appointment($1,1,'2080-01-12',$2,'New Guest','123456789',false,$3,null,false,null,8002)",[service,nslot.start_minute,unknown]);assert.notEqual(guest.client_id,booker.id);assert.equal(guest.treatment_name,'Patch Test for Other Sensitive Treatment');
+ const nslot2=await one("select * from get_proxy_booking_slots(8002,$1,'2080-01-12',1) limit 1",[unknown]);
+ const guest2=await one("select * from book_guaranteed_appointment($1,1,'2080-01-12',$2,'New Guest','123456789',false,$3,null,false,null,8002)",[service,nslot2.start_minute,unknown.toUpperCase()]);assert.equal(guest2.client_id,guest.client_id);
+ const nonpatch=(await one('select get_proxy_booking_plan($1,$2) data',[treatmentId,unknown])).data;assert.equal(nonpatch.patch_needed,false);assert.equal(nonpatch.treatment.id,treatmentId);
+ const plainSlot=await one("select * from get_proxy_booking_slots($1,$2,'2080-01-12',1) limit 1",[treatmentId,unknown]);assert(plainSlot);
+ const plain=await one("select * from book_guaranteed_appointment($1,1,'2080-01-12',$2,'New Guest','123456789',false,$3,$4,true,null)",[treatmentId,plainSlot.start_minute,unknown,card.id]);assert.equal(plain.client_id,guest.client_id);assert.equal(plain.patch_for_treatment_id,null);assert.equal(plain.guarantee_card_id,card.id);
+ assert.equal((await one('select get_proxy_booking_plan($1,$2) data',[treatmentId,patient.email])).data.patch_needed,false);
+
+ await assert.rejects(pg.query("select get_proxy_booking_plan(8001,'bad email')"),/valid email/);
+ // Attendee's saved card cannot be borrowed by the booking creator.
+ await pg.exec('reset role');const patientCard=await one('select id from booking_guarantee_cards where client_id=$1 limit 1',[patient.id]);await as(clientUser);
+ await assert.rejects(pg.query("select book_guaranteed_appointment(8001,1,'2080-01-12',660,'Patch Client','123456789',false,'patch-client@example.com',$1,true,null)",[patientCard.id]),/belonging to the booking payer/);
+ const mine=(await pg.query('select * from get_my_appointments()')).rows;assert(mine.some(a=>a.id===guest.id&&a.booked_for_self===false));
+ await pg.exec('reset role');assert.equal((await one('select count(*) n from clients where lower(email)=$1',[unknown])).n,1);
+ const snapshot=(await one('select snapshot from booking_email_queue where appointment_id=$1',[guest.id])).snapshot;assert.equal(snapshot.treatment_name,guest.treatment_name);assert.equal(snapshot.guarantee_required,false);
+ await as(accountant);await assert.rejects(pg.query("select get_proxy_booking_plan(8002,'patch-client@example.com')"),/Client sign-in/);
+ await as(null,'anon');await assert.rejects(pg.query("select get_proxy_booking_plan(8002,'patch-client@example.com')"),/permission denied/);
+});

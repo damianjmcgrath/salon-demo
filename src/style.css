@@ -1648,3 +1648,14 @@ nav .logout-link {
 .treatment-management-row strong {
   flex: 1 1 250px;
 }
+
+.multiple-booking-guidance {
+  margin: 24px auto 0;
+  max-width: 740px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.multiple-booking-guidance a {
+  color: inherit;
+  text-decoration: underline;
+}
