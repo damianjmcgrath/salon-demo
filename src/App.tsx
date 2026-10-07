@@ -1,3 +1,4 @@
+import { lastBookedLabel } from "./bookingRecency.js";
 import AppointmentReminder from "./AppointmentReminder";
 import PermissionManagement from "./PermissionManagement";
 import TreatmentManagement from "./TreatmentManagement";
@@ -2118,6 +2119,9 @@ export default function App() {
                             ? "Rebook Treatment ↗"
                             : "Choose treatment ↗"}
                         </span>
+                        {category === "Previous Bookings" && forSelf && !staffClient && (
+                          <span className="last-booked">{lastBookedLabel(live ? myBookings : local.filter(a => a.user_id === "local-client"), t.id, today())}</span>
+                        )}
                       </button>
                     ))}
                   </div>
