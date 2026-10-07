@@ -1405,3 +1405,19 @@ test('client communications capture authenticated staff, audit and enforce clien
  await pg.exec('reset role');assert.equal((await one("select count(*) n from audit_events where action='client_communication_recorded' and client_id=$1",[c.id])).n,1);
  await as(null,'anon');await assert.rejects(pg.query('select * from client_communications'),/permission denied/);
 });
+
+test('appointment reminders snapshot active appointments and record one SYSTEM email only after provider acceptance',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/028_appointment_reminders.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ const a=await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,1,8001,'2080-01-20',630,60,'Client','123','Reminder Treatment',80,'booked') returning *",[c.id,clientUser]);
+ const id='c0000000-0000-0000-0000-000000000001';await as(staffA);
+ const job=(await one('select prepare_appointment_reminder($1,$2,$3) data',[a.id,' Other@Example.com ',id])).data;assert.equal(job.snapshot.treatment_name,'Reminder Treatment');assert.equal(job.requested_email,'other@example.com');
+ await assert.rejects(pg.query('select prepare_appointment_reminder($1,$2,$3)',[a.id,'changed@example.com',id]),/request changed/);
+ await assert.rejects(pg.query("select finish_appointment_reminder($1,'accepted','fake')",[id]),/permission denied/);
+ await as(null,'service_role');await pg.query("select finish_appointment_reminder($1,'failed',null,'failed')",[id]);
+ await pg.exec('reset role');assert.equal((await one("select count(*) n from client_communications where note like 'Appointment reminder sent%' and client_id=$1",[c.id])).n,0);
+ await as(null,'service_role');await pg.query("select finish_appointment_reminder($1,'accepted','resend-ref')",[id]);await pg.query("select finish_appointment_reminder($1,'accepted','resend-ref')",[id]);
+ await pg.exec('reset role');const logs=(await pg.query("select * from client_communications where note like 'Appointment reminder sent%' and client_id=$1",[c.id])).rows;assert.equal(logs.length,1);assert.equal(logs[0].staff_name,'SYSTEM');assert.equal(logs[0].communication_type,'Email');assert(logs[0].note.includes('10:30'));assert(logs[0].note.includes('other@example.com'));assert.equal(logs[0].recorded_by,staffA);
+ await pg.query("update appointments set status='completed' where id=$1",[a.id]);await as(staffA);assert.equal((await one('select prepare_appointment_reminder($1,$2,$3) data',[a.id,'other@example.com',id])).data.status,'accepted');await assert.rejects(pg.query('select prepare_appointment_reminder($1,$2,$3)',[a.id,'other@example.com','c0000000-0000-0000-0000-000000000002']),/Only active/);
+ for(const uid of [clientUser,accountant,staffB]){await as(uid);await assert.rejects(pg.query('select prepare_appointment_reminder($1,$2,$3)',[a.id,'other@example.com',id]),/Permission denied/);}
+});

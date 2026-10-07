@@ -152,7 +152,7 @@ export default function AppointmentCheckout({
     return (
       <div className="checkout-start">
         <button
-          className="primary"
+          className="primary appointment-action"
           disabled={busy || (price === 0 && !db)}
           onClick={() => (price === 0 ? void confirm() : setOpen(true))}
         >

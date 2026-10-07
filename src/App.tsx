@@ -1,3 +1,4 @@
+import AppointmentReminder from "./AppointmentReminder";
 import PermissionManagement from "./PermissionManagement";
 import TreatmentManagement from "./TreatmentManagement";
 import { defaultPermissions, type Permissions } from "./permissions";
@@ -1685,7 +1686,8 @@ export default function App() {
               Reports
             </button>
           )}
-          <div className={activeRole === "client" ? "client-sign-in" : ""}>
+          <div className={activeRole === "client" || staffAccess ? "client-sign-in" : ""}>
+            {staffAccess && <span>Signed in as {actorName.trim().split(/\s+/)[0]}</span>}
             {activeRole === "client" && (
               <span>
                 Signed in as{" "}
@@ -3222,16 +3224,19 @@ export default function App() {
             <hr />
             {["booked", "checked_in"].includes(selected.status) && (
               <button
-                className="secondary"
+                className="secondary appointment-action"
                 disabled={busy}
                 onClick={() => void amendFromDiary(selected)}
               >
                 Amend appointment
               </button>
             )}
+            {["booked", "checked_in"].includes(selected.status) && (
+              <AppointmentReminder key={selected.id} db={live ? db : null} appointmentId={selected.id} initialEmail={selected.attendee_email || ""} disabled={busy} />
+            )}
             {selected.status === "booked" && (
               <button
-                className="primary"
+                className="primary appointment-action"
                 disabled={busy}
                 onClick={() => void changeStatus("checked_in")}
               >
@@ -3277,7 +3282,7 @@ export default function App() {
             )}
             {["booked", "checked_in"].includes(selected.status) && (
               <button
-                className="danger"
+                className="danger appointment-action"
                 disabled={busy}
                 onClick={() => {
                   setStatusAction("cancelled");
@@ -3295,7 +3300,7 @@ export default function App() {
             )}
             {selected.status === "booked" && (
               <button
-                className="danger"
+                className="danger appointment-action"
                 disabled={
                   busy ||
                   (!sandboxNoShowTesting &&

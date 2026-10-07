@@ -14,6 +14,7 @@ let dom,
   VoucherReport,
   VoucherManagement,
   Communications,
+  Reminder,
   render,
   screen,
   fireEvent,
@@ -38,6 +39,7 @@ before(async () => {
     "VoucherStatusReport",
     "VoucherManagement",
     "ClientCommunications",
+    "AppointmentReminder",
   ])
     await build({
       entryPoints: [
@@ -50,6 +52,7 @@ before(async () => {
       packages: "external",
       jsx: "automatic",
     });
+  Reminder = (await import(pathToFileURL(dir + "/AppointmentReminder.mjs"))).default;
   Communications = (await import(pathToFileURL(dir + "/ClientCommunications.mjs"))).default;
   Treatment = (await import(pathToFileURL(dir + "/TreatmentManagement.mjs")))
     .default;
@@ -534,4 +537,16 @@ test('communications cancel discards notes and save adds server-attributed histo
  fireEvent.click(screen.getByRole('button',{name:'Save'}));
  await screen.findByText('Confirmed arrival.');assert.equal(saved,1);assert.deepEqual(calls,[{name:'record_client_communication',args:{p_client:'client-1',p_type:'WhatsApp',p_note:'Confirmed arrival.'}}]);
  assert(screen.getByText('Aoife'));assert(screen.getByText('07/10/2026 10:30'));
+});
+
+test('appointment reminder prefills editable attendee email and reuses request on uncertain retry',async()=>{
+ const calls=[];let failed=true;
+ const db={functions:{async invoke(name,args){calls.push({name,args});if(failed)return {error:{message:'Uncertain status'},data:null};return {error:null,data:{accepted:true}};}}};
+ render(React.createElement(Reminder,{db,appointmentId:'appointment-1',initialEmail:'client@example.com',disabled:false}));
+ fireEvent.click(screen.getByRole('button',{name:'Send Reminder'}));assert.equal(screen.getByLabelText('Client email address').value,'client@example.com');
+ fireEvent.change(screen.getByLabelText('Client email address'),{target:{value:'other@example.com'}});
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));await screen.findByRole('alert');
+ failed=false;fireEvent.click(screen.getByRole('button',{name:'Send'}));await screen.findByRole('status');
+ assert.equal(calls.length,2);assert.equal(calls[0].name,'send-appointment-reminder');assert.equal(calls[0].args.body.email,'other@example.com');assert.equal(calls[0].args.body.appointment_id,'appointment-1');assert.equal(calls[0].args.body.request_id,calls[1].args.body.request_id);
+ assert.equal(screen.queryByLabelText('Client email address'),null);
 });

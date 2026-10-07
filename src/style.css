@@ -1729,3 +1729,17 @@ nav .logout-link {
     grid-template-columns: 1fr;
   }
 }
+
+.modal .appointment-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(50% - 12px);
+  min-height: 60px;
+  margin: 6px;
+  padding: 12px;
+  vertical-align: top;
+}
+@media (max-width: 480px) {
+  .modal .appointment-action { width: calc(100% - 12px); }
+}
