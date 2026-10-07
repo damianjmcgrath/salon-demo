@@ -2271,8 +2271,11 @@ export default function App() {
                     <p>Checking booking guarantee requirements…</p>
                   ) : guaranteeNeeded === false ? (
                     <p>
-                      No card guarantee is required for this appointment.
-                      Payment will be made in the salon after the treatment.
+                      {Number(treatment.price) === 0 &&
+                      (patchPlan?.patch_needed ||
+                        treatment.category.toUpperCase() === "PATCH TEST")
+                        ? "This is a free booking, so no card guarantee is required for this appointment. After you have completed the Patch Test in the Salon, please speak to a member of staff who can book you in for any relevant treatments."
+                        : "No card guarantee is required for this appointment. Payment will be made in the salon after the treatment."}
                     </p>
                   ) : live && db ? (
                     <BookingGuarantee
