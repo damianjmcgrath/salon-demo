@@ -13,3 +13,7 @@ verify_jwt = false
 [functions.send-booking-confirmations]
 # Database webhook/Cron only. Handler checks the private worker secret.
 verify_jwt = false
+
+[functions.send-voucher-email]
+# Validates Supabase user and Voucher Management permission inside the handler.
+verify_jwt = false

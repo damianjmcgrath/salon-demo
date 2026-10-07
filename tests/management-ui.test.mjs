@@ -12,6 +12,7 @@ let dom,
   Values,
   Patch,
   VoucherReport,
+  VoucherManagement,
   render,
   screen,
   fireEvent,
@@ -34,6 +35,7 @@ before(async () => {
     "ClientValues",
     "ClientPatchTests",
     "VoucherStatusReport",
+    "VoucherManagement",
   ])
     await build({
       entryPoints: [
@@ -54,6 +56,9 @@ before(async () => {
   Patch = (await import(pathToFileURL(dir + "/ClientPatchTests.mjs"))).default;
   VoucherReport = (
     await import(pathToFileURL(dir + "/VoucherStatusReport.mjs"))
+  ).default;
+  VoucherManagement = (
+    await import(pathToFileURL(dir + "/VoucherManagement.mjs"))
   ).default;
 });
 afterEach(() => cleanup());
@@ -425,4 +430,77 @@ test("voucher report filters partial and full use and exports the selected view 
     URL.revokeObjectURL = oldRevoke;
     window.HTMLAnchorElement.prototype.click = oldClick;
   }
+});
+
+test("Find and Reassign share purchaser lookup and an editable recipient email action", async () => {
+  const voucher = {
+    id: "v-id",
+    code: "SC-TEST-0001",
+    original_amount: 75,
+    balance: 75,
+    expires_on: "2100-01-01",
+    client_id: "c-id",
+    assigned_client_name: "Client",
+    recipient_email: "client@example.com",
+    revision: 0,
+    created_at: "2026-01-01T10:00:00Z",
+  };
+  let search, sent;
+  const db = {
+    rpc: async (name, args) => {
+      search = [name, args];
+      return { data: [voucher], error: null };
+    },
+    functions: {
+      invoke: async (name, args) => {
+        sent = [name, args];
+        return { data: { accepted: true }, error: null };
+      },
+    },
+  };
+  render(
+    React.createElement(VoucherManagement, {
+      live: true,
+      db,
+      data: { clients: [] },
+      setData() {},
+      actor: "Aoife",
+    }),
+  );
+  assert.equal(
+    document.querySelector(".workspace-card h2").textContent,
+    "Find a Voucher",
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Find a Voucher/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Search by Purchaser" }));
+  fireEvent.change(screen.getByLabelText("Purchaser email"), {
+    target: { value: "buyer@example.com" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Search purchaser" }));
+  fireEvent.click(await screen.findByRole("button", { name: /SC-TEST-0001/ }));
+  assert.equal(search[0], "search_managed_vouchers");
+  assert.equal(search[1].p_purchaser_email, "buyer@example.com");
+  const actions = document.querySelector(".voucher-detail-actions");
+  assert.equal(actions.querySelector("button").textContent, "Email voucher");
+  assert.equal(actions.querySelectorAll("button").length, 3);
+  fireEvent.click(screen.getByRole("button", { name: "Email voucher" }));
+  assert.equal(
+    screen.getByLabelText("Email address").value,
+    "client@example.com",
+  );
+  fireEvent.change(screen.getByLabelText("Email address"), {
+    target: { value: "overtyped@example.com" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Send", exact: true }));
+  await screen.findByText(
+    /Voucher email accepted for sending to damianjmcgrath/,
+  );
+  assert.equal(sent[0], "send-voucher-email");
+  assert.equal(sent[1].body.email, "overtyped@example.com");
+  assert.equal(sent[1].body.voucher_id, "v-id");
+  assert(sent[1].body.request_id);
+  fireEvent.click(screen.getByRole("button", { name: /Voucher options/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Re-Assign a Voucher/ }));
+  assert(screen.getByRole("button", { name: "Search by Purchaser" }));
+  assert(screen.getByRole("button", { name: "Search by client details" }));
 });

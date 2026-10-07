@@ -48,7 +48,62 @@ export default function VoucherManagement({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
+  const [purchaserName, setPurchaserName] = useState(""),
+    [purchaserEmail, setPurchaserEmail] = useState("");
+  const [emailOpen, setEmailOpen] = useState(false),
+    [emailTo, setEmailTo] = useState("");
+  const [emailRequest, setEmailRequest] = useState("");
   const alive = useRef(true);
+  function openFind() {
+    setCode("");
+    setVouchers([]);
+    setPurchaserName("");
+    setPurchaserEmail("");
+    setMessage("");
+    setError("");
+    setEmailOpen(false);
+    setScreen("find");
+  }
+  async function sendEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!voucher || busy) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      if (!live || !db)
+        throw Error("Connect to Supabase to send voucher emails.");
+      const r = await db.functions.invoke("send-voucher-email", {
+        body: {
+          voucher_id: voucher.id,
+          email: emailTo.trim(),
+          request_id: emailRequest,
+        },
+      });
+      if (r.error) {
+        let message = r.error.message;
+        try {
+          const body = await r.error.context.json();
+          message = body.error || message;
+        } catch {}
+        throw Error(message);
+      }
+      if (r.data?.error) throw Error(r.data.error);
+      if (!r.data?.accepted)
+        throw Error("Email was not accepted. Please retry.");
+      if (!alive.current) return;
+      setMessage(
+        "Voucher email accepted for sending to damianjmcgrath@gmail.com (testing). Entered recipient: " +
+          emailTo.trim(),
+      );
+      setEmailOpen(false);
+    } catch (e) {
+      if (alive.current) setError((e as Error).message);
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  }
+
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -86,29 +141,41 @@ export default function VoucherManagement({
       if (alive.current) setBusy(false);
     }
   }
-  async function findVouchers(client?: Client) {
+  async function findVouchers(client?: Client, purchaser = false) {
     setBusy(true);
     setError("");
     setMessage("");
     try {
       let found: Voucher[];
       if (live && db) {
-        const r = await db.rpc("search_vouchers", {
-          p_code: client ? "" : code.trim(),
+        const r = await db.rpc("search_managed_vouchers", {
+          p_code: client || purchaser ? "" : code.trim(),
           p_client_id: client?.id || null,
+          p_purchaser_name: purchaser ? purchaserName.trim() : "",
+          p_purchaser_email: purchaser ? purchaserEmail.trim() : "",
         });
         if (r.error) throw r.error;
         found = r.data || [];
       } else {
-        if (!client && !code.trim())
+        if (!client && !purchaser && !code.trim())
           throw Error("Enter a voucher ID or select a client.");
         const normalize = (s: string) =>
           s.toUpperCase().replace(/[^A-Z0-9]/g, "");
         found = (data.vouchers || []).filter((v) =>
-          client
-            ? v.client_id === client.id ||
-              v.recipient_email?.toLowerCase() === client.email.toLowerCase()
-            : normalize(v.code) === normalize(code),
+          purchaser
+            ? !!(purchaserName.trim() || purchaserEmail.trim()) &&
+              (!purchaserName.trim() ||
+                v.purchaser_name
+                  ?.toLowerCase()
+                  .includes(purchaserName.trim().toLowerCase())) &&
+              (!purchaserEmail.trim() ||
+                v.purchaser_email
+                  ?.toLowerCase()
+                  .includes(purchaserEmail.trim().toLowerCase()))
+            : client
+              ? v.client_id === client.id ||
+                v.recipient_email?.toLowerCase() === client.email.toLowerCase()
+              : normalize(v.code) === normalize(code),
         );
       }
       if (!alive.current) return;
@@ -161,6 +228,8 @@ export default function VoucherManagement({
           p_amount: value,
           p_expires_on: expiry,
           p_client_id: recipient?.id || null,
+          p_purchaser_name: purchaserName.trim() || null,
+          p_purchaser_email: purchaserEmail.trim() || null,
         });
         if (r.error) throw r.error;
         if (!alive.current) return;
@@ -184,6 +253,8 @@ export default function VoucherManagement({
           client_id: recipient?.id || null,
           assigned_client_name: recipient?.name || null,
           recipient_email: recipient?.email,
+          purchaser_name: purchaserName.trim() || null,
+          purchaser_email: purchaserEmail.trim().toLowerCase() || null,
           revision: 0,
           created_at: new Date().toISOString(),
         };
@@ -313,12 +384,20 @@ export default function VoucherManagement({
       {message && <p role="status">{message}</p>}
       {screen === "home" ? (
         <div className="workspace-grid">
+          <button className="panel workspace-card" onClick={openFind}>
+            <h2>Find a Voucher</h2>
+            <p>Find, email, print or reassign a voucher.</p>
+            <span>Open →</span>
+          </button>
           <button
             className="panel workspace-card"
             onClick={() => {
               setRecipient(null);
               setAmount("");
               setExpiry("");
+              setPurchaserName("");
+              setPurchaserEmail("");
+              setEmailOpen(false);
               setScreen("create");
             }}
           >
@@ -329,13 +408,11 @@ export default function VoucherManagement({
           <button
             className="panel workspace-card"
             onClick={() => {
-              setCode("");
-              setVouchers([]);
-              setScreen("find");
+              openFind();
             }}
           >
             <h2>Re-Assign a Voucher</h2>
-            <p>Find a voucher by ID or by client details.</p>
+            <p>Find a voucher by ID, client or purchaser details.</p>
             <span>Open →</span>
           </button>
         </div>
@@ -363,6 +440,23 @@ export default function VoucherManagement({
                 required
                 value={expiry}
                 onChange={(e) => setExpiry(e.target.value)}
+              />
+            </label>
+            <label>
+              Purchaser name (optional)
+              <input
+                value={purchaserName}
+                maxLength={200}
+                onChange={(e) => setPurchaserName(e.target.value)}
+              />
+            </label>
+            <label>
+              Purchaser email (optional)
+              <input
+                type="email"
+                value={purchaserEmail}
+                maxLength={254}
+                onChange={(e) => setPurchaserEmail(e.target.value)}
               />
             </label>
             <p>
@@ -431,6 +525,51 @@ export default function VoucherManagement({
           >
             Search by client details
           </button>
+          <button
+            className="secondary"
+            disabled={busy}
+            onClick={() => {
+              setPurchaserName("");
+              setPurchaserEmail("");
+              setScreen("purchaser");
+              setError("");
+            }}
+          >
+            Search by Purchaser
+          </button>
+        </section>
+      ) : screen === "purchaser" ? (
+        <section className="panel">
+          <h2>Search by Purchaser</h2>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void findVouchers(undefined, true);
+            }}
+          >
+            <label>
+              Purchaser name
+              <input
+                value={purchaserName}
+                onChange={(e) => setPurchaserName(e.target.value)}
+              />
+            </label>
+            <label>
+              Purchaser email
+              <input
+                value={purchaserEmail}
+                onChange={(e) => setPurchaserEmail(e.target.value)}
+              />
+            </label>
+            <button
+              className="primary"
+              disabled={
+                busy || !(purchaserName.trim() || purchaserEmail.trim())
+              }
+            >
+              Search purchaser
+            </button>
+          </form>
         </section>
       ) : screen === "results" ? (
         <section className="panel">
@@ -443,6 +582,7 @@ export default function VoucherManagement({
                 setVoucher(v);
                 setScreen("detail");
                 setMessage("");
+                setEmailOpen(false);
               }}
             >
               <strong>{v.code}</strong>
@@ -499,7 +639,25 @@ export default function VoucherManagement({
               <strong className="no-show-label">Expired</strong>
             )}
           </div>
-          <div className="record-actions">
+          <div className="record-actions voucher-detail-actions">
+            <button
+              className="secondary"
+              disabled={busy}
+              onClick={() => {
+                setEmailTo(
+                  voucher.recipient_email ||
+                    data.clients.find((c) => c.id === voucher.client_id)
+                      ?.email ||
+                    "",
+                );
+                setEmailRequest(crypto.randomUUID());
+                setEmailOpen(true);
+                setMessage("");
+                setError("");
+              }}
+            >
+              Email voucher
+            </button>
             <button className="primary" onClick={() => window.print()}>
               Print voucher
             </button>
@@ -514,10 +672,46 @@ export default function VoucherManagement({
               {voucher.client_id ? "Reassign" : "Assign to client"}
             </button>
           </div>
+          {emailOpen && (
+            <form
+              className="voucher-email-form"
+              onSubmit={(e) => void sendEmail(e)}
+            >
+              <label>
+                Email address
+                <input
+                  type="email"
+                  required
+                  maxLength={254}
+                  value={emailTo}
+                  disabled={busy}
+                  onChange={(e) => {
+                    setEmailTo(e.target.value);
+                    setEmailRequest(crypto.randomUUID());
+                  }}
+                />
+              </label>
+              <p className="small">
+                Testing: this email will be sent to damianjmcgrath@gmail.com
+                regardless of the address entered.
+              </p>
+              <div className="record-actions">
+                <button className="primary" disabled={busy}>
+                  {busy ? "Sending…" : "Send"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => setEmailOpen(false)}
+                >
+                  Cancel email
+                </button>
+              </div>
+            </form>
+          )}
           <p className="small">
-            Voucher redemption at checkout will be added in the payment flow.
-            This step creates and assigns the voucher; it does not record a sale
-            payment.
+            This screen manages vouchers; it does not record a sale payment.
           </p>
         </section>
       ) : null}

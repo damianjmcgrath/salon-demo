@@ -90,6 +90,8 @@ export type Voucher = {
   recipient_email?: string;
   demo_purchase?: boolean;
   purchased_by?: string;
+  purchaser_name?: string | null;
+  purchaser_email?: string | null;
   treatment_name?: string | null;
 };
 export type VoucherTransaction = {

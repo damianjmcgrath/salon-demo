@@ -1369,3 +1369,24 @@ test('voucher status report includes each voucher once with partial/full usage, 
  for(const uid of [clientUser,staffB]){await as(uid);await assert.rejects(pg.query('select get_voucher_status_report()'),/Permission denied/);}
  await as(null,'anon');await assert.rejects(pg.query('select get_voucher_status_report()'),/permission denied/);
 });
+
+test('managed voucher lookup supports non-client purchasers and email requests are scoped, immutable and service-finished',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/026_voucher_find_email.sql',import.meta.url),'utf8'));
+ await as(staffA);const v=await one("select * from create_voucher(75,'2100-01-01',null,'Outside Buyer',' Outside@Example.com ')");assert.equal(v.purchaser_name,'Outside Buyer');assert.equal(v.purchaser_email,'outside@example.com');assert.equal(v.client_id,null);
+ let found=(await one("select search_managed_vouchers('',null,'buyer','OUTSIDE@') data")).data;assert(found.some(x=>x.id===v.id&&Number(x.balance)===75));assert.equal(found.find(x=>x.id===v.id).recipient_email,null);
+ assert.equal((await one('select search_managed_vouchers($1) data',[v.code.toLowerCase()])).data[0].id,v.id);
+ await assert.rejects(pg.query('select search_managed_vouchers()'),/Enter a voucher ID/);
+ const report=(await one('select get_voucher_status_report() data')).data.find(x=>x.id===v.id);assert.equal(report.purchased_by,'Outside Buyer');
+ const c=await one('select * from clients where auth_user_id=$1',[clientUser]);const assigned=await one('select * from reassign_voucher($1,$2,0)',[v.id,c.id]);const details=(await one('select managed_voucher_details($1) data',[v.id])).data;assert.equal(details.recipient_email,c.email);assert.equal(details.purchaser_name,'Outside Buyer');
+ assert((await one('select search_managed_vouchers(\'\',$1) data',[c.id])).data.some(x=>x.id===v.id));
+ const request='b0000000-0000-0000-0000-000000000001';const job=(await one('select prepare_staff_voucher_email($1,$2,$3) data',[v.id,'recipient@example.com',request])).data;assert.equal(job.snapshot.code,v.code);assert.equal(job.requested_email,'recipient@example.com');
+ assert.equal((await one('select prepare_staff_voucher_email($1,$2,$3) data',[v.id,'recipient@example.com',request])).data.id,request);
+ await assert.rejects(pg.query('select prepare_staff_voucher_email($1,$2,$3)',[v.id,'changed@example.com',request]),/request changed/);
+ await assert.rejects(pg.query("select finish_staff_voucher_email($1,'accepted','fake',null)",[request]),/permission denied/);
+ await assert.rejects(pg.query('select * from voucher_email_requests'),/permission denied/);
+ await as(null,'service_role');await pg.query("select finish_staff_voucher_email($1,'accepted','resend-test',null)",[request]);await pg.query("select finish_staff_voucher_email($1,'accepted','resend-test',null)",[request]);
+ await pg.exec('reset role');assert.equal((await one("select count(*) n from audit_events where action='voucher_email_accepted' and details->>'request_id'=$1",[request])).n,1);
+ await as(staffA);assert.equal((await one('select prepare_staff_voucher_email($1,$2,$3) data',[v.id,'recipient@example.com',request])).data.status,'accepted');
+ for(const uid of [clientUser,accountant,staffB]){await as(uid);await assert.rejects(pg.query('select managed_voucher_details($1)',[v.id]),/Permission denied/);await assert.rejects(pg.query('select prepare_staff_voucher_email($1,$2,$3)',[v.id,'recipient@example.com',request]),/Permission denied/);}
+ await as(null,'anon');await assert.rejects(pg.query('select search_managed_vouchers($1)',[v.code]),/permission denied/);
+});

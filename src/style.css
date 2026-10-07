@@ -1707,3 +1707,25 @@ nav .logout-link {
     grid-template-columns: 1fr;
   }
 }
+
+.voucher-detail-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.voucher-detail-actions button {
+  height: 60px;
+  width: 100%;
+  margin: 0;
+  padding: 12px;
+  box-sizing: border-box;
+  font-size: 16px;
+}
+.voucher-email-form {
+  margin-top: 20px;
+}
+@media (max-width: 500px) {
+  .voucher-detail-actions {
+    grid-template-columns: 1fr;
+  }
+}
