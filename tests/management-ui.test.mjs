@@ -242,6 +242,7 @@ test("patch checkout form opens with intended treatment selected and allows addi
   assert(screen.getByLabelText("Intended").checked);
   assert(!screen.getByLabelText("Additional").checked);
   assert.equal(screen.queryByLabelText("PATCH TEST"), null);
+  await waitFor(() => assert(!screen.getByLabelText("Additional").disabled));
   fireEvent.click(screen.getByLabelText("Additional"));
   fireEvent.click(screen.getByRole("button", { name: "Save Patch Test" }));
   await waitFor(() => assert.equal(saved?.p_client, "attendee"));
@@ -249,4 +250,82 @@ test("patch checkout form opens with intended treatment selected and allows addi
   assert.equal(saved.p_staff, 1);
   await screen.findByRole("button", { name: "Record Patch Test" });
   assert(screen.getByText("Intended, Additional"));
+});
+
+test("completed patch coverage is disabled with its latest date and category selection saves only new treatments", async () => {
+  const treatments = [
+    { id: 1, name: "Done", category: "Brows" },
+    { id: 2, name: "New", category: "Brows" },
+  ];
+  let saved;
+  const history = [
+    {
+      id: "older",
+      recorded_at: "2026-01-01T09:30:00Z",
+      staff_name: "Aoife",
+      treatments_covered: [treatments[0]],
+    },
+    {
+      id: "latest",
+      recorded_at: "2026-02-03T14:05:00Z",
+      staff_name: "Leah",
+      treatments_covered: [treatments[0]],
+    },
+  ];
+  const q = {
+    select() {
+      return this;
+    },
+    eq() {
+      return this;
+    },
+    order() {
+      return this;
+    },
+    then(fn) {
+      return Promise.resolve({ data: history, error: null }).then(fn);
+    },
+  };
+  const db = {
+    from: () => q,
+    rpc: async (name, args) => {
+      saved = args;
+      return {
+        data: {
+          id: "new",
+          recorded_at: new Date().toISOString(),
+          staff_name: "Aoife",
+          treatments_covered: [treatments[1]],
+        },
+        error: null,
+      };
+    },
+  };
+  render(
+    React.createElement(Patch, {
+      db,
+      clientId: "client",
+      treatments,
+      staff: [{ id: 1, name: "Aoife" }],
+      initiallyRecord: true,
+      initialTreatmentId: 1,
+      initialStaffId: 1,
+      onSaved() {},
+    }),
+  );
+  const done = await screen.findByLabelText(
+    "Done (already completed on 03/02/2026 14:05)",
+  );
+  assert(done.disabled);
+  assert(done.closest("label").classList.contains("patch-completed"));
+  assert(screen.getByText("0 treatments selected"));
+  fireEvent.click(screen.getByLabelText("Select all in Brows"));
+  assert(screen.getByLabelText("New").checked);
+  assert(screen.getByText("1 treatments selected"));
+  fireEvent.click(screen.getByRole("button", { name: "Save Patch Test" }));
+  await waitFor(() => assert.deepEqual(saved?.p_treatments, [2]));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Record Patch Test" }),
+  );
+  assert(screen.getByLabelText("Select all in Brows").disabled);
 });

@@ -1,6 +1,19 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 type Treatment = { id: number; name: string; category: string };
+const completedTime = (value: string) => {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Dublin",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find((p) => p.type === type)?.value;
+  return `${part("day")}/${part("month")}/${part("year")} ${part("hour")}:${part("minute")}`;
+};
 type Entry = {
   id: string;
   staff_name: string;
@@ -45,11 +58,13 @@ export default function ClientPatchTests({
     ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [historyReady, setHistoryReady] = useState(false);
   useEffect(() => {
     let current = true;
     setHistory([]);
     setLoading(true);
+    setHistoryReady(false);
     if (!db) {
       setError("Connect to Supabase to record patch tests.");
       setLoading(false);
@@ -64,7 +79,10 @@ export default function ClientPatchTests({
         if (!current) return;
         setLoading(false);
         if (error) setError(error.message);
-        else setHistory(data || []);
+        else {
+          setHistory(data || []);
+          setHistoryReady(true);
+        }
       });
     return () => {
       current = false;
@@ -76,17 +94,31 @@ export default function ClientPatchTests({
         t.category.trim().toLowerCase(),
       ),
   );
+  const completed = new Map<number, string>();
+  for (const entry of history)
+    for (const t of entry.treatments_covered) {
+      const old = completed.get(t.id);
+      if (
+        !old ||
+        new Date(entry.recorded_at).getTime() > new Date(old).getTime()
+      )
+        completed.set(t.id, entry.recorded_at);
+    }
+  const newSelected = selected.filter(
+    (id) => !completed.has(id) && eligibleTreatments.some((t) => t.id === id),
+  );
   const groups = [...new Set(eligibleTreatments.map((t) => t.category))];
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!db || busy) return;
+    if (!db || busy || !historyReady || !newSelected.length || !performer)
+      return;
     setBusy(true);
     setError("");
     try {
       const r = await db.rpc("record_client_patch_test", {
         p_client: clientId,
         p_staff: Number(performer),
-        p_treatments: selected,
+        p_treatments: newSelected,
       });
       if (r.error) throw r.error;
       setHistory((h) => [r.data, ...h]);
@@ -124,7 +156,10 @@ export default function ClientPatchTests({
             const items = eligibleTreatments.filter(
               (t) => t.category === category,
             );
-            const all = items.every((t) => selected.includes(t.id));
+            const available = items.filter((t) => !completed.has(t.id));
+            const all =
+              available.length > 0 &&
+              available.every((t) => newSelected.includes(t.id));
             return (
               <fieldset className="patch-category" key={category}>
                 <legend>{category}</legend>
@@ -132,23 +167,30 @@ export default function ClientPatchTests({
                   <input
                     type="checkbox"
                     checked={all}
-                    disabled={busy}
+                    disabled={busy || !historyReady || !available.length}
                     onChange={() =>
                       setSelected((s) =>
                         all
-                          ? s.filter((id) => !items.some((t) => t.id === id))
-                          : [...new Set([...s, ...items.map((t) => t.id)])],
+                          ? s.filter(
+                              (id) => !available.some((t) => t.id === id),
+                            )
+                          : [...new Set([...s, ...available.map((t) => t.id)])],
                       )
                     }
                   />
                   Select all in {category}
                 </label>
                 {items.map((t) => (
-                  <label className="patch-check" key={t.id}>
+                  <label
+                    className={`patch-check${completed.has(t.id) ? " patch-completed" : ""}`}
+                    key={t.id}
+                  >
                     <input
                       type="checkbox"
-                      disabled={busy}
-                      checked={selected.includes(t.id)}
+                      disabled={busy || !historyReady || completed.has(t.id)}
+                      checked={
+                        completed.has(t.id) || newSelected.includes(t.id)
+                      }
                       onChange={() =>
                         setSelected((s) =>
                           s.includes(t.id)
@@ -158,6 +200,8 @@ export default function ClientPatchTests({
                       }
                     />
                     {t.name}
+                    {completed.has(t.id) &&
+                      ` (already completed on ${completedTime(completed.get(t.id)!)})`}
                   </label>
                 ))}
               </fieldset>
@@ -181,11 +225,13 @@ export default function ClientPatchTests({
                 ))}
             </select>
           </label>
-          <p>{selected.length} treatments selected</p>
+          <p>{newSelected.length} treatments selected</p>
           <div className="record-actions">
             <button
               className="primary"
-              disabled={busy || !selected.length || !performer}
+              disabled={
+                busy || !historyReady || !newSelected.length || !performer
+              }
             >
               {busy ? "Saving…" : "Save Patch Test"}
             </button>

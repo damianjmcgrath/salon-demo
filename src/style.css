@@ -1681,4 +1681,17 @@ nav .logout-link {
   margin: 0;
 }
 
-.checkout-panel .payment-buttons button, .checkout-panel .record-actions button { height: 60px; min-height: 60px; font-size: 16px; padding: 12px; box-sizing: border-box; }
+.checkout-panel .payment-buttons button,
+.checkout-panel .record-actions button {
+  height: 60px;
+  min-height: 60px;
+  font-size: 16px;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.patch-check.patch-completed {
+  color: #777;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
