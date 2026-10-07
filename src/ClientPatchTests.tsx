@@ -13,17 +13,36 @@ export default function ClientPatchTests({
   treatments,
   staff,
   onSaved,
+  initiallyRecord = false,
+  initialTreatmentId,
+  initialStaffId,
 }: {
   db: SupabaseClient | null;
   clientId: string;
   treatments: Treatment[];
   staff: { id: number; name: string; active?: boolean }[];
   onSaved: () => void;
+  initiallyRecord?: boolean;
+  initialTreatmentId?: number;
+  initialStaffId?: number;
 }) {
   const [history, setHistory] = useState<Entry[]>([]),
-    [record, setRecord] = useState(false),
-    [selected, setSelected] = useState<number[]>([]),
-    [performer, setPerformer] = useState(""),
+    [record, setRecord] = useState(initiallyRecord),
+    [selected, setSelected] = useState<number[]>(
+      initialTreatmentId &&
+        treatments.some(
+          (t) =>
+            t.id === initialTreatmentId &&
+            !["patch test", "training academy"].includes(
+              t.category.trim().toLowerCase(),
+            ),
+        )
+        ? [initialTreatmentId]
+        : [],
+    ),
+    [performer, setPerformer] = useState(
+      initialStaffId ? String(initialStaffId) : "",
+    ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true);

@@ -32,6 +32,7 @@ export default function StaffWorkspace({
   onBook,
   onCancel,
   initialAppointment,
+  initialPatchRecord = false,
   role,
   initialScreen = "home",
   treatments,
@@ -61,6 +62,7 @@ export default function StaffWorkspace({
   onBook: (client: Client, appointment?: Appointment) => void;
   onCancel: (appointment: Appointment, reason: string) => Promise<void>;
   initialAppointment?: Appointment | null;
+  initialPatchRecord?: boolean;
 }) {
   const grants = permissions ?? defaultPermissions(role);
   const [requiresDeposit, setRequiresDeposit] = useState(true);
@@ -81,6 +83,7 @@ export default function StaffWorkspace({
     [cancel, setCancel] = useState<Appointment | null>(null),
     [reason, setReason] = useState("");
   const [clientTab, setClientTab] = useState("Personal Details");
+  const [patchPrompt, setPatchPrompt] = useState(initialPatchRecord);
   const generation = useRef(0),
     mounted = useRef(true);
   useEffect(() => {
@@ -173,8 +176,10 @@ export default function StaffWorkspace({
             ).data
           : data.clients.find((c) => c.id === initialAppointment.client_id);
       if (stopped) return;
-      if (c) await loadClient(c, "profile");
-      else
+      if (c) {
+        await loadClient(c, "profile");
+        if (!stopped && initialPatchRecord) setClientTab("Patch Tests");
+      } else
         setError(
           "This appointment has no linked client record. Apply migration 005 first.",
         );
@@ -868,9 +873,24 @@ export default function StaffWorkspace({
                   key={client.id}
                   db={db}
                   clientId={client.id}
+                  initiallyRecord={
+                    patchPrompt && client.id === initialAppointment?.client_id
+                  }
+                  initialTreatmentId={
+                    patchPrompt && client.id === initialAppointment?.client_id
+                      ? (initialAppointment?.patch_for_treatment_id ??
+                        undefined)
+                      : undefined
+                  }
+                  initialStaffId={
+                    patchPrompt && client.id === initialAppointment?.client_id
+                      ? initialAppointment?.staff_id
+                      : undefined
+                  }
                   treatments={treatments}
                   staff={staff}
                   onSaved={() => {
+                    setPatchPrompt(false);
                     if (db)
                       void db
                         .rpc("get_client_activity", { p_client_id: client.id })

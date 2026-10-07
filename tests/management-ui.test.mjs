@@ -10,6 +10,7 @@ let dom,
   Treatment,
   Permission,
   Values,
+  Patch,
   render,
   screen,
   fireEvent,
@@ -30,6 +31,7 @@ before(async () => {
     "TreatmentManagement",
     "PermissionManagement",
     "ClientValues",
+    "ClientPatchTests",
   ])
     await build({
       entryPoints: [
@@ -47,6 +49,7 @@ before(async () => {
   Permission = (await import(pathToFileURL(dir + "/PermissionManagement.mjs")))
     .default;
   Values = (await import(pathToFileURL(dir + "/ClientValues.mjs"))).default;
+  Patch = (await import(pathToFileURL(dir + "/ClientPatchTests.mjs"))).default;
 });
 afterEach(() => cleanup());
 after(async () => {
@@ -184,4 +187,66 @@ test("credit note history is readable without displaying a forbidden create acti
     screen.queryByRole("button", { name: "Create New Credit Note" }),
     null,
   );
+});
+
+test("patch checkout form opens with intended treatment selected and allows additional coverage before saving", async () => {
+  const treatments = [
+    { id: 8001, name: "Intended", category: "Brows" },
+    { id: 8002, name: "Additional", category: "Brows" },
+    { id: 69, name: "PATCH TEST", category: "PATCH TEST" },
+  ];
+  let saved;
+  const q = {
+    select() {
+      return this;
+    },
+    eq() {
+      return this;
+    },
+    order() {
+      return this;
+    },
+    then(fn) {
+      return Promise.resolve({ data: [], error: null }).then(fn);
+    },
+  };
+  const db = {
+    from: () => q,
+    rpc: async (name, args) => {
+      saved = args;
+      return {
+        data: {
+          id: "record",
+          staff_name: "Aoife",
+          recorded_at: new Date().toISOString(),
+          treatments_covered: treatments.filter((t) =>
+            args.p_treatments.includes(t.id),
+          ),
+        },
+        error: null,
+      };
+    },
+  };
+  render(
+    React.createElement(Patch, {
+      db,
+      clientId: "attendee",
+      treatments,
+      staff: [{ id: 1, name: "Aoife" }],
+      initiallyRecord: true,
+      initialTreatmentId: 8001,
+      initialStaffId: 1,
+      onSaved() {},
+    }),
+  );
+  assert(screen.getByLabelText("Intended").checked);
+  assert(!screen.getByLabelText("Additional").checked);
+  assert.equal(screen.queryByLabelText("PATCH TEST"), null);
+  fireEvent.click(screen.getByLabelText("Additional"));
+  fireEvent.click(screen.getByRole("button", { name: "Save Patch Test" }));
+  await waitFor(() => assert.equal(saved?.p_client, "attendee"));
+  assert.deepEqual(saved.p_treatments, [8001, 8002]);
+  assert.equal(saved.p_staff, 1);
+  await screen.findByRole("button", { name: "Record Patch Test" });
+  assert(screen.getByText("Intended, Additional"));
 });

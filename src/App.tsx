@@ -154,6 +154,7 @@ export default function App() {
   const [staffClient, setStaffClient] = useState<Client | null>(null),
     [amending, setAmending] = useState<Appointment | null>(null),
     [changeReason, setChangeReason] = useState("");
+  const [initialPatchRecord, setInitialPatchRecord] = useState(false);
   const [initialStaffAppointment, setInitialStaffAppointment] =
     useState<Appointment | null>(null);
   const [staffData, setStaffData] = useState<LocalStaffData>(() => {
@@ -566,6 +567,7 @@ export default function App() {
   const [workspaceScreen, setWorkspaceScreen] = useState("home");
   const [workspaceNavigation, setWorkspaceNavigation] = useState(0);
   function staffHome(screen = "home") {
+    setInitialPatchRecord(false);
     setWorkspaceScreen(screen);
     setWorkspaceNavigation((n) => n + 1);
     setInitialStaffAppointment(null);
@@ -1842,6 +1844,7 @@ export default function App() {
             appointments={local}
             actor={actorName}
             initialAppointment={initialStaffAppointment}
+            initialPatchRecord={initialPatchRecord}
             onDiary={() => {
               setDate(today());
               setView("diary");
@@ -3207,6 +3210,7 @@ export default function App() {
               <button
                 className="back"
                 onClick={() => {
+                  setInitialPatchRecord(false);
                   setInitialStaffAppointment(selected);
                   setSelected(null);
                   setView("staff-workspace");
@@ -3246,11 +3250,28 @@ export default function App() {
                 key={selected.id}
                 db={live ? db : null}
                 appointment={selected}
-                onSaved={async () => {
+                onSaved={async (completed) => {
                   const operation = identityVersion.current;
                   await refresh();
                   if (operation !== identityVersion.current) return;
                   setSelected(null);
+                  if (
+                    completed.patch_for_treatment_id ||
+                    selected.treatment_name.trim().toUpperCase() ===
+                      "PATCH TEST" ||
+                    treatments
+                      .find((t) => t.id === selected.treatment_id)
+                      ?.category.toUpperCase() === "PATCH TEST"
+                  ) {
+                    if (allowed("view.clients")) {
+                      setInitialPatchRecord(true);
+                      setInitialStaffAppointment(completed);
+                      setView("staff-workspace");
+                    } else
+                      setError(
+                        "Appointment completed. Client Management permission is required to record its patch test.",
+                      );
+                  }
                 }}
               />
             )}

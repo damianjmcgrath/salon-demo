@@ -33,7 +33,7 @@ export default function AppointmentCheckout({
 }: {
   db: SupabaseClient | null;
   appointment: Appointment;
-  onSaved: () => Promise<void>;
+  onSaved: (completed: Appointment) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false),
     [method, setMethod] = useState(""),
@@ -85,9 +85,10 @@ export default function AppointmentCheckout({
   const remainder = price - used,
     isValue = method === "voucher" || method === "credit";
   const ready =
-    !!method &&
-    (!isValue ||
-      (!!value && used > 0 && (remainder === 0 || !!remainderMethod)));
+    price === 0 ||
+    (!!method &&
+      (!isValue ||
+        (!!value && used > 0 && (remainder === 0 || !!remainderMethod))));
   function choose(m: string) {
     setMethod(m);
     setEditing(false);
@@ -128,14 +129,14 @@ export default function AppointmentCheckout({
       const r = await db.rpc("checkout_appointment", {
         p_id: appointment.id,
         p_revision: appointment.revision ?? 0,
-        p_method: method,
+        p_method: price === 0 ? null : method,
         p_voucher_code: method === "voucher" ? value?.code : null,
         p_credit_note_id: method === "credit" ? value?.id : null,
         p_remainder_method: isValue && remainder > 0 ? remainderMethod : null,
         p_value_amount: isValue ? used / 100 : null,
       });
       if (r.error) throw r.error;
-      if (alive.current) await onSaved();
+      if (alive.current) await onSaved(r.data);
     } catch (e) {
       if (alive.current)
         setError(
@@ -149,9 +150,20 @@ export default function AppointmentCheckout({
   }
   if (!open)
     return (
-      <button className="primary" onClick={() => setOpen(true)}>
-        Check Client Out
-      </button>
+      <div className="checkout-start">
+        <button
+          className="primary"
+          disabled={busy || (price === 0 && !db)}
+          onClick={() => (price === 0 ? void confirm() : setOpen(true))}
+        >
+          {busy ? "Saving…" : "Check Client Out"}
+        </button>
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
     );
   return (
     <section
@@ -411,9 +423,11 @@ export function CheckoutHistory({
         </table>
       ) : (
         <p>
-          {labels[appointment.payment_method ?? ""] ??
-            appointment.payment_method ??
-            "Not recorded"}{" "}
+          {Number(appointment.price) === 0
+            ? "No payment required"
+            : (labels[appointment.payment_method ?? ""] ??
+              appointment.payment_method ??
+              "Not recorded")}{" "}
           · {money(Number(appointment.price))}
         </p>
       )}

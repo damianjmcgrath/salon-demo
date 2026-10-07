@@ -147,3 +147,11 @@ test("manual voucher lookup and server balance error leave checkout uncompleted"
   assert.equal(saved.length, 0);
   assert.equal(calls.filter((c) => c[0] === "checkout_appointment").length, 1);
 });
+
+test('free checkout completes on the first click without payment choices and returns the completed appointment',async()=>{
+ const free={id:'free-patch',revision:2,price:0,status:'checked_in',patch_for_treatment_id:8001};let call,saved;
+ const db={rpc:async(name,args)=>{call=[name,args];return {data:{...free,status:'completed',revision:3},error:null};}};
+ render(React.createElement(Component,{db,appointment:free,onSaved:async(a)=>{saved=a;}}));
+ fireEvent.click(screen.getByRole('button',{name:'Check Client Out'}));
+ await waitFor(()=>assert.equal(saved?.status,'completed'));assert.equal(saved.patch_for_treatment_id,8001);assert.equal(call[0],'checkout_appointment');assert.equal(call[1].p_method,null);assert.equal(call[1].p_revision,2);assert.equal(screen.queryByText('Select method of payment'),null);
+});

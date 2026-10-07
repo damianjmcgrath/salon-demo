@@ -1338,3 +1338,16 @@ test('proxy patch bookings match normalized attendee email, retain payer ownersh
  await as(accountant);await assert.rejects(pg.query("select get_proxy_booking_plan(8002,'patch-client@example.com')"),/Client sign-in/);
  await as(null,'anon');await assert.rejects(pg.query("select get_proxy_booking_plan(8002,'patch-client@example.com')"),/permission denied/);
 });
+
+test('free checkout completes without any tender, retains audit and rejects paid/stale/unauthorized requests',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/024_free_appointment_checkout.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ const a=await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status,patch_for_treatment_id) values($1,$2,1,69,'1990-01-01',600,5,'Patch Client','123','Patch Test for Sensitive Treatment',0,'checked_in',8001) returning *",[c.id,clientUser]);
+ await as(staffA);await assert.rejects(pg.query("select checkout_appointment($1,0,'card')",[a.id]),/No payment method/);
+ const done=await one('select * from checkout_appointment($1,0,null)',[a.id]);assert.equal(done.status,'completed');assert.equal(done.payment_method,null);assert.equal(done.revision,1);assert(done.completed_at);assert.equal(done.patch_for_treatment_id,8001);
+ await assert.rejects(pg.query('select checkout_appointment($1,0,null)',[a.id]),/changed/);
+ await pg.exec('reset role');assert.equal((await one('select count(*) n from appointment_payments where appointment_id=$1',[a.id])).n,0);assert.equal((await one("select details from audit_events where appointment_id=$1 and action='appointment_checked_out'",[a.id])).details.free_appointment,true);
+ const paid=await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,1,8001,'1990-01-02',600,60,'Client','123','Paid',80,'checked_in') returning *",[c.id,clientUser]);
+ await as(staffA);await assert.rejects(pg.query('select checkout_appointment($1,0,null)',[paid.id]),/Choose a payment method/);
+ for(const uid of [clientUser,accountant,staffB]){await as(uid);await assert.rejects(pg.query('select checkout_appointment($1,1,null)',[a.id]),/Staff access|Permission denied/);}
+});
