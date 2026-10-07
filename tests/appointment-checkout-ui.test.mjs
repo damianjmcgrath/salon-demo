@@ -73,12 +73,14 @@ async function open() {
 test("card choice can be edited and only final confirmation records the selected cash method", async () => {
   const { calls, saved } = setup();
   await open();
+  assert.equal(screen.queryByRole("button", { name: "Complete Appointment" }), null);
   fireEvent.click(screen.getByRole("button", { name: "Card", exact: true }));
   assert(screen.getByText("Payment breakdown"));
   assert.equal(calls.filter((c) => c[0] === "checkout_appointment").length, 0);
   fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  assert.equal(screen.queryByRole("button", { name: "Complete Appointment" }), null);
   fireEvent.click(screen.getByRole("button", { name: "Cash", exact: true }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm Check Out" }));
+  fireEvent.click(screen.getByRole("button", { name: "Complete Appointment" }));
   await waitFor(() => assert.equal(saved.length, 1));
   assert.deepEqual(calls.find((c) => c[0] === "checkout_appointment")[1], {
     p_id: "appointment-1",
@@ -99,9 +101,9 @@ test("partial voucher requires a Card/Cash remainder and records the displayed b
     target: { value: "voucher-1" },
   });
   assert(screen.getByText("€20.00 remaining to pay"));
-  assert(screen.getByRole("button", { name: "Confirm Check Out" }).disabled);
+  assert.equal(screen.queryByRole("button", { name: "Complete Appointment" }), null);
   fireEvent.click(screen.getByRole("button", { name: "Card", exact: true }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm Check Out" }));
+  fireEvent.click(screen.getByRole("button", { name: "Complete Appointment" }));
   await waitFor(() => assert.equal(saved.length, 1));
   const p = calls.find((c) => c[0] === "checkout_appointment")[1];
   assert.equal(p.p_value_amount, 60);
@@ -119,7 +121,7 @@ test("credit note exceeding the treatment uses only its price and preserves the 
   });
   assert(screen.getByText("€80.00 will be used. €20.00 will remain."));
   assert.equal(screen.queryByText("remaining to pay"), null);
-  fireEvent.click(screen.getByRole("button", { name: "Confirm Check Out" }));
+  fireEvent.click(screen.getByRole("button", { name: "Complete Appointment" }));
   await waitFor(() => assert.equal(saved.length, 1));
   const p = calls.find((c) => c[0] === "checkout_appointment")[1];
   assert.equal(p.p_value_amount, 80);
@@ -138,7 +140,7 @@ test("manual voucher lookup and server balance error leave checkout uncompleted"
   fireEvent.click(screen.getByRole("button", { name: "Find Voucher" }));
   await screen.findByText("€20.00 remaining to pay");
   fireEvent.click(screen.getByRole("button", { name: "Cash", exact: true }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm Check Out" }));
+  fireEvent.click(screen.getByRole("button", { name: "Complete Appointment" }));
   assert(
     (await screen.findByRole("alert")).textContent.includes(
       "The balance changed.",

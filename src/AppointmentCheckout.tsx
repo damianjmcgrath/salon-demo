@@ -355,13 +355,15 @@ export default function AppointmentCheckout({
         </p>
       )}
       <div className="record-actions">
+        {ready && !editing && !loading && (
         <button
           className="primary"
           disabled={!db || !ready || editing || busy || loading}
           onClick={() => void confirm()}
         >
-          {busy ? "Saving…" : "Confirm Check Out"}
+          {busy ? "Saving…" : "Complete Appointment"}
         </button>
+        )}
         <button
           className="secondary"
           disabled={busy}
