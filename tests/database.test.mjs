@@ -1254,3 +1254,42 @@ test('management permissions enforce delegated views/actions and client guarante
  await assert.rejects(pg.query("select * from checkout_appointment($1,1,'cash')",[required.id]),/Permission denied/);
  await as(accountant);assert((await pg.query("select * from get_activity_report('2021-04-01','2021-04-01')")).rows.length);await assert.rejects(pg.query('select list_staff_permissions()'),/Permission denied/);
 });
+
+test('self booking routes missing patch clearance to a named patch appointment and enforces a full 24 hours after recording',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/022_self_patch_test_booking.sql',import.meta.url),'utf8'));
+ const patient='d0000000-0000-0000-0000-000000000005';await pg.query("insert into auth.users(id,email,raw_user_meta_data) values($1,'patch-client@example.com','{\"full_name\":\"Patch Client\",\"mobile\":\"123456789\"}')",[patient]);
+ await pg.exec("insert into treatments(id,name,category,price,price_type,duration,patch_required) values(8001,'Sensitive Treatment','Brows',80,'Fixed',60,true)");
+ const patchService=await one('select treatment_id id from patch_booking_settings');
+ await pg.query('insert into staff_treatments(staff_id,treatment_id) values(1,8001),(2,8001),(1,$1),(2,$1) on conflict do nothing',[patchService.id]);
+ await as(patient);const cid=(await one('select ensure_own_client() id')).id;
+ let plan=(await one('select get_self_booking_plan(8001) data')).data;assert.equal(plan.patch_needed,true);assert.equal(plan.treatment.id,patchService.id);assert.equal(plan.treatment.name,'Patch Test for Sensitive Treatment');assert.equal(plan.guarantee_required,false);assert.equal(Number(plan.treatment.price),0);
+ const slot=await one("select * from get_self_booking_slots(8001,'2080-01-09',1) limit 1");assert(slot);
+ const ap=await one("select * from book_guaranteed_appointment($1,1,'2080-01-09',$2,'Patch Client','123456789',true,'patch-client@example.com',null,false,null,8001)",[patchService.id,slot.start_minute]);
+ assert.equal(ap.patch_for_treatment_id,8001);assert.equal(ap.patch_for_treatment_name,'Sensitive Treatment');assert.equal(ap.treatment_name,'Patch Test for Sensitive Treatment');assert.equal(ap.guarantee_required,false);assert.equal(ap.guarantee_card_id,null);assert.equal(Number(ap.price),0);
+ assert.equal((await one('select get_self_booking_plan(8001) data')).data.patch_needed,true); // Scheduling is not a performed patch test.
+ assert((await pg.query('select * from get_my_appointments()')).rows.some(a=>a.id===ap.id&&a.treatment_name==='Patch Test for Sensitive Treatment'));
+ await pg.exec('reset role');let snapshot=(await one('select snapshot from booking_email_queue where appointment_id=$1',[ap.id])).snapshot;assert.equal(snapshot.treatment_name,ap.treatment_name);assert.equal(snapshot.guarantee_required,false);
+ const card=await one("insert into booking_guarantee_cards(client_id,created_by,setup_order_id,customer_id,payment_method_id,verified_at) values($1,$2,'patch-owner-setup','patch-customer','patch-method',now()) returning id",[cid,patient]);
+ await as(patient);await assert.rejects(pg.query("select book_guaranteed_appointment(8001,1,'2080-01-10',600,'Patch Client','123456789',true,'patch-client@example.com',$1,true,null)",[card.id]),/recorded patch test/);
+ await assert.rejects(pg.query("select book_guaranteed_appointment($1,1,'2080-01-10',600,'Other','123456789',false,'other@example.com',null,false,null,8001)",[patchService.id]),/only available for client self/);
+ // Staff can amend a patch appointment without losing its intended treatment label.
+ await as(staffA);const edited=await one("select * from amend_appointment($1,$2,1,'2080-01-09',$3,0,'Client requested change')",[ap.id,patchService.id,ap.start_minute]);assert.equal(edited.treatment_name,ap.treatment_name);assert.equal(edited.patch_for_treatment_id,8001);
+ // Completing/checking out the scheduled patch does not manufacture clinical clearance.
+ await pg.exec('reset role');await pg.query("update appointments set status='completed' where id=$1",[ap.id]);await as(patient);assert.equal((await one('select get_self_booking_plan(8001) data')).data.patch_needed,true);
+ await as(staffA);const record=await one('select * from record_client_patch_test($1,1,array[8001])',[cid]);
+ await pg.exec('reset role');await pg.query("update client_patch_tests set recorded_at='2080-01-09 09:00:00Z' where id=$1",[record.id]);
+ await as(patient);plan=(await one('select get_self_booking_plan(8001) data')).data;assert.equal(plan.patch_needed,false);assert.equal(plan.treatment.id,8001);assert.equal(plan.guarantee_required,true);assert.equal(new Date(plan.earliest_treatment_at).toISOString(),'2080-01-10T09:00:00.000Z');
+ assert.equal((await pg.query("select * from get_self_booking_slots(8001,'2080-01-09',1)")).rows.length,0);
+ const next=(await pg.query("select * from get_self_booking_slots(8001,'2080-01-10',1)")).rows;assert(next.length);assert(next.every(s=>s.start_minute>=540));
+ await assert.rejects(pg.query("select book_guaranteed_appointment(8001,1,'2080-01-10',539,'Patch Client','123456789',true,'patch-client@example.com',$1,true,null)",[card.id]),/24 hours/);
+ await assert.rejects(pg.query("select book_guaranteed_appointment($1,1,'2080-01-10',600,'Patch Client','123456789',true,'patch-client@example.com',null,false,null,8001)",[patchService.id]),/requirements changed/);
+ // Staff can now book the intended treatment at the 24-hour boundary with the client's normal guarantee.
+ await as(staffA);const treatment=await one("select * from book_guaranteed_appointment(8001,1,'2080-01-10',$1,'Patch Client','123456789',true,'patch-client@example.com',$2,true,$3)",[next[0].start_minute,card.id,cid]);assert.equal(treatment.treatment_name,'Sensitive Treatment');assert.equal(Number(treatment.price),80);assert.equal(treatment.patch_for_treatment_id,null);assert.equal(treatment.guarantee_card_id,card.id);
+ // A different treatment still has no coverage, and non-patch services continue normally.
+ await pg.exec('reset role');await pg.exec("insert into treatments(id,name,category,price,price_type,duration,patch_required) values(8002,'Other Sensitive Treatment','Brows',20,'Fixed',30,true)");await as(patient);assert.equal((await one('select get_self_booking_plan(8002) data')).data.patch_needed,true);
+ const normal=(await one('select get_self_booking_plan($1) data',[treatmentId])).data;assert.equal(normal.patch_needed,false);assert.equal(normal.treatment.id,treatmentId);
+ await as(staffA);const patch=await one('select * from treatments where id=$1',[patchService.id]);await assert.rejects(pg.query("select save_treatment($1,'PATCH TEST','',5,0,true,$2,false)",[patch.id,patch.revision]),/cannot itself require/);
+ const saved=await one("select * from save_treatment($1,'PATCH TEST','',5,0,false,$2,true)",[patch.id,patch.revision]);assert.equal(saved.guarantee_required,true);await as(patient);assert.equal((await one('select get_self_booking_plan(8002) data')).data.guarantee_required,true);
+ await as(accountant);await assert.rejects(pg.query('select get_self_booking_plan(8001)'),/Client sign-in/);
+ await as(null,'anon');await assert.rejects(pg.query('select get_self_booking_plan(8001)'),/permission denied/);
+});

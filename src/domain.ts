@@ -33,6 +33,8 @@ export type Appointment = {
   treatment_name: string;
   price: number;
   status: string;
+  patch_for_treatment_id?: number | null;
+  patch_for_treatment_name?: string | null;
   guarantee_required?: boolean;
   payment_method?: string;
   appointment_date: string;

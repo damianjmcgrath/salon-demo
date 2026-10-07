@@ -31,6 +31,7 @@ type Treatment = (typeof catalog)[number] & {
   description?: string;
   revision?: number;
   active?: boolean;
+  guarantee_required?: boolean;
 };
 import StaffWorkspace from "./StaffWorkspace";
 import Reporting from "./Reporting";
@@ -322,6 +323,18 @@ export default function App() {
     [step, setStep] = useState(0),
     [confirmation, setConfirmation] = useState<Appointment | null>(null);
   const [forSelf, setForSelf] = useState(true);
+  type PatchPlan = {
+    requested_treatment_id: number;
+    requested_treatment_name: string;
+    patch_needed: boolean;
+    patch_for_treatment_id: number | null;
+    earliest_treatment_at: string | null;
+    treatment: Treatment;
+  };
+  const [patchPlan, setPatchPlan] = useState<PatchPlan | null>(null);
+  const [patchChecking, setPatchChecking] = useState(false);
+  const patchSelection = useRef(0);
+
   const [guaranteeNeeded, setGuaranteeNeeded] = useState<boolean | null>(null);
   const [guaranteeError, setGuaranteeError] = useState("");
 
@@ -332,6 +345,9 @@ export default function App() {
     setStep(0);
     setView("book");
     setTreatment(null);
+    setPatchPlan(null);
+    patchSelection.current++;
+    setPatchChecking(false);
     setSlot(null);
     setPeriod("");
     setCategory("All treatments");
@@ -559,6 +575,9 @@ export default function App() {
     setCategory("All treatments");
     setSearch("");
     setTreatment(null);
+    setPatchPlan(null);
+    patchSelection.current++;
+    setPatchChecking(false);
     setSlot(null);
     setPeriod("");
     setConsent(false);
@@ -1055,6 +1074,9 @@ export default function App() {
     setCard("");
     setConsent(false);
     setTreatment(null);
+    setPatchPlan(null);
+    patchSelection.current++;
+    setPatchChecking(false);
     setSlot(null);
     setName("");
     setPhone("");
@@ -1069,12 +1091,21 @@ export default function App() {
     setSlots([]);
     if (!treatment) return;
     if (live && db && session) {
-      db.rpc(amending ? "get_booking_slots" : "get_available_slots", {
-        p_treatment_id: treatment.id,
-        p_date: date,
-        p_staff_id: staffChoice || null,
-        ...(amending ? { p_exclude_id: amending.id } : {}),
-      }).then(({ data, error }) => {
+      db.rpc(
+        patchPlan && activeRole === "client" && forSelf
+          ? "get_self_booking_slots"
+          : amending
+            ? "get_booking_slots"
+            : "get_available_slots",
+        {
+          ...(patchPlan && activeRole === "client" && forSelf
+            ? { p_requested_treatment: patchPlan.requested_treatment_id }
+            : { p_treatment_id: treatment.id }),
+          p_date: date,
+          p_staff_id: staffChoice || null,
+          ...(amending ? { p_exclude_id: amending.id } : {}),
+        },
+      ).then(({ data, error }) => {
         if (cancelled) return;
         if (error) setError(error.message);
         else
@@ -1142,6 +1173,9 @@ export default function App() {
     staffData.dayShifts,
     remoteBreaks,
     amending?.id,
+    patchPlan,
+    forSelf,
+    activeRole,
   ]);
   useEffect(() => {
     let active = true;
@@ -1157,6 +1191,7 @@ export default function App() {
       .rpc("booking_requires_guarantee", {
         p_attendee_email: forSelf ? null : email.trim(),
         p_client_id: staffClient?.id ?? null,
+        p_treatment_id: treatment?.id ?? null,
       })
       .then(({ data, error }) => {
         if (!active) return;
@@ -1172,16 +1207,80 @@ export default function App() {
     live,
     session?.user.id,
     staffClient?.id,
+    treatment?.id,
     forSelf,
     email,
   ]);
+  async function chooseTreatment(t: Treatment, self = forSelf) {
+    const selection = ++patchSelection.current;
+    const identity = identityVersion.current;
+    setPatchPlan(null);
+    setSlot(null);
+    setPeriod("");
+    setCard("");
+    setConsent(false);
+    setStaffChoice(0);
+    setError("");
+    if (live && db && activeRole === "client" && self) {
+      setPatchChecking(true);
+      try {
+        const r = await db.rpc("get_self_booking_plan", {
+          p_requested_treatment: t.id,
+        });
+        if (r.error) throw r.error;
+        if (
+          selection !== patchSelection.current ||
+          identity !== identityVersion.current
+        )
+          return;
+        const plan = r.data as PatchPlan;
+        setPatchPlan(plan);
+        setTreatment(plan.treatment);
+        if (plan.earliest_treatment_at) {
+          const earliestDay = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Europe/Dublin",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(new Date(plan.earliest_treatment_at));
+          if (earliestDay > today()) setDate(earliestDay);
+        }
+        setStep(2);
+      } catch (e) {
+        if (
+          selection === patchSelection.current &&
+          identity === identityVersion.current
+        )
+          setError((e as Error).message);
+      } finally {
+        if (
+          selection === patchSelection.current &&
+          identity === identityVersion.current
+        )
+          setPatchChecking(false);
+      }
+    } else {
+      setTreatment(
+        amending?.patch_for_treatment_id && amending.treatment_id === t.id
+          ? { ...t, name: amending.treatment_name }
+          : t,
+      );
+      setStep(2);
+    }
+  }
   const eligibleStaff = staff.filter(
     (s) =>
       !treatment ||
       (live
         ? staffSkills.some(
             (k) => k.staff_id === s.id && k.treatment_id === treatment.id,
-          )
+          ) &&
+          (!patchPlan?.patch_needed ||
+            staffSkills.some(
+              (k) =>
+                k.staff_id === s.id &&
+                k.treatment_id === patchPlan.requested_treatment_id,
+            ))
         : records
             .find((r) => r.id === s.id)
             ?.treatment_ids?.includes(treatment.id)),
@@ -1226,6 +1325,8 @@ export default function App() {
               p_attendee_email: email.trim(),
               p_guarantee_id: guaranteeNeeded ? card : null,
               p_client_id: staffClient?.id || null,
+              p_patch_for_treatment_id:
+                patchPlan?.patch_for_treatment_id ?? null,
             });
         if (r.error) throw r.error;
         if (operation !== identityVersion.current) return;
@@ -1937,18 +2038,16 @@ export default function App() {
                     Prices from the salon’s booking catalogue. Durations are
                     provisional for this demo.
                   </p>
+                  {patchChecking && (
+                    <p role="status">Checking patch test requirements…</p>
+                  )}
                   <div className="treatment-grid">
                     {filtered.map((t) => (
                       <button
                         className="treatment"
                         key={t.id}
-                        onClick={() => {
-                          setTreatment(t);
-                          setPeriod("");
-                          setCard("");
-                          setStep(2);
-                          setConsent(false);
-                        }}
+                        disabled={patchChecking}
+                        onClick={() => void chooseTreatment(t)}
                       >
                         <span className="eyebrow">{t.category}</span>
                         <h3>{t.name}</h3>
@@ -1986,6 +2085,37 @@ export default function App() {
                     ← Treatments
                   </button>
                   <h2>Find your perfect time</h2>
+                  {patchPlan?.patch_needed && (
+                    <div
+                      className="guarantee patch-booking-notice"
+                      role="status"
+                    >
+                      <h3>
+                        Patch Test for {patchPlan.requested_treatment_name}
+                      </h3>
+                      <p>
+                        Booking this treatment will require a patch test first.
+                        The Patch Test must be done at least 24 hours before the
+                        Treatment. You can book in your Patch Test online now,
+                        and when you visit the salon, the staff can book your
+                        treatment appointment for you.
+                      </p>
+                    </div>
+                  )}
+                  {patchPlan?.earliest_treatment_at &&
+                    new Date(patchPlan.earliest_treatment_at).getTime() >
+                      Date.now() && (
+                      <p role="status">
+                        Your patch test is recorded. Treatment appointments are
+                        available from{" "}
+                        {new Date(
+                          patchPlan.earliest_treatment_at,
+                        ).toLocaleString("en-IE", {
+                          timeZone: "Europe/Dublin",
+                        })}
+                        , at least 24 hours after the test.
+                      </p>
+                    )}
                   <label>
                     Who would you like to see?
                     <select
@@ -2119,8 +2249,8 @@ export default function App() {
                     <p>Checking booking guarantee requirements…</p>
                   ) : guaranteeNeeded === false ? (
                     <p>
-                      No card guarantee is required for this client. Payment
-                      will be made in the salon after the treatment.
+                      No card guarantee is required for this appointment.
+                      Payment will be made in the salon after the treatment.
                     </p>
                   ) : live && db ? (
                     <BookingGuarantee
@@ -2556,7 +2686,11 @@ export default function App() {
                     )}
                     {appointments.map((a) => {
                       const currentTreatment =
-                        treatments.find((t) => t.id === a.treatment_id) ||
+                        treatments.find(
+                          (t) =>
+                            t.id ===
+                            (a.patch_for_treatment_id ?? a.treatment_id),
+                        ) ||
                         treatments.find((t) => t.name === a.treatment_name);
                       return (
                         <article className="history-card" key={a.id}>
@@ -2593,10 +2727,12 @@ export default function App() {
                                   setStaffClient(null);
                                   setAmending(null);
                                   setConfirmation(null);
-                                  setTreatment(currentTreatment);
                                   setStaffChoice(0);
                                   setDate(today());
-                                  setStep(2);
+                                  void chooseTreatment(
+                                    currentTreatment,
+                                    a.booked_for_self !== false,
+                                  );
                                 }}
                               >
                                 Rebook appointment

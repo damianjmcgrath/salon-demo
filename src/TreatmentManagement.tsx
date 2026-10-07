@@ -10,6 +10,7 @@ export type ManagedTreatment = {
   patch_required: boolean;
   revision?: number;
   active?: boolean;
+  guarantee_required?: boolean;
 };
 export default function TreatmentManagement({
   db,
@@ -57,6 +58,7 @@ export default function TreatmentManagement({
         p_price: Number(draft.price),
         p_patch_required: draft.patch_required,
         p_revision: draft.revision ?? 0,
+        p_guarantee_required: draft.guarantee_required !== false,
       });
       if (r.error) throw r.error;
       setTreatments((ts) => ts.map((t) => (t.id === draft.id ? r.data : t)));
@@ -151,6 +153,26 @@ export default function TreatmentManagement({
               <option value="no">No</option>
             </select>
           </label>
+          <label>
+            Booking guarantee required
+            <select
+              value={draft.guarantee_required === false ? "no" : "yes"}
+              disabled={busy}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  guarantee_required: e.target.value === "yes",
+                })
+              }
+            >
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+          <p className="small">
+            No allows this service to be booked without card details, even when
+            the client normally requires a booking guarantee.
+          </p>
           <div className="record-actions">
             <button className="primary" disabled={busy}>
               Save Treatment
