@@ -1434,3 +1434,14 @@ test('daily activity lists completed payment parts and collected no-show fees wi
  await assert.rejects(pg.query("select get_daily_activity_report('1991-01-02','1991-01-01')"),/valid date range/);
  for(const uid of [clientUser,staffB]){await as(uid);await assert.rejects(pg.query("select get_daily_activity_report('1991-01-01','1991-01-01')"),/Permission denied/);}
 });
+
+test('cancel check-in clears active timestamp, restores booked state and records reversal with revision guards',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/030_cancel_check_in.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ const a=await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status,checked_in_at) values($1,$2,1,8001,'1992-01-01',600,15,'Client','123','Check-in Test',80,'checked_in','1992-01-01T10:00:00Z') returning *",[c.id,clientUser]);
+ for(const uid of [clientUser,accountant,staffB]){await as(uid);await assert.rejects(pg.query('select cancel_appointment_check_in($1,0)',[a.id]),/Permission denied/);}
+ await as(staffA);await assert.rejects(pg.query('select cancel_appointment_check_in($1,99)',[a.id]),/changed/);
+ const restored=await one('select * from cancel_appointment_check_in($1,0)',[a.id]);assert.equal(restored.status,'booked');assert.equal(restored.checked_in_at,null);assert.equal(restored.revision,1);
+ await assert.rejects(pg.query('select cancel_appointment_check_in($1,1)',[a.id]),/Only checked-in/);
+ await pg.exec('reset role');assert.equal((await one("select count(*) n from audit_events where appointment_id=$1 and action='appointment_check_in_cancelled'",[a.id])).n,1);
+});

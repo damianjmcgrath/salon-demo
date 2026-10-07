@@ -1442,6 +1442,27 @@ export default function App() {
       setBusy(false);
     }
   }
+  async function cancelCheckIn() {
+    if (!selected || busy) return;
+    const appointment = selected, operation = identityVersion.current;
+    setBusy(true); setError("");
+    try {
+      if (live && db) {
+        const result = await db.rpc("cancel_appointment_check_in", { p_id: appointment.id, p_revision: appointment.revision || 0 });
+        if (result.error) throw result.error;
+        if (operation !== identityVersion.current) return;
+        await refresh();
+        if (operation !== identityVersion.current) return;
+        setSelected(result.data);
+      } else {
+        const restored = { ...appointment, status: "booked", checked_in_at: null, revision: (appointment.revision || 0) + 1 };
+        auditLocal("appointment_check_in_cancelled", appointment, { before: "checked_in", after: "booked" });
+        setLocal(prev => prev.map(a => a.id === appointment.id ? restored : a));
+        setSelected(restored);
+      }
+      setStatusAction(""); setStatusReason("");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
   async function changeStatus(status: string, payment = "") {
     if (!selected) return;
     const operation = identityVersion.current;
@@ -3224,7 +3245,7 @@ export default function App() {
               </button>
             )}
             <hr />
-            {["booked", "checked_in"].includes(selected.status) && (
+            {selected.status === "booked" && (
               <button
                 className="secondary appointment-action"
                 disabled={busy}
@@ -3233,8 +3254,8 @@ export default function App() {
                 Amend appointment
               </button>
             )}
-            {["booked", "checked_in"].includes(selected.status) && (
-              <AppointmentReminder key={selected.id} db={live ? db : null} appointmentId={selected.id} initialEmail={selected.attendee_email || ""} disabled={busy} />
+            {selected.status === "booked" && (
+              <AppointmentReminder key={`reminder-${selected.id}`} db={live ? db : null} appointmentId={selected.id} initialEmail={selected.attendee_email || ""} disabled={busy} />
             )}
             {selected.status === "booked" && (
               <button
@@ -3245,16 +3266,19 @@ export default function App() {
                 Check client in
               </button>
             )}
+            {selected.status === "checked_in" && (
+              <p><button className="back" disabled={busy} onClick={() => void cancelCheckIn()}>Cancel Check In</button></p>
+            )}
             {selected.status === "completed" && (
               <CheckoutHistory
-                key={selected.id}
+                key={`history-${selected.id}`}
                 db={live ? db : null}
                 appointment={selected}
               />
             )}
             {selected.status === "checked_in" && (
               <AppointmentCheckout
-                key={selected.id}
+                key={`checkout-${selected.id}`}
                 db={live ? db : null}
                 appointment={selected}
                 onSaved={async (completed) => {
@@ -3282,7 +3306,7 @@ export default function App() {
                 }}
               />
             )}
-            {["booked", "checked_in"].includes(selected.status) && (
+            {selected.status === "booked" && (
               <button
                 className="danger appointment-action"
                 disabled={busy}

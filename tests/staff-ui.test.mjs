@@ -853,3 +853,14 @@ test('UI: client deposit requirement defaults to Yes and can be saved as No',asy
  await login();await findEmma();const setting=screen.getByLabelText('Requires Deposit');assert.equal(setting.value,'yes');fireEvent.change(setting,{target:{value:'no'}});fireEvent.click(screen.getByRole('button',{name:'Save details'}));await waitFor(()=>assert.equal(screen.getByLabelText('Requires Deposit').value,'no'));
  const client=JSON.parse(localStorage.getItem('sculpted-staff-data-v1')).clients.find(c=>c.name==='Emma Demo');assert.equal(client.requires_deposit,false);
 });
+
+test('UI: checked-in diary offers checkout and reversal, restoring a single reminder and booking actions',async()=>{
+ await login(/Aoife/);
+ fireEvent.click(screen.getByRole('button',{name:'Staff Diary',exact:true}));
+ fireEvent.click(await screen.findByRole('button',{name:/Grace Demo.*Lash Lift/}));
+ let modal=within(screen.getByRole('dialog',{name:'Appointment details'}));
+ assert(modal.getByRole('button',{name:'Check Client Out'}));assert.equal(modal.queryByRole('button',{name:'Send Reminder'}),null);assert.equal(modal.queryByRole('button',{name:'Amend appointment'}),null);assert.equal(modal.queryByRole('button',{name:'Cancel appointment'}),null);
+ fireEvent.click(modal.getByRole('button',{name:'Cancel Check In'}));
+ await waitFor(()=>assert(screen.getByRole('button',{name:'Check client in'})));
+ modal=within(screen.getByRole('dialog',{name:'Appointment details'}));assert.equal(modal.getAllByRole('button',{name:'Send Reminder'}).length,1);assert(modal.getByRole('button',{name:'Amend appointment'}));assert(modal.getByRole('button',{name:'Cancel appointment'}));
+});
