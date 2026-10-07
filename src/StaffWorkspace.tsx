@@ -1,6 +1,7 @@
 import { defaultPermissions, type Permissions } from "./permissions";
 import ClientSearch from "./ClientSearch";
 import ClientPatchTests from "./ClientPatchTests";
+import ClientCommunications from "./ClientCommunications";
 import ClientValues from "./ClientValues";
 import VoucherManagement from "./VoucherManagement";
 import {
@@ -726,6 +727,7 @@ export default function StaffWorkspace({
               {[
                 "Personal Details",
                 "Notes",
+                "Communications",
                 "Patch Tests",
                 "Vouchers",
                 "Credit Notes",
@@ -867,6 +869,11 @@ export default function StaffWorkspace({
                         });
                   }}
                 />
+              )}
+              {clientTab === "Communications" && (
+                <ClientCommunications key={client.id} db={db} clientId={client.id} onSaved={() => {
+                  if (db) void db.rpc("get_client_activity", { p_client_id: client.id }).then(({ data }) => { if (data) setActivity(data); });
+                }} />
               )}
               {clientTab === "Patch Tests" && (
                 <ClientPatchTests

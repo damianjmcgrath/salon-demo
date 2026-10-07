@@ -1390,3 +1390,18 @@ test('managed voucher lookup supports non-client purchasers and email requests a
  for(const uid of [clientUser,accountant,staffB]){await as(uid);await assert.rejects(pg.query('select managed_voucher_details($1)',[v.id]),/Permission denied/);await assert.rejects(pg.query('select prepare_staff_voucher_email($1,$2,$3)',[v.id,'recipient@example.com',request]),/Permission denied/);}
  await as(null,'anon');await assert.rejects(pg.query('select search_managed_vouchers($1)',[v.code]),/permission denied/);
 });
+
+test('client communications capture authenticated staff, audit and enforce client-management access',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/027_client_communications.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ await as(staffA);
+ const entry=await one("select * from record_client_communication($1,'Phone Call',' Called about appointment. ')",[c.id]);
+ assert.equal(entry.note,'Called about appointment.');assert.equal(entry.recorded_by,staffA);assert.equal(entry.staff_name,(await one('select name from staff where id=1')).name);assert(entry.recorded_at);
+ assert.equal((await one('select count(*) n from client_communications where client_id=$1',[c.id])).n,1);
+ await assert.rejects(pg.query("select record_client_communication($1,'SMS','Hello')",[c.id]),/valid communication type/);
+ await assert.rejects(pg.query("select record_client_communication($1,'Email','   ')",[c.id]),/communication notes/);
+ await assert.rejects(pg.query("insert into client_communications(client_id,communication_type,note,staff_name,recorded_by) values($1,'Email','Spoof','SYSTEM',$2)",[c.id,staffA]),/permission denied/);
+ for(const uid of [clientUser,accountant,staffB]){await as(uid);assert.equal((await one('select count(*) n from client_communications')).n,0);await assert.rejects(pg.query("select record_client_communication($1,'Email','Hello')",[c.id]),/Permission denied/);}
+ await pg.exec('reset role');assert.equal((await one("select count(*) n from audit_events where action='client_communication_recorded' and client_id=$1",[c.id])).n,1);
+ await as(null,'anon');await assert.rejects(pg.query('select * from client_communications'),/permission denied/);
+});

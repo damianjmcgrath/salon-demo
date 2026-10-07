@@ -13,6 +13,7 @@ let dom,
   Patch,
   VoucherReport,
   VoucherManagement,
+  Communications,
   render,
   screen,
   fireEvent,
@@ -36,6 +37,7 @@ before(async () => {
     "ClientPatchTests",
     "VoucherStatusReport",
     "VoucherManagement",
+    "ClientCommunications",
   ])
     await build({
       entryPoints: [
@@ -48,6 +50,7 @@ before(async () => {
       packages: "external",
       jsx: "automatic",
     });
+  Communications = (await import(pathToFileURL(dir + "/ClientCommunications.mjs"))).default;
   Treatment = (await import(pathToFileURL(dir + "/TreatmentManagement.mjs")))
     .default;
   Permission = (await import(pathToFileURL(dir + "/PermissionManagement.mjs")))
@@ -503,4 +506,32 @@ test("Find and Reassign share purchaser lookup and an editable recipient email a
   fireEvent.click(screen.getByRole("button", { name: /Re-Assign a Voucher/ }));
   assert(screen.getByRole("button", { name: "Search by Purchaser" }));
   assert(screen.getByRole("button", { name: "Search by client details" }));
+});
+
+test('communications cancel discards notes and save adds server-attributed history with Dublin timestamp',async()=>{
+ const calls=[];let saved=0;
+ const db = {
+   from(name) {
+     assert.equal(name, 'client_communications');
+     return { select() { return { eq(key, id) {
+       assert.equal(key, 'client_id'); assert.equal(id, 'client-1');
+       return { order() { return Promise.resolve({ data: [], error: null }); } };
+     } }; } };
+   },
+   async rpc(name, args) {
+     calls.push({ name, args });
+     return { data: { id: 'entry-1', communication_type: args.p_type, note: args.p_note, staff_name: 'Aoife', recorded_at: '2026-10-07T09:30:00Z' }, error: null };
+   }
+ };
+ render(React.createElement(Communications,{db,clientId:'client-1',onSaved(){saved++;}}));
+ await screen.findByText('No communications recorded yet.');
+ fireEvent.click(screen.getByRole('button',{name:'Add Communication'}));
+ fireEvent.change(screen.getByLabelText('Communication Notes'),{target:{value:'Discard this'}});
+ fireEvent.click(screen.getByRole('button',{name:'Cancel'}));assert.equal(calls.length,0);
+ fireEvent.click(screen.getByRole('button',{name:'Add Communication'}));assert.equal(screen.getByLabelText('Communication Notes').value,'');
+ fireEvent.change(screen.getByLabelText('Communication Type'),{target:{value:'WhatsApp'}});
+ fireEvent.change(screen.getByLabelText('Communication Notes'),{target:{value:' Confirmed arrival. '}});
+ fireEvent.click(screen.getByRole('button',{name:'Save'}));
+ await screen.findByText('Confirmed arrival.');assert.equal(saved,1);assert.deepEqual(calls,[{name:'record_client_communication',args:{p_client:'client-1',p_type:'WhatsApp',p_note:'Confirmed arrival.'}}]);
+ assert(screen.getByText('Aoife'));assert(screen.getByText('07/10/2026 10:30'));
 });
