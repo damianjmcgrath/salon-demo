@@ -1,3 +1,4 @@
+import VoucherStatusReport from "./VoucherStatusReport";
 import RevolutSandbox from "./RevolutSandbox";
 import { useRef, useState } from "react";
 import StaffReports, { staffReportNames } from "./StaffReports";
@@ -47,6 +48,7 @@ export default function Reporting({
   allowSandbox?: boolean;
 }) {
   const [sandbox, setSandbox] = useState(false);
+  const [vouchers, setVouchers] = useState(false);
   const [staffReport, setStaffReport] = useState<
     keyof typeof staffReportNames | null
   >(null);
@@ -155,7 +157,10 @@ export default function Reporting({
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  if (sandbox && allowSandbox) return <RevolutSandbox db={db} onBack={() => setSandbox(false)} />;
+  if (vouchers)
+    return <VoucherStatusReport db={db} onBack={() => setVouchers(false)} />;
+  if (sandbox && allowSandbox)
+    return <RevolutSandbox db={db} onBack={() => setSandbox(false)} />;
   if (staffReport)
     return (
       <StaffReports
@@ -177,8 +182,22 @@ export default function Reporting({
       {!period ? (
         <>
           <h2>Active Reports</h2>
-          {allowSandbox && <p><button onClick={() => setSandbox(true)}>Revolut Sandbox Test</button></p>}
+          {allowSandbox && (
+            <p>
+              <button onClick={() => setSandbox(true)}>
+                Revolut Sandbox Test
+              </button>
+            </p>
+          )}
           <div className="workspace-grid">
+            <button
+              className="panel workspace-card"
+              onClick={() => setVouchers(true)}
+            >
+              <h2>Voucher Status</h2>
+              <p>Voucher purchases, redemptions and remaining balances.</p>
+              <span>Open →</span>
+            </button>
             {(
               Object.entries(staffReportNames) as [
                 keyof typeof staffReportNames,

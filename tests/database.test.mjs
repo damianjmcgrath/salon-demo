@@ -1351,3 +1351,21 @@ test('free checkout completes without any tender, retains audit and rejects paid
  await as(staffA);await assert.rejects(pg.query('select checkout_appointment($1,0,null)',[paid.id]),/Choose a payment method/);
  for(const uid of [clientUser,accountant,staffB]){await as(uid);await assert.rejects(pg.query('select checkout_appointment($1,1,null)',[a.id]),/Staff access|Permission denied/);}
 });
+
+test('voucher status report includes each voucher once with partial/full usage, buyer and all appointments, and enforces reporting access',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/025_voucher_status_report.sql',import.meta.url),'utf8'));
+ const c=await one('select * from clients where auth_user_id=$1',[clientUser]);
+ const part=await one("insert into vouchers(code,original_amount,expires_on,client_id,assigned_client_name,purchased_by,created_by) values('REPORT-PART',100,'2030-01-01',$1,'Gift Recipient',$2,$2) returning *",[c.id,clientUser]);
+ const full=await one("insert into vouchers(code,original_amount,expires_on,client_id,assigned_client_name,created_by) values('REPORT-FULL',50,'2030-01-01',$1,'Recipient',$2) returning *",[c.id,staffA]);
+ await pg.query("insert into voucher_transactions(voucher_id,kind,amount,user_id) values($1,'issued',100,$3),($2,'issued',50,$3)",[part.id,full.id,staffA]);
+ for(const [i,v,amount] of [[0,part,20],[1,part,10],[2,full,50]]){
+ const a=await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,1,8001,'1990-01-05',$3,15,'Client','123',$4,$5,'completed') returning *",[c.id,clientUser,600+i*60,'Report Treatment '+i,amount]);
+ await pg.query("insert into client_value_redemptions(client_id,voucher_id,appointment_id,amount,treatment_name,staff_name,recorded_by,used_at) values($1,$2,$3,$4,$5,'Aoife',$6,$7)",[c.id,v.id,a.id,amount,a.treatment_name,staffA,'2026-01-0'+(i+1)+'T10:00:00Z']);
+ }
+ await as(accountant);const rows=(await one('select get_voucher_status_report() data')).data;
+ const p=rows.filter(v=>v.code==='REPORT-PART');assert.equal(p.length,1);assert.equal(Number(p[0].original_amount),100);assert.equal(Number(p[0].redeemed_amount),30);assert.equal(Number(p[0].balance),70);assert.equal(p[0].uses.length,2);assert.equal(p[0].purchased_by,c.name);assert.equal(p[0].purchased_for,'Gift Recipient');assert.equal(p[0].uses[0].treatment_name,'Report Treatment 0');assert.equal(p[0].uses[1].start_minute,660);
+ const f=rows.find(v=>v.code==='REPORT-FULL');assert.equal(Number(f.balance),0);assert.equal(Number(f.redeemed_amount),50);assert.equal(f.purchased_by,'Not recorded');assert.equal(new Set(rows.map(v=>v.id)).size,rows.length);
+ await as(staffA);assert((await one('select get_voucher_status_report() data')).data.length);
+ for(const uid of [clientUser,staffB]){await as(uid);await assert.rejects(pg.query('select get_voucher_status_report()'),/Permission denied/);}
+ await as(null,'anon');await assert.rejects(pg.query('select get_voucher_status_report()'),/permission denied/);
+});

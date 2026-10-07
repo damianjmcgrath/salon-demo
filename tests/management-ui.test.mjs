@@ -11,6 +11,7 @@ let dom,
   Permission,
   Values,
   Patch,
+  VoucherReport,
   render,
   screen,
   fireEvent,
@@ -32,6 +33,7 @@ before(async () => {
     "PermissionManagement",
     "ClientValues",
     "ClientPatchTests",
+    "VoucherStatusReport",
   ])
     await build({
       entryPoints: [
@@ -50,6 +52,9 @@ before(async () => {
     .default;
   Values = (await import(pathToFileURL(dir + "/ClientValues.mjs"))).default;
   Patch = (await import(pathToFileURL(dir + "/ClientPatchTests.mjs"))).default;
+  VoucherReport = (
+    await import(pathToFileURL(dir + "/VoucherStatusReport.mjs"))
+  ).default;
 });
 afterEach(() => cleanup());
 after(async () => {
@@ -328,4 +333,96 @@ test("completed patch coverage is disabled with its latest date and category sel
     await screen.findByRole("button", { name: "Record Patch Test" }),
   );
   assert(screen.getByLabelText("Select all in Brows").disabled);
+});
+
+test("voucher report filters partial and full use and exports the selected view with matching dates", async () => {
+  const usage = {
+    used_at: "2026-01-01T10:00:00Z",
+    treatment_name: "Brow Treatment",
+    appointment_date: "2026-10-07",
+    start_minute: 600,
+  };
+  const base = {
+    purchased_at: "2026-01-01T09:00:00Z",
+    purchased_by: "Buyer",
+    purchased_for: "Recipient",
+  };
+  const rows = [
+    {
+      ...base,
+      id: "part",
+      code: "PART-100",
+      original_amount: 100,
+      redeemed_amount: 20,
+      balance: 80,
+      uses: [usage],
+    },
+    {
+      ...base,
+      id: "full",
+      code: "FULL-50",
+      original_amount: 50,
+      redeemed_amount: 50,
+      balance: 0,
+      uses: [usage],
+    },
+    {
+      ...base,
+      id: "open",
+      code: "OPEN-25",
+      original_amount: 25,
+      redeemed_amount: 0,
+      balance: 25,
+      uses: [],
+    },
+  ];
+  render(
+    React.createElement(VoucherReport, {
+      db: { rpc: async () => ({ data: rows, error: null }) },
+      onBack() {},
+    }),
+  );
+  await screen.findByText("PART-100");
+  assert(screen.getByText("€175.00"));
+  assert(screen.getByText("€70.00"));
+  assert(screen.getByText("€105.00"));
+  assert(screen.getAllByText("07/10/26 10:00").length === 2);
+  fireEvent.change(screen.getByLabelText("Voucher filter"), {
+    target: { value: "used" },
+  });
+  assert.equal(screen.queryByText("OPEN-25"), null);
+  assert(screen.getByText("Part"));
+  assert(screen.getByText("Full"));
+  const oldCreate = URL.createObjectURL,
+    oldRevoke = URL.revokeObjectURL,
+    oldClick = window.HTMLAnchorElement.prototype.click;
+  let blob;
+  URL.createObjectURL = (b) => {
+    blob = b;
+    return "blob:test";
+  };
+  URL.revokeObjectURL = () => {};
+  window.HTMLAnchorElement.prototype.click = function () {};
+  try {
+    fireEvent.click(screen.getByRole("button", { name: "Export to CSV" }));
+    let csv = await blob.text();
+    assert(csv.includes("PART-100"));
+    assert(csv.includes("FULL-50"));
+    assert(!csv.includes("OPEN-25"));
+    assert(csv.includes("07/10/26 10:00"));
+    fireEvent.change(screen.getByLabelText("Voucher filter"), {
+      target: { value: "open" },
+    });
+    assert(screen.getByText("OPEN-25"));
+    assert.equal(screen.queryByText("FULL-50"), null);
+    fireEvent.click(screen.getByRole("button", { name: "Export to CSV" }));
+    csv = await blob.text();
+    assert(csv.includes("PART-100"));
+    assert(csv.includes("OPEN-25"));
+    assert(!csv.includes("FULL-50"));
+  } finally {
+    URL.createObjectURL = oldCreate;
+    URL.revokeObjectURL = oldRevoke;
+    window.HTMLAnchorElement.prototype.click = oldClick;
+  }
 });
