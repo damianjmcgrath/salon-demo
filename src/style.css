@@ -234,13 +234,22 @@ aside h3 {
   color: #292925;
   font-weight: 500;
 }
-.treatment small {
-  font-size: 10px;
+.treatment .treatment-duration {
+  font-size: 16px;
+  color: #666054;
+}
+.treatment-description {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #666054;
+  white-space: pre-wrap;
 }
 .choose {
   display: block;
   margin-top: 18px;
-  font-size: 11px;
+  font-size: 17px;
+  font-weight: 600;
   color: #7d6650;
 }
 .booking-layout {

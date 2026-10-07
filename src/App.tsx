@@ -2080,16 +2080,18 @@ export default function App() {
                       >
                         <span className="eyebrow">{t.category}</span>
                         <h3>{t.name}</h3>
-                        {t.description && <p>{t.description}</p>}
                         <div>
-                          <span>
-                            {t.duration} min <small>· demo duration</small>
+                          <span className="treatment-duration">
+                            {t.duration} minutes
                           </span>
                           <strong>
                             {t.price_type === "From" ? "From " : ""}
                             {money(t.price)}
                           </strong>
                         </div>
+                        {t.description?.trim() && (
+                          <p className="treatment-description">{t.description}</p>
+                        )}
                         <span className="choose">
                           {forSelf && !staffClient && previousIds.includes(t.id)
                             ? "Rebook Treatment ↗"
