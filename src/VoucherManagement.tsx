@@ -21,6 +21,7 @@ const euro = (n: number) =>
     n,
   );
 const blankQuery = { name: "", email: "", phone: "" };
+const defaultExpiry = () => { const d = new Date(today() + "T12:00:00Z"); const month = d.getUTCMonth(); d.setUTCFullYear(d.getUTCFullYear() + 5); if (d.getUTCMonth() !== month) d.setUTCDate(0); return d.toISOString().slice(0, 10); };
 export default function VoucherManagement({
   live,
   db,
@@ -36,7 +37,7 @@ export default function VoucherManagement({
 }) {
   const [screen, setScreen] = useState("home"),
     [amount, setAmount] = useState(""),
-    [expiry, setExpiry] = useState(""),
+    [expiry, setExpiry] = useState(defaultExpiry),
     [recipient, setRecipient] = useState<Client | null>(null),
     [voucher, setVoucher] = useState<Voucher | null>(null),
     [vouchers, setVouchers] = useState<Voucher[]>([]),
@@ -50,6 +51,7 @@ export default function VoucherManagement({
     [message, setMessage] = useState("");
   const [purchaserName, setPurchaserName] = useState(""),
     [purchaserEmail, setPurchaserEmail] = useState("");
+  const [recipientName, setRecipientName] = useState(""), [recipientEmail, setRecipientEmail] = useState("");
   const [emailOpen, setEmailOpen] = useState(false),
     [emailTo, setEmailTo] = useState("");
   const [emailRequest, setEmailRequest] = useState("");
@@ -207,6 +209,7 @@ export default function VoucherManagement({
   });
   async function create(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
@@ -224,10 +227,11 @@ export default function VoucherManagement({
         throw Error("Choose an expiry date that is not in the past.");
       let v: Voucher;
       if (live && db) {
-        const r = await db.rpc("create_voucher", {
+        const r = await db.rpc("create_staff_recipient_voucher", {
           p_amount: value,
           p_expires_on: expiry,
-          p_client_id: recipient?.id || null,
+          p_recipient_name: recipientName.trim() || null,
+          p_recipient_email: recipientEmail.trim() || null,
           p_purchaser_name: purchaserName.trim() || null,
           p_purchaser_email: purchaserEmail.trim() || null,
         });
@@ -235,6 +239,7 @@ export default function VoucherManagement({
         if (!alive.current) return;
         v = { ...r.data, balance: Number(r.data.original_amount) };
       } else {
+        const recipient = data.clients.find(c => recipientEmail.trim() && c.email.trim().toLowerCase() === recipientEmail.trim().toLowerCase()) || null;
         let generated = "";
         do {
           const raw = crypto
@@ -252,7 +257,7 @@ export default function VoucherManagement({
           expires_on: expiry,
           client_id: recipient?.id || null,
           assigned_client_name: recipient?.name || null,
-          recipient_email: recipient?.email,
+          recipient_email: recipientEmail.trim().toLowerCase() || undefined,
           purchaser_name: purchaserName.trim() || null,
           purchaser_email: purchaserEmail.trim().toLowerCase() || null,
           revision: 0,
@@ -279,6 +284,7 @@ export default function VoucherManagement({
           ],
         }));
       }
+      setMessage(v.client_id ? "It looks like the recipient is an existing client, the voucher will be assigned to their profile" : "");
       setVoucher(v);
       setScreen("detail");
       setMessage(
@@ -394,7 +400,8 @@ export default function VoucherManagement({
             onClick={() => {
               setRecipient(null);
               setAmount("");
-              setExpiry("");
+              setExpiry(defaultExpiry());
+              setRecipientName(""); setRecipientEmail("");
               setPurchaserName("");
               setPurchaserEmail("");
               setEmailOpen(false);
@@ -459,28 +466,8 @@ export default function VoucherManagement({
                 onChange={(e) => setPurchaserEmail(e.target.value)}
               />
             </label>
-            <p>
-              Assigned to: <strong>{recipient?.name || "Unassigned"}</strong>
-            </p>
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy}
-              onClick={() => clientSearch("create")}
-            >
-              {recipient
-                ? "Choose a different client"
-                : "Assign to an existing client"}
-            </button>
-            {recipient && (
-              <button
-                type="button"
-                className="back"
-                onClick={() => setRecipient(null)}
-              >
-                Leave unassigned
-              </button>
-            )}
+            <label>Recipient Name<input value={recipientName} maxLength={200} onChange={e => setRecipientName(e.target.value)} /></label>
+            <label>Recipient Email Address<input type="email" value={recipientEmail} maxLength={254} onChange={e => setRecipientEmail(e.target.value)} /></label>
             <button className="primary" disabled={busy}>
               Create voucher
             </button>
@@ -628,7 +615,7 @@ export default function VoucherManagement({
             <strong className="voucher-code">{voucher.code}</strong>
             <p>
               Assigned to:{" "}
-              <strong>{voucher.assigned_client_name || "Unassigned"}</strong>
+              <strong>{voucher.assigned_client_name || ""}</strong>
             </p>
             <p>Valid through: {voucher.expires_on}</p>
             <p>

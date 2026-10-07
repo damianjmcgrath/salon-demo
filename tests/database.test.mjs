@@ -1451,3 +1451,12 @@ test('custom voucher amounts enforce decimal syntax and €5–€500 limits on 
  for(const value of ['abc','5e1','45.999','4.99','500.01','-10'])await assert.rejects(pg.query("select purchase_demo_voucher($1,null,true,'','','saved_demo',true,gen_random_uuid())",[value]),/voucher amount/);
  for(const value of ['5','45.99','500.00']){const row=(await one("select purchase_demo_voucher($1,null,true,'','','saved_demo',true,gen_random_uuid()) data",[value])).data;assert.equal(Number(row.original_amount),Number(value));}
 });
+
+test('staff voucher recipient email links existing client and preserves unmatched recipient without assignment',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/032_staff_voucher_recipients.sql',import.meta.url),'utf8'));
+ const c=await one('select * from clients where auth_user_id=$1',[clientUser]);await as(staffA);
+ const v=await one('select * from create_staff_recipient_voucher(75,\'2035-01-01\',\'Buyer\',\'buyer@example.com\',\'Recipient\',$1)',[' '+c.email.toUpperCase()+' ']);assert.equal(v.client_id,c.id);assert.equal(v.assigned_client_name,c.name);assert.equal(v.recipient_email,c.email.toLowerCase());assert.equal(v.recipient_name,'Recipient');
+ const unknown=await one("select * from create_staff_recipient_voucher(25,'2035-01-01',null,null,'Gift Recipient','unknown-gift@example.com')");assert.equal(unknown.client_id,null);assert.equal(unknown.assigned_client_name,null);assert.equal(unknown.recipient_email,'unknown-gift@example.com');
+ const blank=await one("select * from create_staff_recipient_voucher(25,'2035-01-01')");assert.equal(blank.assigned_client_name,null);
+ await as(accountant);await assert.rejects(pg.query("select create_staff_recipient_voucher(25,'2035-01-01')"),/Permission denied/);
+});

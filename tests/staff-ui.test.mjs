@@ -307,14 +307,8 @@ test("UI: voucher issuance, client assignment, transfer and print use the curren
   fireEvent.change(screen.getByLabelText("Expiry date"), {
     target: { value: "2027-12-31" },
   });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Assign to an existing client" }),
-  );
-  fireEvent.change(screen.getByLabelText("Name"), {
-    target: { value: "Emma" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Search", exact: true }));
-  fireEvent.click(await screen.findByRole("button", { name: /Emma Demo/ }));
+  fireEvent.change(screen.getByLabelText("Recipient Name"), { target: { value: "Emma Demo" } });
+  fireEvent.change(screen.getByLabelText("Recipient Email Address"), { target: { value: "emma@example.com" } });
   fireEvent.click(
     screen.getByRole("button", { name: "Create voucher", exact: true }),
   );
