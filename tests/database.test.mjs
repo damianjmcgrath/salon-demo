@@ -1421,3 +1421,16 @@ test('appointment reminders snapshot active appointments and record one SYSTEM e
  await pg.query("update appointments set status='completed' where id=$1",[a.id]);await as(staffA);assert.equal((await one('select prepare_appointment_reminder($1,$2,$3) data',[a.id,'other@example.com',id])).data.status,'accepted');await assert.rejects(pg.query('select prepare_appointment_reminder($1,$2,$3)',[a.id,'other@example.com','c0000000-0000-0000-0000-000000000002']),/Only active/);
  for(const uid of [clientUser,accountant,staffB]){await as(uid);await assert.rejects(pg.query('select prepare_appointment_reminder($1,$2,$3)',[a.id,'other@example.com',id]),/Permission denied/);}
 });
+
+test('daily activity lists completed payment parts and collected no-show fees with reporting-only access',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/029_daily_activity_report.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ async function appointment(status,start){return one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,1,8001,'1991-01-01',$3,15,'Client','123','Activity Test',80,$4) returning *",[c.id,clientUser,start,status]);}
+ const done=await appointment('completed',600),noShow=await appointment('no_show',660),pending=await appointment('booked',720),cancelled=await appointment('cancelled',780),waived=await appointment('no_show',840);
+ await pg.query("insert into appointment_payments(appointment_id,method,amount,recorded_by) values($1,'card',60,$3),($1,'cash',20,$3),($2,'cash',80,$3)",[done.id,pending.id,staffA]);
+ await pg.query("insert into no_show_fees(appointment_id,actor_id,apply_fee,comments,state,order_id) values($1,$3,true,'Test','completed','revolut-order-test'),($2,$3,false,'Waived','waived',null)",[noShow.id,waived.id,staffA]);
+ await as(accountant);let rows=(await one("select get_daily_activity_report('1991-01-01','1991-01-01') data")).data;assert.equal(rows.length,3);assert.equal(rows.filter(r=>r.appointment_id===done.id).length,2);assert(!rows.some(r=>[pending.id,cancelled.id,waived.id].includes(r.appointment_id)));const fee=rows.find(r=>r.appointment_id===noShow.id);assert.equal(Number(fee.amount),10);assert.equal(fee.revolut_id,'revolut-order-test');assert.equal(fee.treatment_name,'Activity Test (NO SHOW)');assert.equal(rows.find(r=>r.appointment_id===done.id).revolut_id,'');
+ rows=(await one("select get_daily_activity_report('1991-01-01','1991-01-01',array['cash']) data")).data;assert.equal(rows.length,1);assert.equal(Number(rows[0].amount),20);
+ await assert.rejects(pg.query("select get_daily_activity_report('1991-01-02','1991-01-01')"),/valid date range/);
+ for(const uid of [clientUser,staffB]){await as(uid);await assert.rejects(pg.query("select get_daily_activity_report('1991-01-01','1991-01-01')"),/Permission denied/);}
+});

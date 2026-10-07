@@ -1752,3 +1752,7 @@ nav .logout-link {
 @media (max-width: 480px) {
   .modal .appointment-action { width: calc(100% - 12px); }
 }
+
+.activity-payment-filters { display: flex; flex-wrap: wrap; gap: 18px; margin: 16px 0; }
+.activity-payment-filters label { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.activity-payment-filters input { width: auto; margin: 0; }

@@ -15,6 +15,7 @@ let dom,
   VoucherManagement,
   Communications,
   Reminder,
+  DailyActivity,
   render,
   screen,
   fireEvent,
@@ -40,6 +41,7 @@ before(async () => {
     "VoucherManagement",
     "ClientCommunications",
     "AppointmentReminder",
+    "DailyActivityReport",
   ])
     await build({
       entryPoints: [
@@ -52,6 +54,7 @@ before(async () => {
       packages: "external",
       jsx: "automatic",
     });
+  DailyActivity = (await import(pathToFileURL(dir + "/DailyActivityReport.mjs"))).default;
   Reminder = (await import(pathToFileURL(dir + "/AppointmentReminder.mjs"))).default;
   Communications = (await import(pathToFileURL(dir + "/ClientCommunications.mjs"))).default;
   Treatment = (await import(pathToFileURL(dir + "/TreatmentManagement.mjs")))
@@ -549,4 +552,12 @@ test('appointment reminder prefills editable attendee email and reuses request o
  failed=false;fireEvent.click(screen.getByRole('button',{name:'Send'}));await screen.findByRole('status');
  assert.equal(calls.length,2);assert.equal(calls[0].name,'send-appointment-reminder');assert.equal(calls[0].args.body.email,'other@example.com');assert.equal(calls[0].args.body.appointment_id,'appointment-1');assert.equal(calls[0].args.body.request_id,calls[1].args.body.request_id);
  assert.equal(screen.queryByLabelText('Client email address'),null);
+});
+
+test('daily activity supports multiple checked payment methods and displays exact appointment date and references',async()=>{
+ const calls=[];const db={async rpc(name,args){calls.push({name,args});return {data:[{row_id:'r',appointment_date:'2026-10-01',start_minute:630,client_name:'Damian',client_email:'damian@example.com',treatment_name:'Lash Lift (NO SHOW)',staff_name:'Aoife',method:'card',revolut_id:'order-123',voucher_code:'',amount:10}],error:null};}};
+ render(React.createElement(DailyActivity,{db,onBack(){}}));
+ fireEvent.change(screen.getByLabelText('From Date'),{target:{value:'2026-10-01'}});fireEvent.change(screen.getByLabelText('To Date'),{target:{value:'2026-10-02'}});
+ fireEvent.click(screen.getByLabelText('All'));fireEvent.click(screen.getByLabelText('Card'));fireEvent.click(screen.getByLabelText('Vouchers'));fireEvent.click(screen.getByRole('button',{name:'Generate'}));
+ await screen.findByText('Lash Lift (NO SHOW)');assert.deepEqual(calls,[{name:'get_daily_activity_report',args:{p_from:'2026-10-01',p_to:'2026-10-02',p_methods:['card','voucher']}}]);assert(screen.getByText('01/10/2026 10:30'));assert(screen.getByText('order-123'));assert(screen.getByText('damian@example.com'));assert(screen.getByRole('button',{name:'Export to CSV'}));
 });

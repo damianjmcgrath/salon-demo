@@ -1,3 +1,4 @@
+import DailyActivityReport from "./DailyActivityReport";
 import VoucherStatusReport from "./VoucherStatusReport";
 import RevolutSandbox from "./RevolutSandbox";
 import { useRef, useState } from "react";
@@ -47,6 +48,7 @@ export default function Reporting({
   onHome: () => void;
   allowSandbox?: boolean;
 }) {
+  const [activity, setActivity] = useState(false);
   const [sandbox, setSandbox] = useState(false);
   const [vouchers, setVouchers] = useState(false);
   const [staffReport, setStaffReport] = useState<
@@ -153,10 +155,11 @@ export default function Reporting({
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${period === "month" ? "monthly" : "daily"}-activity-${generated.from}-to-${generated.to}.csv`;
+    a.download = `${period === "month" ? "monthly" : "daily"}-summary-${generated.from}-to-${generated.to}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  if (activity) return <DailyActivityReport db={db} onBack={() => setActivity(false)} />;
   if (vouchers)
     return <VoucherStatusReport db={db} onBack={() => setVouchers(false)} />;
   if (sandbox && allowSandbox)
@@ -176,7 +179,7 @@ export default function Reporting({
       </button>
       <h1>
         {period
-          ? `${period === "day" ? "Daily" : "Monthly"} Activity Report`
+          ? `${period === "day" ? "Daily" : "Monthly"} Summary Report`
           : "Reporting"}
       </h1>
       {!period ? (
@@ -190,6 +193,7 @@ export default function Reporting({
             </p>
           )}
           <div className="workspace-grid">
+            <button className="panel workspace-card" onClick={() => setActivity(true)}><h2>Daily Activity Report</h2><p>Individual appointment payments and collected no-show fees.</p><span>Open →</span></button>
             <button
               className="panel workspace-card"
               onClick={() => setVouchers(true)}
@@ -226,7 +230,7 @@ export default function Reporting({
                 className="panel workspace-card"
                 onClick={() => open(p)}
               >
-                <h2>{p === "day" ? "Daily" : "Monthly"} Activity Report</h2>
+                <h2>{p === "day" ? "Daily" : "Monthly"} Summary Report</h2>
                 <p>
                   Appointments and recorded payments by{" "}
                   {p === "day" ? "date" : "month"}.
@@ -285,7 +289,7 @@ export default function Reporting({
               <div className="report-table-scroll">
                 <table className="activity-report-table">
                   <caption>
-                    {period === "day" ? "Daily" : "Monthly"} Activity Report —
+                    {period === "day" ? "Daily" : "Monthly"} Summary Report —
                     amounts in euros
                   </caption>
                   <thead>

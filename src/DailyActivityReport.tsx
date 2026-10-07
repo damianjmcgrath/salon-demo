@@ -1,0 +1,23 @@
+import { useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
+type Row = { row_id: string; appointment_date: string; start_minute: number; client_name: string; client_email: string; treatment_name: string; staff_name: string; method: string; revolut_id: string; voucher_code: string; amount: number };
+const methods = { card: "Card", cash: "Cash", voucher: "Vouchers", credit: "Credit Notes" };
+const keys = Object.keys(methods);
+const headings = ["Date/Time", "Client Name", "Email Address", "Treatment Name", "Staff Name", "Payment Method", "Revolut Transaction ID", "Voucher ID", "Payment Amount"];
+const timestamp = (r: Row) => `${r.appointment_date.slice(8,10)}/${r.appointment_date.slice(5,7)}/${r.appointment_date.slice(0,4)} ${String(Math.floor(r.start_minute/60)).padStart(2,"0")}:${String(r.start_minute%60).padStart(2,"0")}`;
+const money = (n: number) => new Intl.NumberFormat("en-IE",{style:"currency",currency:"EUR"}).format(n);
+const cells = (r: Row) => [timestamp(r), r.client_name, r.client_email, r.treatment_name, r.staff_name, methods[r.method as keyof typeof methods] || "No payment required", r.revolut_id, r.voucher_code];
+export default function DailyActivityReport({db,onBack}:{db:SupabaseClient|null;onBack:()=>void}) {
+ const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Dublin",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+ const [from,setFrom]=useState(today),[to,setTo]=useState(today),[selected,setSelected]=useState(keys),[rows,setRows]=useState<Row[]|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ function change(){setRows(null);setError("");}
+ async function generate(e:React.FormEvent){e.preventDefault();if(busy)return;setError("");setRows(null);if(!db){setError("Connect to Supabase to generate this report.");return;}if(from>to||!selected.length){setError("Choose a valid date range and at least one payment method.");return;}setBusy(true);try{const r=await db.rpc("get_daily_activity_report",{p_from:from,p_to:to,p_methods:selected});if(r.error)throw r.error;setRows((r.data||[]).map((r:Row)=>({...r,amount:Number(r.amount)})));}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ function exportCsv(){if(!rows)return;const csv=[headings,...rows.map(r=>[...cells(r),r.amount.toFixed(2)])].map(row=>row.map(value=>{let s=String(value??"");if(/^\s*[=+@-]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';}).join(",")).join("\r\n");const url=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));const a=document.createElement("a");a.href=url;a.download=`daily-activity-${from}-to-${to}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ return <section className="panel reporting-page"><button className="back" onClick={onBack}>← Reporting</button><h1>Daily Activity Report</h1>
+ <form onSubmit={generate}><div className="report-filters"><label>From Date<input type="date" required value={from} disabled={busy} onChange={e=>{setFrom(e.target.value);change();}}/></label><label>To Date<input type="date" required value={to} disabled={busy} onChange={e=>{setTo(e.target.value);change();}}/></label></div>
+ <fieldset className="activity-payment-filters"><legend>Payment Method</legend><label><input type="checkbox" disabled={busy} checked={selected.length===keys.length} onChange={()=>{setSelected(selected.length===keys.length?[]:keys);change();}}/>All</label>{Object.entries(methods).map(([key,label])=><label key={key}><input type="checkbox" disabled={busy} checked={selected.includes(key)} onChange={()=>{setSelected(s=>s.includes(key)?s.filter(k=>k!==key):[...s,key]);change();}}/>{label}</label>)}</fieldset>
+ <button className="primary" disabled={busy||!selected.length}>{busy?"Generating…":"Generate"}</button></form>
+ <p className="small">Dates refer to the appointment date and time. Split payments appear as separate rows. In-salon card payments are recorded manually, so their Revolut reference is blank. Collected no-show fees show the Revolut order reference.</p>
+ {error&&<p className="auth-error" role="alert">{error}</p>}{rows&&<><button className="secondary" onClick={exportCsv}>Export to CSV</button><p>{rows.length} payment rows · Total: {money(rows.reduce((n,r)=>n+r.amount,0))}</p>{!rows.length?<p>No completed appointments or collected no-show fees match these filters.</p>:<div className="report-table-scroll"><table className="activity-report-table"><thead><tr>{headings.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.row_id}>{cells(r).map((v,i)=><td key={i}>{v}</td>)}<td>{money(r.amount)}</td></tr>)}</tbody></table></div>}</>}
+ </section>;
+}
