@@ -37,6 +37,7 @@ const appointmentTime = (u: Use) =>
   `${u.appointment_date.slice(8, 10)}/${u.appointment_date.slice(5, 7)}/${u.appointment_date.slice(2, 4)} ${String(Math.floor(u.start_minute / 60)).padStart(2, "0")}:${String(u.start_minute % 60).padStart(2, "0")}`;
 const headings = [
   "Voucher ID",
+  "Voucher Amount",
   "Date Purchased",
   "Purchased By",
   "Purchased For",
@@ -47,6 +48,7 @@ const headings = [
 ];
 const cells = (v: Voucher) => [
   v.code,
+  money(Number(v.original_amount)),
   timestamp(v.purchased_at),
   v.purchased_by,
   v.purchased_for,
