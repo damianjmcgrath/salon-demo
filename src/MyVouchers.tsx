@@ -1,0 +1,15 @@
+import { useEffect, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { LocalStaffData } from "./domain";
+import { assignedVouchers, localClient, euro } from "./clientModel";
+type Row = Record<string, any>;
+const date = (s:string) => new Date(s.length===10?s+"T12:00:00Z":s).toLocaleDateString("en-GB",{timeZone:"Europe/Dublin"});
+const when = (s:string) => new Date(s).toLocaleString("en-GB",{timeZone:"Europe/Dublin",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).replace(",","");
+function Table({rows,columns,empty}:{rows:Row[];columns:[string,(r:Row)=>string][];empty:string}) { return rows.length?<div className="report-table-scroll"><table className="activity-report-table"><thead><tr>{columns.map(([name])=><th key={name}>{name}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.id}>{columns.map(([name,format])=><td key={name}>{format(r)}</td>)}</tr>)}</tbody></table></div>:<p>{empty}</p>; }
+export default function MyVouchers({db,live,data,onBuy}:{db:SupabaseClient|null;live:boolean;data:LocalStaffData;onBuy:()=>void}) {
+ const [vouchers,setVouchers]=useState<Row[]>([]),[uses,setUses]=useState<Row[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState("");
+ useEffect(()=>{let current=true;async function load(){try{if(live&&db){const r=await db.rpc("get_my_voucher_history");if(r.error)throw r.error;if(current){setVouchers(r.data.vouchers||[]);setUses(r.data.uses||[]);}}else if(current){setVouchers(assignedVouchers(data,localClient(data).email));setUses([]);}}catch(e){if(current)setError((e as Error).message);}finally{if(current)setLoading(false);}}void load();return()=>{current=false;};},[db,live,data]);
+ const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Dublin",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+ const columns:[string,(r:Row)=>string][]=[["Purchase Date/Time",r=>when(r.created_at)],["Purchased By",r=>r.purchaser_name||"Not recorded"],["Voucher Code",r=>r.code],["Voucher Amount",r=>euro(Number(r.original_amount))],["Remaining Amount",r=>euro(Number(r.balance))],["Expiry Date",r=>date(r.expires_on)]];
+ return <section className="panel"><h1>My Vouchers</h1>{error&&<p className="auth-error" role="alert">{error}</p>}{loading?<p>Loading vouchers…</p>:!error&&<><h2>Active Vouchers</h2><Table rows={vouchers.filter(v=>v.expires_on>=today&&Number(v.balance)>0)} columns={columns} empty="No active vouchers."/><h2>Used Vouchers</h2><Table rows={uses} columns={[["Date/Time Used",r=>when(r.used_at)],["Voucher Code",r=>r.voucher_code],["Amount Used",r=>euro(Number(r.amount))],["Treatment",r=>r.treatment_name],["Staff Member",r=>r.staff_name]]} empty="No voucher redemptions recorded."/><h2>Expired Vouchers</h2><Table rows={vouchers.filter(v=>v.expires_on<today)} columns={columns} empty="No expired vouchers."/></>}<div className="record-actions"><button className="primary" onClick={onBuy}>Buy a Voucher</button></div></section>;
+}

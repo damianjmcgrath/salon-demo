@@ -1460,3 +1460,9 @@ test('staff voucher recipient email links existing client and preserves unmatche
  const blank=await one("select * from create_staff_recipient_voucher(25,'2035-01-01')");assert.equal(blank.assigned_client_name,null);
  await as(accountant);await assert.rejects(pg.query("select create_staff_recipient_voucher(25,'2035-01-01')"),/Permission denied/);
 });
+
+test('My Vouchers returns only own assigned voucher history and blocks staff identities',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/033_my_voucher_history.sql',import.meta.url),'utf8'));
+ await as(clientUser);const report=(await one('select get_my_voucher_history() data')).data;const own=(await one('select get_my_vouchers() data')).data;assert.deepEqual(report.vouchers.map(v=>v.id).sort(),own.map(v=>v.id).sort());assert(report.vouchers.every(v=>v.purchaser_name));assert(report.uses.every(r=>own.some(v=>v.id===r.voucher_id)));
+ await as(accountant);await assert.rejects(pg.query('select get_my_voucher_history()'),/Client sign-in/);await as(null,'anon');await assert.rejects(pg.query('select get_my_voucher_history()'),/permission denied/);
+});

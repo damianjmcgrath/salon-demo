@@ -31,6 +31,7 @@ export function canAccess(role, view, permissions) {
     [
       "my-bookings",
       "my-profile",
+      "my-vouchers",
       "voucher-purchase",
       "multiple-bookings",
     ].includes(view)

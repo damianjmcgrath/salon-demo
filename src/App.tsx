@@ -3,6 +3,7 @@ import AppointmentReminder from "./AppointmentReminder";
 import PermissionManagement from "./PermissionManagement";
 import TreatmentManagement from "./TreatmentManagement";
 import { defaultPermissions, type Permissions } from "./permissions";
+import MyVouchers from "./MyVouchers";
 import ClientProfile from "./ClientProfile";
 import BookingGuarantee from "./BookingGuarantee";
 import AppointmentCheckout, { CheckoutHistory } from "./AppointmentCheckout";
@@ -1624,6 +1625,7 @@ export default function App() {
               My Profile
             </button>
           )}
+          {activeRole === "client" && <button className={view === "my-vouchers" ? "active" : ""} onClick={() => setView("my-vouchers")}>My Vouchers</button>}
           {staffAccess && (
             <button
               className={
@@ -1887,6 +1889,8 @@ export default function App() {
             onHome={startBooking}
             onBuy={() => setView("voucher-purchase")}
           />
+        ) : view === "my-vouchers" && activeRole === "client" ? (
+          <MyVouchers db={db} live={live} data={staffData} onBuy={() => setView("voucher-purchase")} />
         ) : view === "voucher-purchase" && activeRole === "client" ? (
           <VoucherPurchase
             key={`${live}-${session?.user.id || "local"}`}
