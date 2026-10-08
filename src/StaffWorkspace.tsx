@@ -85,6 +85,12 @@ export default function StaffWorkspace({
     [reason, setReason] = useState("");
   const [clientTab, setClientTab] = useState("Personal Details");
   const [patchPrompt, setPatchPrompt] = useState(initialPatchRecord);
+  const profileTop = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (screen !== "record" || !client || window.innerWidth > 700) return;
+    const timer = window.setTimeout(() => profileTop.current?.scrollIntoView?.({behavior:"instant",block:"start"}),0);
+    return () => window.clearTimeout(timer);
+  }, [screen, client?.id]);
   const generation = useRef(0),
     mounted = useRef(true);
   useEffect(() => {
@@ -531,7 +537,7 @@ export default function StaffWorkspace({
       </section>
     );
   return (
-    <section className="staff-workspace">
+    <section ref={profileTop} className="staff-workspace" style={{scrollMarginTop:16}}>
       <p className="eyebrow">STAFF PORTAL · {actor}</p>
       {screen !== "home" && (
         <button
