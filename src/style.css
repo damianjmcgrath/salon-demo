@@ -530,6 +530,7 @@ table {
 }
 th,
 td {
+  text-align: left;
   padding: 17px 12px;
   border-bottom: 1px solid #e5dfd3;
 }
@@ -1527,7 +1528,7 @@ nav .logout-link {
 .activity-report-table td {
   padding: 14px 12px;
   border-bottom: 1px solid #e2ddd3;
-  text-align: right;
+  text-align: left;
 }
 .activity-report-table thead th {
   background: #f0ece4;
@@ -1612,10 +1613,6 @@ nav .logout-link {
 .checkout-breakdown th {
   padding: 0.5rem;
   text-align: left;
-}
-.checkout-breakdown td:last-child,
-.checkout-breakdown th:last-child {
-  text-align: right;
 }
 
 .management-page {
