@@ -1,9 +1,10 @@
+import { voucherDate } from "./dateFormats";
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LocalStaffData } from "./domain";
 import { assignedVouchers, localClient, euro } from "./clientModel";
 type Row = Record<string, any>;
-const date = (s:string) => new Date(s.length===10?s+"T12:00:00Z":s).toLocaleDateString("en-GB",{timeZone:"Europe/Dublin"});
+const date = (s:string) => voucherDate(s);
 const when = (s:string) => new Date(s).toLocaleString("en-GB",{timeZone:"Europe/Dublin",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).replace(",","");
 function Table({rows,columns,empty}:{rows:Row[];columns:[string,(r:Row)=>string][];empty:string}) { return rows.length?<><div className="my-vouchers-table report-table-scroll"><table className="activity-report-table"><thead><tr>{columns.map(([name])=><th key={name}>{name}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.id}>{columns.map(([name,format])=><td key={name}>{format(r)}</td>)}</tr>)}</tbody></table></div><div className="my-vouchers-cards">{rows.map(r=><dl className="my-voucher-card" key={r.id}>{columns.map(([name,format])=><div key={name}><dt>{name}</dt><dd>{format(r)}</dd></div>)}</dl>)}</div></>:<p>{empty}</p>; }
 export default function MyVouchers({db,live,data,onBuy}:{db:SupabaseClient|null;live:boolean;data:LocalStaffData;onBuy:()=>void}) {

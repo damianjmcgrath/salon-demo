@@ -1,3 +1,4 @@
+import { voucherDate } from "./dateFormats";
 import {
   useEffect,
   useRef,
@@ -210,7 +211,7 @@ export default function ClientProfile({
               <p>
                 Assigned to: {v.assigned_client_name}
                 <br />
-                Expires: {v.expires_on}
+                Expires: {voucherDate(v.expires_on)}
               </p>
               {v.demo_purchase && <small>Demo voucher</small>}
               {v.expires_on < new Date().toISOString().slice(0, 10) && (

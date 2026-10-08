@@ -1,3 +1,4 @@
+import { voucherDate } from "./dateFormats";
 import {
   useRef,
   useEffect,
@@ -241,7 +242,7 @@ export default function VoucherPurchase({
             <p>{voucher.recipient_email}</p>
             <p>Voucher code</p>
             <strong className="voucher-code">{voucher.code}</strong>
-            <p>Valid through: {voucher.expires_on}</p>
+            <p>Valid through: {voucherDate(voucher.expires_on)}</p>
             <small>DEMO VOUCHER · No payment taken</small>
           </div>
           <div className="record-actions" style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",marginTop:24}}>

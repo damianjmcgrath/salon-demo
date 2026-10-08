@@ -1,3 +1,4 @@
+import { displayDate, displayDateTime, displayHistoryValue } from "./dateFormats";
 import { defaultPermissions, type Permissions } from "./permissions";
 import ClientSearch from "./ClientSearch";
 import ClientPatchTests from "./ClientPatchTests";
@@ -853,7 +854,7 @@ export default function StaffWorkspace({
                       <p>{n.body}</p>
                       <small>
                         {n.author_name} ·{" "}
-                        {new Date(n.created_at).toLocaleString("en-IE")}
+                        {displayDateTime(n.created_at)}
                       </small>
                     </article>
                   ))}
@@ -935,7 +936,7 @@ export default function StaffWorkspace({
                       <div>
                         <h3>{a.treatment_name}</h3>
                         <p>
-                          {a.appointment_date} · {time(a.start_minute)} ·{" "}
+                          {displayDate(a.appointment_date)} · {time(a.start_minute)} ·{" "}
                           {a.client_name}
                         </p>
                         <span className={`status ${a.status}`}>
@@ -982,7 +983,7 @@ export default function StaffWorkspace({
                   <strong>{a.action.replaceAll("_", " ")}</strong>
                   <p>
                     {a.actor_name} ·{" "}
-                    {new Date(a.created_at).toLocaleString("en-IE")}
+                    {displayDateTime(a.created_at)}
                   </p>
                   {a.details?.reason && <p>Reason: {a.details.reason}</p>}
                   {a.details?.before && a.details?.after && (
@@ -991,7 +992,7 @@ export default function StaffWorkspace({
                       <pre>
                         {JSON.stringify(
                           { before: a.details.before, after: a.details.after },
-                          null,
+                          displayHistoryValue,
                           2,
                         )}
                       </pre>
@@ -1014,7 +1015,7 @@ export default function StaffWorkspace({
           >
             <h2>Cancel this appointment?</h2>
             <p>
-              {cancel.treatment_name} · {cancel.appointment_date} ·{" "}
+              {cancel.treatment_name} · {displayDate(cancel.appointment_date)} ·{" "}
               {time(cancel.start_minute)}
             </p>
             <label>

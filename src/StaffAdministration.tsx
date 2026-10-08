@@ -1,3 +1,4 @@
+import { displayDate } from "./dateFormats";
 import {
   useEffect,
   useRef,
@@ -771,7 +772,7 @@ export default function StaffAdministration({
                   <h2>{s.name}</h2>
                   <p>
                     {s.active === false
-                      ? `Archived · Left ${s.date_left || "not recorded"}`
+                      ? `Archived · Left ${s.date_left ? displayDate(s.date_left) : "not recorded"}`
                       : s.role === "admin"
                         ? "Admin"
                         : "Staff"}
@@ -834,6 +835,7 @@ export default function StaffAdministration({
                           }[k]
                         }
                         <input
+                          lang="en-GB"
                           type={
                             k === "date_of_birth" || k === "date_hired"
                               ? "date"
@@ -952,7 +954,7 @@ export default function StaffAdministration({
                   <button className="primary">Save staff details</button>
                 </fieldset>
               </form>
-              {draft.date_left && <p>Date Left: {draft.date_left}</p>}
+              {draft.date_left && <p>Date Left: {displayDate(draft.date_left)}</p>}
               <button
                 className="secondary"
                 onClick={() =>
@@ -1024,7 +1026,7 @@ export default function StaffAdministration({
                 <label>
                   Shifts starting
                   <input
-                    type="date"
+                    type="date" lang="en-GB"
                     min={dublinToday()}
                     value={shiftStart}
                     onChange={(e) => {
@@ -1147,7 +1149,7 @@ export default function StaffAdministration({
                 <label>
                   Clock history starting
                   <input
-                    type="date"
+                    type="date" lang="en-GB"
                     max={dublinToday()}
                     value={clockStart}
                     onChange={(e) => {
@@ -1440,7 +1442,7 @@ export default function StaffAdministration({
               <h2>Archive Staff Member</h2>
               {draft.active === false ? (
                 <p>
-                  Archived · Date Left: {draft.date_left || "Not recorded"}. All
+                  Archived · Date Left: {draft.date_left ? displayDate(draft.date_left) : "Not recorded"}. All
                   details and history are retained.
                 </p>
               ) : (
@@ -1453,7 +1455,7 @@ export default function StaffAdministration({
                   <label>
                     Date Left
                     <input
-                      type="date"
+                      type="date" lang="en-GB"
                       required
                       max={dublinToday()}
                       min={draft.date_hired || undefined}

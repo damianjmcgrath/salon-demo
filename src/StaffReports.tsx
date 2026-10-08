@@ -199,7 +199,7 @@ export default function StaffReports({
               From Date
               <input
                 required
-                type="date"
+                type="date" lang="en-GB"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
               />
@@ -208,7 +208,7 @@ export default function StaffReports({
               To Date
               <input
                 required
-                type="date"
+                type="date" lang="en-GB"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
               />

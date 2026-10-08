@@ -16,7 +16,8 @@ export function voucherPayload(s: Record<string, any>, from: string) {
       style: "currency",
       currency: "EUR",
     }).format(Number(v));
-  const expiry = String(s.expires_on).split("-").reverse().join("/");
+  const expiryParts = new Intl.DateTimeFormat("en-GB", {timeZone:"Europe/Dublin",day:"2-digit",month:"short",year:"numeric"}).formatToParts(new Date(String(s.expires_on)+"T12:00:00Z"));
+  const expiry = ["day","month","year"].map(type => { const value=expiryParts.find(p=>p.type===type)?.value||"";return type==="month" ? value.slice(0,3) : value; }).join("-");
   const lines = [
     "Your Sculpted by Aoife Clare Gift Voucher",
     `Voucher ID: ${s.code}`,

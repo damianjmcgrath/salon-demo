@@ -1,3 +1,4 @@
+import { displayDate } from "./dateFormats";
 import BookingValueOptions, { type BookingValueChoice } from "./BookingValueOptions";
 import {diaryEntryLayout} from "./diaryLayout.js";
 import {useCalendarEntries} from "./CalendarEntries";
@@ -2223,7 +2224,7 @@ export default function App() {
                   <label>
                     Appointment date
                     <input
-                      type="date"
+                      type="date" lang="en-GB"
                       min={today()}
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
@@ -2799,7 +2800,7 @@ export default function App() {
                               </p>
                             )}
                             <p>
-                              {a.appointment_date} · {time(a.start_minute)} ·{" "}
+                              {displayDate(a.appointment_date)} · {time(a.start_minute)} ·{" "}
                               {staff.find((s) => s.id === a.staff_id)?.name}
                             </p>
                           </div>
@@ -2943,7 +2944,7 @@ export default function App() {
                 </button>
                 <input
                   aria-label="Diary date"
-                  type="date"
+                  type="date" lang="en-GB"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                 />
@@ -3179,7 +3180,7 @@ export default function App() {
               {breakDraft.kind === "lunch" ? "Lunch time" : "Add break time"}
             </h2>
             <p>
-              {staff.find((s) => s.id === breakDraft.staff_id)?.name} · {date}
+              {staff.find((s) => s.id === breakDraft.staff_id)?.name} · {displayDate(date)}
             </p>
             <form
               onSubmit={(e) => {
@@ -3271,7 +3272,7 @@ export default function App() {
             <h2>{selected.client_name}</h2>
             <h3>{selected.treatment_name}</h3>
             <p>
-              {selected.appointment_date} · {time(selected.start_minute)}–
+              {displayDate(selected.appointment_date)} · {time(selected.start_minute)}–
               {time(selected.start_minute + selected.duration)}
             </p>
             <p>
@@ -3598,7 +3599,7 @@ function Summary({
         {money(treatment.price)}
       </h3>
       <hr />
-      <p>{date}</p>
+      <p>{displayDate(date)}</p>
       {slot && (
         <>
           <h3>{time(slot.start_minute)}</h3>

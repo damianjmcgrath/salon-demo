@@ -1,3 +1,4 @@
+import { displayDate, displayDateTime } from "./dateFormats";
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 type Row = Record<string, any>;
@@ -6,9 +7,9 @@ const money = (n: number) =>
     Number(n),
   );
 const when = (v: string) =>
-  new Date(v).toLocaleString("en-IE", { timeZone: "Europe/Dublin" });
+  displayDateTime(v);
 const day = (v: string) =>
-  new Date(`${v}T12:00:00Z`).toLocaleDateString("en-IE");
+  displayDate(v);
 function Table({
   rows,
   columns,

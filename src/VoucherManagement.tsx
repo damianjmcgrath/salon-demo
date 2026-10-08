@@ -1,3 +1,4 @@
+import { displayDate, voucherDate } from "./dateFormats";
 import {
   useRef,
   useEffect,
@@ -442,7 +443,7 @@ export default function VoucherManagement({
             <label>
               Expiry date
               <input
-                type="date"
+                type="date" lang="en-GB"
                 min={today()}
                 required
                 value={expiry}
@@ -576,7 +577,7 @@ export default function VoucherManagement({
               <span>
                 {v.assigned_client_name || "Unassigned"} ·{" "}
                 {euro(Number(v.balance ?? v.original_amount))} · Expires{" "}
-                {v.expires_on}
+                {displayDate(v.expires_on)}
               </span>
               <span>Select →</span>
             </button>
@@ -617,7 +618,7 @@ export default function VoucherManagement({
               Assigned to:{" "}
               <strong>{voucher.assigned_client_name || ""}</strong>
             </p>
-            <p>Valid through: {voucher.expires_on}</p>
+            <p>Valid through: {voucherDate(voucher.expires_on)}</p>
             <p>
               Remaining value:{" "}
               {euro(Number(voucher.balance ?? voucher.original_amount))}
