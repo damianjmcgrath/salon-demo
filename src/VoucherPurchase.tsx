@@ -45,6 +45,8 @@ export default function VoucherPurchase({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
+  const [emailOpen, setEmailOpen] = useState(false), [emailTo, setEmailTo] = useState("");
+  const emailRequest = useRef(crypto.randomUUID());
   const request = useRef(crypto.randomUUID()),
     alive = useRef(true);
   useEffect(() => {
@@ -157,20 +159,27 @@ export default function VoucherPurchase({
       if (alive.current) setBusy(false);
     }
   }
-  async function demoEmail(to: "recipient" | "self") {
-    if (!voucher) return;
+  async function sendEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!voucher || busy) return;
     setBusy(true);
     setError("");
+    setMessage("");
     try {
-      let mail = to === "recipient" ? voucher.recipient_email : own?.email;
+      const mail = emailTo.trim();
+      if (!/^\S+@\S+\.\S+$/.test(mail)) throw Error("Enter a valid email address.");
       if (live) {
-        const r = await db!.rpc("simulate_voucher_email", {
-          p_voucher_id: voucher.id,
-          p_to: to,
-        });
-        if (r.error) throw r.error;
+        const r = await db!.functions.invoke("send-voucher-email", {body: {
+          voucher_id: voucher.id, email: mail, request_id: emailRequest.current, client_purchase: true,
+        }});
+        if (r.error) {
+          let detail = r.error.message;
+          try { detail = (await r.error.context.json()).error || detail; } catch {}
+          throw Error(detail);
+        }
+        if (r.data?.error) throw Error(r.data.error);
+        if (!r.data?.accepted) throw Error("Email was not accepted. Please retry.");
         if (!alive.current) return;
-        mail = r.data;
       } else
         setData((d) => ({
           ...d,
@@ -190,8 +199,10 @@ export default function VoucherPurchase({
             },
           ],
         }));
-      if (alive.current)
-        setMessage(`Demo email prepared for ${mail}. No email has been sent.`);
+      if (alive.current) {
+        setEmailOpen(false);
+        setMessage(live ? `Voucher email accepted for sending to damianjmcgrath@gmail.com (testing). Entered recipient: ${mail}` : `Demo email prepared for ${mail}. No email has been sent.`);
+      }
     } catch (e) {
       if (alive.current) setError((e as Error).message);
     } finally {
@@ -233,26 +244,21 @@ export default function VoucherPurchase({
             <p>Valid through: {voucher.expires_on}</p>
             <small>DEMO VOUCHER · No payment taken</small>
           </div>
-          <div className="record-actions">
-            <button className="primary" onClick={() => window.print()}>
-              Print voucher
-            </button>
-            <button
-              className="secondary"
-              disabled={busy}
-              onClick={() => void demoEmail("recipient")}
-            >
-              Email voucher to recipient
-            </button>
-            <button
-              className="secondary"
-              disabled={busy}
-              onClick={() => void demoEmail("self")}
-            >
-              Email voucher to myself
-            </button>
+          <div className="record-actions" style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",marginTop:24}}>
+            <button className="primary" style={{height:52,marginTop:0,fontSize:13}} disabled={busy} onClick={() => window.print()}>Print voucher</button>
+            <button className="secondary" style={{height:52,marginTop:0,fontSize:13}} disabled={busy} onClick={() => {
+              setEmailTo(voucher.recipient_email || own?.email || "");
+              emailRequest.current = crypto.randomUUID(); setEmailOpen(true); setMessage(""); setError("");
+            }}>Email Voucher</button>
           </div>
-          <p className="small">Email delivery is simulated in this demo.</p>
+          {emailOpen && <form className="voucher-email-form" onSubmit={e => void sendEmail(e)}>
+            <label>Recipient email address<input type="email" required maxLength={254} autoFocus value={emailTo} disabled={busy} onChange={e => {setEmailTo(e.target.value); emailRequest.current=crypto.randomUUID();}} /></label>
+            <p className="small">{live ? "Testing: emails are sent to damianjmcgrath@gmail.com regardless of the address entered." : "Email delivery is simulated in local demo mode."}</p>
+            <div className="record-actions">
+              <button className="primary" disabled={busy}>{busy ? "Sending…" : "Send Email"}</button>
+              <button type="button" className="secondary" disabled={busy} onClick={() => {setEmailOpen(false);setError("");}}>Cancel</button>
+            </div>
+          </form>}
           <button className="back" onClick={onProfile}>
             View My Profile and vouchers →
           </button>

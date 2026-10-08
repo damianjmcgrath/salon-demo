@@ -652,10 +652,16 @@ test("UI: client profile, voucher purchase, print and simulated email work toget
     fireEvent.click(screen.getByRole("button", { name: "Print voucher" }));
     assert.equal(prints, 1);
     fireEvent.click(
-      screen.getByRole("button", { name: "Email voucher to recipient" }),
+      screen.getByRole("button", { name: "Email Voucher" }),
     );
+    assert.equal(screen.getByLabelText("Recipient email address").value,"client@example.com");
+    fireEvent.click(screen.getByRole("button", {name:"Cancel",exact:true}));
+    assert.equal(screen.queryByLabelText("Recipient email address"),null);
+    fireEvent.click(screen.getByRole("button", {name:"Email Voucher"}));
+    fireEvent.change(screen.getByLabelText("Recipient email address"), {target:{value:"edited@example.com"}});
+    fireEvent.click(screen.getByRole("button", {name:"Send Email"}));
     await screen.findByText(
-      "Demo email prepared for client@example.com. No email has been sent.",
+      "Demo email prepared for edited@example.com. No email has been sent.",
     );
     fireEvent.click(
       screen.getByRole("button", { name: /View My Profile and vouchers/ }),

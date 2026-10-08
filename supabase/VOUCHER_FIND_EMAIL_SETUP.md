@@ -15,3 +15,9 @@ The function reuses the existing `RESEND_API_KEY`, `SALON_EMAIL_ENABLED=true` an
 **Email voucher** opens an editable address, pre-filled from the assigned client's email or recorded recipient email where available. Click Send. All actual emails are currently routed server-side to **damianjmcgrath@gmail.com**, regardless of the address entered. The voucher snapshot, entered recipient, staff actor, actual test recipient and Resend reference are retained for audit. “Accepted” means Resend has accepted the message; inbox delivery can take longer.
 
 A failed/uncertain send can be retried with the same request safely. Email content comes from the database, and the browser cannot override its value or actual delivery recipient. Printing and reassigning remain available alongside Email.
+
+## Client voucher purchase confirmation email (migration 038)
+
+Run `038_client_voucher_email.sql` in the SQL Editor after migration 037. Replace `index.ts` in the existing `send-voucher-email` Edge Function with the updated repository file and redeploy. Keep `email.ts`, secrets and existing Verify JWT setting unchanged.
+
+The purchase confirmation now has equally sized Print voucher and Email Voucher buttons. Email Voucher opens an editable recipient address, with Send Email and Cancel actions. Only the purchaser can send from this page; the server checks ownership before preparing the voucher snapshot. Test delivery remains fixed to `damianjmcgrath@gmail.com`, regardless of the recipient address entered. Successful sends mean Resend accepted the message, not that inbox delivery has been independently verified.

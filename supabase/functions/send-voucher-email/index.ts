@@ -27,8 +27,6 @@ Deno.serve(async (req) => {
   const permitted = await userDb.rpc("has_permission", {
     p_key: "view.vouchers",
   });
-  if (permitted.error || permitted.data !== true)
-    return reply({ error: "Voucher Management permission required." }, 403);
   if (
     Deno.env.get("SALON_EMAIL_ENABLED") !== "true" ||
     !Deno.env.get("RESEND_API_KEY")
@@ -43,7 +41,9 @@ Deno.serve(async (req) => {
   } catch {
     return reply({ error: "Invalid request." }, 400);
   }
-  const prepared = await userDb.rpc("prepare_staff_voucher_email", {
+  if (input.client_purchase !== true && (permitted.error || permitted.data !== true))
+    return reply({ error: "Voucher Management permission required." }, 403);
+  const prepared = await userDb.rpc(input.client_purchase === true ? "prepare_client_voucher_email" : "prepare_staff_voucher_email", {
     p_id: input.voucher_id,
     p_email: input.email,
     p_request: input.request_id,

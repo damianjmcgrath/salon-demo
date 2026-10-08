@@ -1527,3 +1527,16 @@ test('upfront voucher and credit bookings redeem atomically and checkout never t
  await pg.exec('reset role');assert.equal(Number((await one('select count(*) n from appointment_payments where appointment_id=$1',[a.id])).n),1);assert.equal(Number((await one('select count(*) n from client_value_redemptions where appointment_id=$1',[a.id])).n),1);
  await as(accountant);const today=(await one("select (now() at time zone 'Europe/Dublin')::date::text d")).d;const rows=(await one('select get_daily_activity_report($1,$1) data',[today])).data;assert(rows.some(x=>x.appointment_id===b.id));
 });
+
+test('client voucher email preparation requires purchase ownership and preserves retry identity',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/038_client_voucher_email.sql',import.meta.url),'utf8'));
+ await as(clientUser);const v=(await one("select purchase_demo_voucher('50',null,false,'Recipient','recipient-email@example.com','saved_demo',true,gen_random_uuid()) data")).data;
+ const request='a1000000-0000-0000-0000-000000000001';
+ const job=(await one('select prepare_client_voucher_email($1,$2,$3) data',[v.id,'edited@example.com',request])).data;assert.equal(job.snapshot.code,v.code);assert.equal(job.requested_email,'edited@example.com');
+ const retry=(await one('select prepare_client_voucher_email($1,$2,$3) data',[v.id,'edited@example.com',request])).data;assert.equal(job.id,retry.id);
+ await assert.rejects(pg.query('select prepare_client_voucher_email($1,$2,$3)',[v.id,'different@example.com',request]),/request changed/);
+ await assert.rejects(pg.query('select prepare_client_voucher_email($1,$2,gen_random_uuid())',[v.id,'invalid']),/valid email/);
+ await pg.exec('reset role');const other=await one('select id from vouchers where purchased_by is null limit 1');await as(clientUser);
+ await assert.rejects(pg.query('select prepare_client_voucher_email($1,$2,gen_random_uuid())',[other.id,'edited@example.com']),/purchased by you/);
+ await as(staffA);await assert.rejects(pg.query('select prepare_client_voucher_email($1,$2,gen_random_uuid())',[v.id,'edited@example.com']),/Client sign-in/);
+});
