@@ -1367,7 +1367,7 @@ export default function App() {
               p_consent: consent,
               p_booked_for_self: forSelf,
               p_attendee_email: email.trim(),
-              p_guarantee_id: guaranteeNeeded ? card : null,
+              p_guarantee_id: !prepayment && guaranteeNeeded ? card || null : null,
               p_client_id: staffClient?.id || null,
               p_patch_for_treatment_id:
                 patchPlan?.patch_for_treatment_id ?? null,
