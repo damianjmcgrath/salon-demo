@@ -1489,3 +1489,16 @@ test('discounts require permission, preserve original price and feed payment tot
  await as(accountant);const rows=(await one('select get_discounts_report() data')).data;assert.equal(rows.length,1);assert.equal(Number(rows[0].original_price),80);assert.equal(Number(rows[0].discount_percentage),25);assert(rows[0].staff_name);await as(clientUser);await assert.rejects(pg.query('select get_discounts_report()'),/Permission denied/);
  await as(staffA);const done=await one("select * from checkout_appointment($1,1,'cash')",[a.id]);assert.equal(Number(done.price),60);
  });
+test('manual calendar Busy blocks bookings, Free permits overlap, and edits/deletion are guarded',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/036_calendar_entries.sql',import.meta.url),'utf8'));await as(staffA);
+ const e=await one("select * from save_calendar_entry(1,'2097-01-01',600,660,'busy','Training')");assert.equal(e.description,'Training');
+ await as(accountant);await assert.rejects(pg.query("select save_calendar_entry(1,'2097-01-01',600,660,'free','Test')"),/Staff access|Permission denied/);
+ await pg.exec('reset role');const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ const insert="insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,1,8001,'2097-01-01',600,15,'Client','123','Calendar Test',50,'booked')";
+ await assert.rejects(pg.query(insert,[c.id,clientUser]),/blocked as Busy/);await as(staffA);
+ await one("select * from save_calendar_entry(1,'2097-01-01',600,660,'free','Training',$1,0)",[e.id]);
+ await assert.rejects(pg.query("select save_calendar_entry(1,'2097-01-01',600,660,'free','Stale',$1,0)",[e.id]),/changed/);
+ await pg.exec('reset role');await pg.query(insert,[c.id,clientUser]);await as(staffA);
+ await assert.rejects(pg.query("select save_calendar_entry(1,'2097-01-01',600,660,'busy','Training',$1,1)",[e.id]),/overlaps/);
+ await one("select * from save_calendar_entry(1,'2097-01-01',600,660,'free','Training',$1,1,true)",[e.id]);await pg.exec('reset role');assert.equal((await one('select count(*) n from staff_calendar_entries where id=$1',[e.id])).n,0);
+});

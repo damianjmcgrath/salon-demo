@@ -1,0 +1,2 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {diaryEntryLayout} from '../src/diaryLayout.js';
+test('overlapping Free entries and bookings have separate lanes; adjacent entries use full width',()=>{const layout=diaryEntryLayout([{id:'a',start_minute:600,duration:60},{id:'b',start_minute:630,duration:15},{id:'c',start_minute:660,duration:30}]);assert.equal(layout.a.width,50);assert.equal(layout.b.width,50);assert.notEqual(layout.a.lane,layout.b.lane);assert.equal(layout.c.width,100);});

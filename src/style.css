@@ -1801,3 +1801,6 @@ nav .logout-link {
   .diary .time-body span { left: 8px; }
   .date-controls { flex-wrap: wrap; }
 }
+.calendar-entry { background: #e7dfd1; border-color: #88715a; }
+.calendar-entry.free { background: #edf2e8; border-color: #7b946b; }
+.calendar-entry:disabled { opacity: 1; cursor: default; }

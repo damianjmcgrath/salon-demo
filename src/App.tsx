@@ -1,3 +1,5 @@
+import {diaryEntryLayout} from "./diaryLayout.js";
+import {useCalendarEntries} from "./CalendarEntries";
 import { lastBookedLabel } from "./bookingRecency.js";
 import AppointmentReminder from "./AppointmentReminder";
 import PermissionManagement from "./PermissionManagement";
@@ -543,6 +545,7 @@ export default function App() {
       );
   const ownStaffId = live ? staffId : localStaffId;
   useEffect(() => {setMobileDiaryStaff(null);}, [ownStaffId]);
+  const calendar = useCalendarEntries(live && allowed("view.diary") ? db : null,date,staff,ownStaffId,activeRole === "admin");
   const mobileDiaryId = staff.some(s=>s.id===mobileDiaryStaff) ? mobileDiaryStaff : staff.some(s=>s.id===ownStaffId) ? ownStaffId : staff[0]?.id;
   const actorName =
     staff.find((s) => s.id === ownStaffId)?.name ||
@@ -956,7 +959,7 @@ export default function App() {
   useEffect(() => {
     if (roleLoading || !activeRole || view === "recovery") return;
     if (view === "login" || !canAccess(activeRole, view, permissions))
-      setView(roleHome(activeRole));
+      setView(staffAccess && allowed("view.diary") ? "diary" : roleHome(activeRole));
   }, [activeRole, roleLoading, view, permissions]);
   useEffect(() => {
     void refresh();
@@ -1563,16 +1566,21 @@ export default function App() {
   const diaryStart = Math.min(
     480,
     ...dayAppointments.map((a) => Math.floor(a.start_minute / 60) * 60),
+    ...calendar.entries.map(e=>Math.floor(e.start_minute/60)*60),
   );
   const diaryEnd = Math.max(
     1080,
+    ...calendar.entries.map(e=>Math.ceil((e.start_minute+e.duration)/60)*60),
     ...dayAppointments.map(
       (a) => Math.ceil((a.start_minute + a.duration) / 60) * 60,
     ),
   );
   const diaryHeight = (diaryEnd - diaryStart) * 1.6;
+  const diaryLanes = Object.assign({},...staff.map(s=>diaryEntryLayout([...dayAppointments.filter(a=>a.status!=="cancelled"&&a.staff_id===s.id),...calendar.entries.filter(e=>e.staff_id===s.id)].map(e=>({...e,id:`${e.staff_id}-${e.id}`})))));
+  const laneStyle = (e: {staff_id:number;id?:string}) => {const lane=diaryLanes[`${e.staff_id}-${e.id}`];return lane ? {left:`calc(${lane.lane*lane.width}% + 4px)`,right:`calc(${100-(lane.lane+1)*lane.width}% + 4px)`} : {};};
   return (
     <>
+      {calendar.dialog}
       <header className={activeRole === "client" || staffAccess || activeRole === "accountant" ? "client-header" : ""}>
         <a
           className="brand"
@@ -2621,7 +2629,7 @@ export default function App() {
                         )!;
                         setLocalStaffId(selected.staffId);
                         setLocalRole(selected.role);
-                        setView(roleHome(selected.role));
+                        setView(["admin","staff"].includes(selected.role) ? "diary" : roleHome(selected.role));
                         setPin("");
                         setDate(today());
                       }}
@@ -2987,6 +2995,7 @@ export default function App() {
                   >
                     Add break time
                   </button>
+                  <button className="secondary" disabled={!live || !db || !ownStaffId} onClick={()=>calendar.open()}>Block Out Time</button>
                 </div>
                 <div className="diary-scroll">
                   <div className="mobile-diary-selector">
@@ -3062,6 +3071,7 @@ export default function App() {
                                 ))}
                             </>
                           )}
+                          {calendar.entries.filter(e=>e.staff_id===s.id).map((e)=><button key={e.id} className={`appointment calendar-entry ${e.show_as}`} style={{top:(e.start_minute-diaryStart)*1.6,height:Math.max(e.duration*1.6,40),...laneStyle(e)}} disabled={activeRole!=="admin"&&e.staff_id!==ownStaffId} onClick={()=>calendar.open(e)}><strong>{time(e.start_minute)}–{time(e.start_minute+e.duration)}</strong><span>{e.description}</span><small>{e.show_as==='busy'?'Busy':'Free'}</small></button>)}
                           {dayAppointments
                             .filter(
                               (a) =>
@@ -3074,6 +3084,7 @@ export default function App() {
                                 style={{
                                   top: (a.start_minute - diaryStart) * 1.6,
                                   height: Math.max(a.duration * 1.6, 24),
+                                  ...laneStyle(a),
                                 }}
                                 onClick={() => {
                                   setSelected(a);

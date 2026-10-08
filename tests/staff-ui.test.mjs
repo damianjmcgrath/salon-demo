@@ -70,6 +70,10 @@ async function login(name = /Leah/) {
     target: { value: "1234" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Open demo workspace" }));
+  if (screen.queryByRole("button", {name:"Staff Home",exact:true})) {
+    assert(screen.getByRole("button", {name:"Block Out Time"}));
+    fireEvent.click(screen.getByRole("button", {name:"Staff Home",exact:true}));
+  }
   await screen.findByRole("heading", { name: "Your salon workspace." });
 }
 async function findEmma() {
@@ -517,6 +521,8 @@ test("UI: newly created staff appears in login and uses its saved demo PIN", asy
     target: { value: "2580" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Open demo workspace" }));
+  assert(screen.getByRole("button", {name:"Block Out Time"}));
+  fireEvent.click(screen.getByRole("button", {name:"Staff Home",exact:true}));
   assert(await screen.findByRole("heading", { name: "Your salon workspace." }));
   assert.equal(
     screen.queryByRole("button", { name: /Staff Management Staff/ }),
