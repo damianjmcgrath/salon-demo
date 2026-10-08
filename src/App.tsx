@@ -225,6 +225,7 @@ export default function App() {
     [breakEnd, setBreakEnd] = useState("13:30");
   const [statusAction, setStatusAction] = useState(""),
     [statusReason, setStatusReason] = useState("");
+  const confirmationSection = useRef<HTMLElement>(null);
   const statusSection = useRef<HTMLDivElement>(null);
   const statusComments = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -1531,6 +1532,13 @@ export default function App() {
       defaultPrevious.current = false;
     }
   }, [step, forSelf, staffClient, live, bookingHistoryLoaded, myBookings]);
+  useEffect(() => {
+    if (view !== "book" || step !== 4 || !confirmation) return;
+    const frame = requestAnimationFrame(() => {
+      confirmationSection.current?.scrollIntoView({ behavior: "instant", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [view, step, confirmation]);
   const visibleSlots: Slot[] = periodSlots(slots, period);
   const categories = [
     ...(forSelf && !staffClient ? ["Previous Bookings"] : []),
@@ -2415,7 +2423,7 @@ export default function App() {
                 />
               </div>
             ) : confirmation ? (
-              <section className="success panel">
+              <section ref={confirmationSection} className="success panel" style={{ scrollMarginTop: 20 }}>
                 <div className="success-icon">✓</div>
                 <p className="eyebrow">
                   {amending ? "APPOINTMENT UPDATED" : "YOU’RE ALL BOOKED"}
