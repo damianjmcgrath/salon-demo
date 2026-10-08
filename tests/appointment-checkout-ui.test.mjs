@@ -5,7 +5,7 @@ import { build } from "esbuild";
 import { pathToFileURL } from "node:url";
 import { JSDOM } from "jsdom";
 import React from "react";
-let dom, dir, Component, render, screen, fireEvent, waitFor, cleanup;
+let dom, dir, Component, ValueOptions, render, screen, fireEvent, waitFor, cleanup;
 before(async () => {
   dom = new JSDOM("<html><body></body></html>", {
     url: "https://salon.example/",
@@ -29,6 +29,8 @@ before(async () => {
     jsx: "automatic",
   });
   Component = (await import(pathToFileURL(dir + "/component.mjs"))).default;
+  await build({entryPoints:[new URL("../src/BookingValueOptions.tsx",import.meta.url).pathname],outfile:dir+"/values.mjs",bundle:true,platform:"node",format:"esm",packages:"external",jsx:"automatic"});
+  ValueOptions = (await import(pathToFileURL(dir+"/values.mjs"))).default;
 });
 afterEach(() => cleanup());
 after(async () => {
@@ -173,4 +175,21 @@ test('discount saves a reduced total and revision before selecting payment; perm
  await waitFor(()=>assert(calls.some(([n,a])=>n==='checkout_appointment'&&a.p_revision===4)));
  assert.equal(calls.find(([n])=>n==='apply_appointment_discount')[1].p_price,60);
  cleanup();render(React.createElement(Component,{db,appointment,onSaved:async()=>{}}));fireEvent.click(screen.getByRole('button',{name:'Check Client Out'}));assert.equal(screen.queryByRole('button',{name:'Apply discount'}),null);
+});
+
+test('prepaid checkout displays the voucher reference and completes without selecting a payment method', async()=>{
+ const calls=[];
+ render(React.createElement(Component,{db:{rpc:async(name,args)=>{calls.push([name,args]);return {data:{},error:null};}},appointment:{...appointment,prepaid_method:'voucher',prepaid_voucher_code:'SC-PAID'},onSaved:async()=>{}}));
+ assert(screen.getByText(/Payment has already been made online by Voucher ID: SC-PAID/));assert.equal(screen.queryByRole('button',{name:'Card',exact:true}),null);
+ fireEvent.click(screen.getByRole('button',{name:'Check Client Out'}));await waitFor(()=>assert.equal(calls.length,1));assert.equal(calls[0][1].p_method,null);assert.equal(calls[0][1].p_voucher_code,null);assert.equal(calls[0][1].p_credit_note_id,null);
+});
+
+test('booking offers both eligible balances and pay-in-salon for guarantee-exempt clients',async()=>{
+ const changes=[];const onChange=c=>changes.push(c);
+ const props={db:{rpc:async()=>({data:{vouchers:[{id:'v',code:'SC-123',balance:80}],credit_notes:[{id:'n',reason:'Goodwill',balance:90}]},error:null})},treatmentId:1,requiresGuarantee:false,choice:null,onChange,disabled:false};
+ const view=render(React.createElement(ValueOptions,props));await waitFor(()=>assert(screen.getByLabelText('Booking payment option')));
+ assert(screen.getByRole('option',{name:'Pay in-salon after the treatment'}));assert(screen.getByRole('option',{name:'Use a credit note now'}));
+ fireEvent.change(screen.getByLabelText('Booking payment option'),{target:{value:'voucher'}});assert.deepEqual(changes.at(-1),{method:'voucher',id:''});
+ view.rerender(React.createElement(ValueOptions,{...props,choice:changes.at(-1)}));fireEvent.change(screen.getByLabelText('Choose a valid voucher'),{target:{value:'v'}});assert.deepEqual(changes.at(-1),{method:'voucher',id:'v'});
+ fireEvent.change(screen.getByLabelText('Booking payment option'),{target:{value:'later'}});assert.equal(changes.at(-1),null);
 });

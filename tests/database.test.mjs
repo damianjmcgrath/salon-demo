@@ -1502,3 +1502,28 @@ test('manual calendar Busy blocks bookings, Free permits overlap, and edits/dele
  await assert.rejects(pg.query("select save_calendar_entry(1,'2097-01-01',600,660,'busy','Training',$1,1)",[e.id]),/overlaps/);
  await one("select * from save_calendar_entry(1,'2097-01-01',600,660,'free','Training',$1,1,true)",[e.id]);await pg.exec('reset role');assert.equal((await one('select count(*) n from staff_calendar_entries where id=$1',[e.id])).n,0);
 });
+
+test('upfront voucher and credit bookings redeem atomically and checkout never takes a second payment', async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/037_upfront_value_bookings.sql',import.meta.url),'utf8'));
+ const c=await one('select * from clients where auth_user_id=$1',[clientUser]);
+ await pg.exec("update treatments set price=50,patch_required=false,guarantee_required=true where id=8001;insert into staff_treatments(staff_id,treatment_id) values(1,8001) on conflict do nothing;");
+ await pg.query('update clients set requires_deposit=true where id=$1',[c.id]);
+ await as(staffA);const v=await one("select * from create_staff_recipient_voucher(100,'2099-01-01','Buyer','buyer@example.com','Client',$1)",[c.email]);
+ const other=await one("select * from create_staff_recipient_voucher(100,'2099-01-01','Buyer','buyer@example.com','Someone','other-voucher@example.com')");
+ const n=await one("select * from create_client_credit_note($1,80,'Testing upfront')",[c.id]);
+ await as(clientUser);
+ const opts=(await one('select get_booking_value_options(8001) data')).data;assert(opts.vouchers.some(x=>x.id===v.id));assert(!opts.vouchers.some(x=>x.id===other.id));assert(opts.credit_notes.some(x=>x.id===n.id));
+ const sql="select * from book_with_value(8001,1,'2080-01-16',$1,'Client Test','0800000000',true,'client@example.com',null,false,null,null,$2,$3)";
+ await assert.rejects(pg.query(sql,[600,'voucher',other.id]),/belonging to your account/);
+ const slots=(await pg.query("select * from get_booking_slots(8001,'2080-01-16',1)")).rows;assert(slots.length>1);
+ const a=await one(sql,[slots[0].start_minute,'voucher',v.id]);assert.equal(a.status,'booked');assert.equal(a.guarantee_required,false);assert.equal(a.prepaid_method,'voucher');assert.equal(a.prepaid_voucher_code,v.code);
+ const b=await one(sql,[slots[1].start_minute,'credit',n.id]);assert.equal(b.prepaid_method,'credit');
+ await assert.rejects(pg.query(sql,[slots[2].start_minute,'credit',n.id]),/no longer covers/);
+ let values=(await one('select get_booking_value_options(8001) data')).data;assert.equal(Number(values.vouchers.find(x=>x.id===v.id).balance),50);assert(!values.credit_notes.some(x=>x.id===n.id));
+ await as(staffA);await pg.query("select update_appointment_status($1,'checked_in',null,0)",[a.id]);
+ await assert.rejects(pg.query("select checkout_appointment($1,1,'cash')",[a.id]),/already been paid/);
+ const done=await one('select * from checkout_appointment($1,1,null)',[a.id]);assert.equal(done.status,'completed');assert.equal(done.payment_method,'voucher');
+ await assert.rejects(pg.query('select apply_appointment_discount($1,0,40)',[b.id]),/checked-in/);
+ await pg.exec('reset role');assert.equal(Number((await one('select count(*) n from appointment_payments where appointment_id=$1',[a.id])).n),1);assert.equal(Number((await one('select count(*) n from client_value_redemptions where appointment_id=$1',[a.id])).n),1);
+ await as(accountant);const today=(await one("select (now() at time zone 'Europe/Dublin')::date::text d")).d;const rows=(await one('select get_daily_activity_report($1,$1) data',[today])).data;assert(rows.some(x=>x.appointment_id===b.id));
+});

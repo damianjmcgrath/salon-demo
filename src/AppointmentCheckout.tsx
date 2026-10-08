@@ -94,7 +94,7 @@ export default function AppointmentCheckout({
   const remainder = price - used,
     isValue = method === "voucher" || method === "credit";
   const ready =
-    price === 0 ||
+    !!current.prepaid_method || price === 0 ||
     (!!method &&
       (!isValue ||
         (!!value && used > 0 && (remainder === 0 || !!remainderMethod))));
@@ -138,7 +138,7 @@ export default function AppointmentCheckout({
       const r = await db.rpc("checkout_appointment", {
         p_id: appointment.id,
         p_revision: current.revision ?? 0,
-        p_method: price === 0 ? null : method,
+        p_method: current.prepaid_method || price === 0 ? null : method,
         p_voucher_code: method === "voucher" ? value?.code : null,
         p_credit_note_id: method === "credit" ? value?.id : null,
         p_remainder_method: isValue && remainder > 0 ? remainderMethod : null,
@@ -157,6 +157,13 @@ export default function AppointmentCheckout({
       if (alive.current) setBusy(false);
     }
   }
+  if (current.prepaid_method) return <section className="checkout-panel" aria-label="Client checkout">
+    <p>{current.prepaid_method === "voucher"
+      ? `Payment has already been made online by Voucher ID: ${current.prepaid_voucher_code}. No further payment is required.`
+      : "Payment has already been made online by Credit Note. No further payment is required."}</p>
+    <button className="primary appointment-action" disabled={!db || busy} onClick={() => void confirm()}>{busy ? "Saving…" : "Check Client Out"}</button>
+    {error && <p className="auth-error" role="alert">{error}</p>}
+  </section>;
   if (!open)
     return (
       <div className="checkout-start">

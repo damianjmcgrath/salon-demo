@@ -1,3 +1,4 @@
+import BookingValueOptions, { type BookingValueChoice } from "./BookingValueOptions";
 import {diaryEntryLayout} from "./diaryLayout.js";
 import {useCalendarEntries} from "./CalendarEntries";
 import { lastBookedLabel } from "./bookingRecency.js";
@@ -343,6 +344,7 @@ export default function App() {
   const [patchChecking, setPatchChecking] = useState(false);
   const patchSelection = useRef(0);
 
+  const [prepayment, setPrepayment] = useState<BookingValueChoice | null>(null);
   const [guaranteeNeeded, setGuaranteeNeeded] = useState<boolean | null>(null);
   const [guaranteeError, setGuaranteeError] = useState("");
 
@@ -1208,6 +1210,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     setGuaranteeNeeded(null);
+    setPrepayment(null);
     setGuaranteeError("");
     if (step !== 3 || amending) return;
     if (!live) {
@@ -1323,7 +1326,7 @@ export default function App() {
       !slot ||
       (!amending &&
         (guaranteeNeeded === null ||
-          (guaranteeNeeded && (!consent || !card)))) ||
+          (prepayment ? !prepayment.id : guaranteeNeeded && (!consent || !card)))) ||
       (!staffClient && activeRole !== "client") ||
       requiresPasswordChange
     )
@@ -1345,7 +1348,8 @@ export default function App() {
               p_revision: amending.revision || 0,
               p_reason: changeReason,
             })
-          : await db.rpc("book_guaranteed_appointment", {
+          : await db.rpc(prepayment ? "book_with_value" : "book_guaranteed_appointment", {
+              ...(prepayment ? {p_value_method: prepayment.method, p_value_id: prepayment.id} : {}),
               p_treatment_id: treatment.id,
               p_staff_id: slot.staff_id,
               p_date: date,
@@ -2309,7 +2313,7 @@ export default function App() {
                         ? "Confirm Appointment"
                         : "Booking Guarantee"}
                   </h2>
-                  {!amending && guaranteeNeeded === true && (
+                  {!amending && guaranteeNeeded === true && !prepayment && (
                     <p>
                       Guarantee your booking using your saved card details, or
                       supply new card details.
@@ -2318,6 +2322,7 @@ export default function App() {
                   <p>
                     Booking for <strong>{name}</strong> · {email}
                   </p>
+                  {!amending && live && db && activeRole === "client" && Number(treatment.price)>0 && <BookingValueOptions db={db} treatmentId={treatment.id} requiresGuarantee={guaranteeNeeded} choice={prepayment} onChange={setPrepayment} disabled={busy} />}
                   {amending ? (
                     <label>
                       Reason for amendment
@@ -2333,6 +2338,8 @@ export default function App() {
                     </p>
                   ) : guaranteeNeeded === null ? (
                     <p>Checking booking guarantee requirements…</p>
+                  ) : prepayment ? (
+                    <p>Your treatment will be paid upfront by {prepayment.method === "voucher" ? "voucher" : "credit note"}. No booking guarantee card is required.</p>
                   ) : guaranteeNeeded === false ? (
                     <p>
                       {Number(treatment.price) === 0 &&
@@ -2416,7 +2423,7 @@ export default function App() {
                       (amending
                         ? !changeReason.trim()
                         : guaranteeNeeded === null ||
-                          (guaranteeNeeded && (!consent || !card))) ||
+                          (prepayment ? !prepayment.id : guaranteeNeeded && (!consent || !card))) ||
                       !name.trim() ||
                       (live && (!session || !phone.trim()))
                     }
@@ -2473,6 +2480,7 @@ export default function App() {
                   <strong>With:</strong>{" "}
                   {staff.find((s) => s.id === confirmation.staff_id)?.name}
                 </p>
+                {confirmation.prepaid_method && <p><strong>Paid already:</strong> {confirmation.prepaid_method === "voucher" ? `Voucher ID: ${confirmation.prepaid_voucher_code}` : "Credit Note"}. No further payment is required.</p>}
                 <p className="small">Your booking is saved.</p>
                 <button
                   className="primary"

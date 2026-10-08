@@ -29,7 +29,11 @@ export function confirmationPayload(
   const minute = Number(s.start_minute);
   const time = `${String(Math.floor(minute / 60) % 12 || 12).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")} ${minute < 720 ? "am" : "pm"}`;
   const guaranteeText =
-    s.guarantee_required === false
+    s.prepaid_method === "voucher"
+      ? `Payment has already been made online by Voucher ID: ${s.prepaid_voucher_code}. No further payment is required.`
+      : s.prepaid_method === "credit"
+        ? "Payment has already been made online by Credit Note. No further payment is required."
+        : s.guarantee_required === false
       ? "No payment is taken now. No card guarantee is required for this booking. Payment is made in the salon after treatment."
       : "No payment is taken now. Payment is made in the salon after treatment. The booking guarantee is €10 for no-shows or late cancellations.";
   const lines = [
@@ -89,7 +93,7 @@ ${[
 <p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#77756f;">Sign in to view your bookings.</p>
 </td></tr>
 <tr><td style="padding:22px 24px;background-color:#f2f0e8;">
-<p style="margin:0 0 8px;font-size:12px;font-weight:bold;">Your booking guarantee</p>
+<p style="margin:0 0 8px;font-size:12px;font-weight:bold;">${s.prepaid_method ? "Your payment" : "Your booking guarantee"}</p>
 <p style="margin:0;font-size:12px;line-height:1.8;color:#66645e;">${escape(guaranteeText)}</p>
 </td></tr>
 <tr><td align="center" style="padding:22px 24px;">

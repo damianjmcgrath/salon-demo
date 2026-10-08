@@ -36,6 +36,10 @@ export type Appointment = {
   patch_for_treatment_id?: number | null;
   patch_for_treatment_name?: string | null;
   guarantee_required?: boolean;
+  prepaid_method?: "voucher" | "credit" | null;
+  prepaid_value_id?: string | null;
+  prepaid_voucher_code?: string | null;
+  prepaid_at?: string | null;
   payment_method?: string;
   appointment_date: string;
   revision?: number;

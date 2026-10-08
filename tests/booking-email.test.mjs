@@ -21,3 +21,10 @@ test('card-exempt booking confirmations do not promise a ten euro guarantee',()=
  const payload=confirmationPayload({id:'exempt',client_name:'Friend',treatment_name:'Test',appointment_date:'2026-10-10',start_minute:600,staff_name:'Aoife',price:25,guarantee_required:false},'Test <test@example.com>');
  assert(payload.text.includes('No card guarantee is required'));assert(!payload.text.includes('€10'));assert(!payload.html.includes('€10'));
 });
+
+test('prepaid confirmations name the payment and do not request payment in salon',()=>{
+ for(const method of ['voucher','credit']){
+ const payload=confirmationPayload({id:'prepaid',client_name:'Client',treatment_name:'Test',appointment_date:'2026-10-10',start_minute:600,staff_name:'Aoife',price:50,guarantee_required:false,prepaid_method:method,prepaid_voucher_code:'SC-PREPAID'},'Test <test@example.com>');
+ assert(payload.text.includes('No further payment is required'));assert(!payload.text.includes('Payment is made in the salon'));assert(payload.html.includes('Your payment'));if(method==='voucher')assert(payload.text.includes('SC-PREPAID'));
+ }
+});
