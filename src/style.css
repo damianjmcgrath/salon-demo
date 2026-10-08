@@ -1680,6 +1680,7 @@ nav .logout-link {
   margin: 0;
 }
 .checkout-panel .record-actions {
+  margin-top: 24px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;

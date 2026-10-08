@@ -365,7 +365,7 @@ export default function AppointmentCheckout({
         </button>
         )}
         <button
-          className="secondary"
+          className="primary"
           disabled={busy}
           onClick={() => {
             setOpen(false);
