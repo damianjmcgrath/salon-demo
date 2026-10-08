@@ -387,7 +387,7 @@ test("UI: client choice screen leads directly to self treatments or recipient de
     fireEvent.click(screen.getByRole("button", { name: "Menu", exact: true }));
     assert.equal(
       screen
-        .getByRole("button", { name: "Menu", exact: true })
+        .getByRole("button", { name: "Close", exact: true })
         .getAttribute("aria-expanded"),
       "true",
     );

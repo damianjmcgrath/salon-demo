@@ -151,6 +151,7 @@ export default function App() {
   const [staffId, setStaffId] = useState<number | null>(null),
     [localStaffId, setLocalStaffId] = useState<number | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [mobileDiaryStaff, setMobileDiaryStaff] = useState<number | null>(null);
   const [loginTile, setLoginTile] = useState<number | null>(null),
     [pin, setPin] = useState("");
   const [ownClient, setOwnClient] = useState<Client | null>(null);
@@ -541,6 +542,8 @@ export default function App() {
         staffData.breaks,
       );
   const ownStaffId = live ? staffId : localStaffId;
+  useEffect(() => {setMobileDiaryStaff(null);}, [ownStaffId]);
+  const mobileDiaryId = staff.some(s=>s.id===mobileDiaryStaff) ? mobileDiaryStaff : staff.some(s=>s.id===ownStaffId) ? ownStaffId : staff[0]?.id;
   const actorName =
     staff.find((s) => s.id === ownStaffId)?.name ||
     roleLabels[activeRole || "client"];
@@ -1534,10 +1537,10 @@ export default function App() {
   }, [step, forSelf, staffClient, live, bookingHistoryLoaded, myBookings]);
   useEffect(() => {
     if (view !== "book" || step !== 4 || !confirmation) return;
-    const frame = requestAnimationFrame(() => {
-      confirmationSection.current?.scrollIntoView({ behavior: "instant", block: "start" });
+    const frame = window.setTimeout(() => {
+      confirmationSection.current?.scrollIntoView?.({ behavior: "instant", block: "start" });
     });
-    return () => cancelAnimationFrame(frame);
+    return () => window.clearTimeout(frame);
   }, [view, step, confirmation]);
   const visibleSlots: Slot[] = periodSlots(slots, period);
   const categories = [
@@ -1570,7 +1573,7 @@ export default function App() {
   const diaryHeight = (diaryEnd - diaryStart) * 1.6;
   return (
     <>
-      <header className={activeRole === "client" ? "client-header" : ""}>
+      <header className={activeRole === "client" || staffAccess || activeRole === "accountant" ? "client-header" : ""}>
         <a
           className="brand"
           href="#"
@@ -1588,9 +1591,10 @@ export default function App() {
             alt="Sculpted by Aoife Claire"
           />
         </a>
-        {activeRole === "client" && (
+        {(activeRole === "client" || staffAccess || activeRole === "accountant") && (
           <button
             className="account-menu-toggle"
+            aria-label={accountMenuOpen ? "Close" : "Menu"}
             aria-expanded={accountMenuOpen}
             aria-controls="account-navigation"
             onClick={() => setAccountMenuOpen(!accountMenuOpen)}
@@ -2985,6 +2989,10 @@ export default function App() {
                   </button>
                 </div>
                 <div className="diary-scroll">
+                  <div className="mobile-diary-selector">
+                    <strong>{new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", {weekday:"short",day:"numeric",month:"short"})}</strong>
+                    <label>View staff diary<select value={mobileDiaryId ?? ""} onChange={e=>setMobileDiaryStaff(Number(e.target.value))}>{staff.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+                  </div>
                   <div
                     className="diary"
                     style={{
@@ -3008,7 +3016,7 @@ export default function App() {
                       </div>
                     </div>
                     {staff.map((s) => (
-                      <div className="staff-column" key={s.id}>
+                      <div className={`staff-column ${s.id === mobileDiaryId ? "mobile-diary-selected" : ""}`} key={s.id}>
                         <div className="staff-heading">
                           <span className="avatar">{s.name[0]}</span>
                           {s.name}

@@ -1770,7 +1770,6 @@ nav .logout-link {
   .mobile-treatment-categories { display: block; margin: 16px 0 0; font-weight: 600; }
   .mobile-treatment-categories select { font-weight: 400; min-height: 48px; }
 }
-
 .my-vouchers-cards { display: none; }
 @media (max-width: 700px) {
   .my-vouchers-table { display: none; }
@@ -1780,7 +1779,6 @@ nav .logout-link {
   .my-voucher-card dt { font-size: 12px; color: #786957; }
   .my-voucher-card dd { margin: 4px 0 0; font-size: 15px; overflow-wrap: anywhere; }
 }
-
 @media (max-width: 700px) {
   .client-header .account-menu-toggle { display: inline-flex; align-items: center; gap: 8px; background: #fff; font-size: 14px; }
   .client-header .account-menu-toggle span { font-size: 20px; line-height: 1; }
@@ -1789,4 +1787,17 @@ nav .logout-link {
   .client-header nav.menu-open > button.active { font-weight: 700; color: #7d6650; }
   .client-header nav.menu-open .client-sign-in { align-items: flex-start; gap: 4px; padding: 16px 4px 8px; }
   .client-header nav.menu-open .client-sign-in button { font-size: 15px; font-weight: 700; min-height: 44px; padding: 10px 0; }
+}
+.mobile-diary-selector { display: none; }
+@media (max-width: 700px) {
+  .diary-scroll { max-height: 72vh; overflow: auto; overscroll-behavior: contain; }
+  .mobile-diary-selector { display: flex; position: sticky; top: 0; z-index: 3; align-items: center; justify-content: space-between; gap: 12px; background: #fffdf9; border-bottom: 1px solid #dfd8ca; padding: 12px; }
+  .mobile-diary-selector strong { font-size: 13px; }
+  .mobile-diary-selector label { margin: 0; font-size: 12px; flex: 1; max-width: 220px; }
+  .mobile-diary-selector select { padding: 10px; margin-top: 4px; }
+  .diary { min-width: 0; grid-template-columns: 64px minmax(0, 1fr) !important; }
+  .diary .staff-column { display: none; }
+  .diary .staff-column.mobile-diary-selected { display: block; min-width: 0; }
+  .diary .time-body span { left: 8px; }
+  .date-controls { flex-wrap: wrap; }
 }
