@@ -160,3 +160,30 @@ test("a declined setup remains unconfirmed and lets the client correct their car
   assert(!changes.some(([id, consent]) => id === "new-card" && consent));
   assert.equal(invocations.filter((a) => a === "create").length, 1);
 });
+
+test('saved card dropdown stays disabled during a delayed lookup and never claims there are no cards',async()=>{
+ let resolve;
+ const db={functions:{invoke:()=>new Promise(r=>resolve=r)}};
+ render(React.createElement(Component,{db,onChange:()=>{}}));
+ assert.equal(screen.getByLabelText('Card for your guarantee').disabled,true);
+ assert(screen.getByText('Loading your saved cards. Please wait before choosing a card.'));
+ assert.equal(screen.queryByText('You have no saved cards yet. Add a new card below.'),null);
+ await act(async()=>resolve({data:{cards:[{id:'saved',brand:'Visa',last_four:'4242'}],owner_name:'Jacqui Durnin',owner_email:'jacqui@example.com'},error:null}));
+ await waitFor(()=>assert.equal(screen.getByLabelText('Card for your guarantee').value,'saved'));
+ assert.equal(screen.getByLabelText('Card for your guarantee').disabled,false);
+});
+test('connection errors retry a card lookup once, then offer a clear manual retry that clears on recovery',async()=>{
+ let calls=0;const actions=[];
+ const db={functions:{invoke:async(_,{body})=>{calls++;actions.push(body.action);return calls<=2?{data:null,error:{message:'TypeError: Load failed'}}:{data:{cards:[{id:'saved',brand:'Visa',last_four:'4242'}],owner_name:'Jacqui Durnin',owner_email:'jacqui@example.com'},error:null};}}};
+ render(React.createElement(Component,{db,onChange:()=>{}}));
+ await screen.findByRole('button',{name:'Retry loading saved cards'});
+ assert.equal(calls,2);assert(screen.getByText('We couldn’t load your saved cards. Please check your connection and try again.'));assert.equal(screen.getByLabelText('Card for your guarantee').disabled,true);
+ assert.equal(screen.queryByText('You have no saved cards yet. Add a new card below.'),null);
+ fireEvent.click(screen.getByRole('button',{name:'Retry loading saved cards'}));
+ await waitFor(()=>assert.equal(screen.getByLabelText('Card for your guarantee').value,'saved'));
+ assert.equal(screen.queryByRole('alert'),null);assert.deepEqual(actions,['list','list','list']);
+});
+test('permission errors are not repeatedly retried as connection errors',async()=>{
+ let calls=0;render(React.createElement(Component,{db:{functions:{invoke:async()=>{calls++;return {data:null,error:{message:'Permission denied'}};}}},onChange:()=>{}}));
+ await screen.findByText('Permission denied');assert.equal(calls,1);assert.equal(screen.getByLabelText('Card for your guarantee').disabled,true);
+});

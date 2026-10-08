@@ -1,3 +1,4 @@
+import { isConnectionError, requestErrorMessage } from "./requestErrors";
 import { useEffect, useRef, useState } from "react";
 import RevolutCheckout from "@revolut/checkout";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -21,6 +22,7 @@ export default function BookingGuarantee({
     [name, setName] = useState(""),
     [setup, setSetup] = useState(""),
     [ready, setReady] = useState(false);
+  const [loadingCards, setLoadingCards] = useState(true), [cardLoadError, setCardLoadError] = useState(""), [cardListVersion, setCardListVersion] = useState(0);
   const started = useRef(false);
   const [retryCheck, setRetryCheck] = useState(false);
   const target = useRef<HTMLDivElement>(null),
@@ -28,13 +30,14 @@ export default function BookingGuarantee({
   const card = useRef<ReturnType<
     Awaited<ReturnType<typeof RevolutCheckout>>["createCardField"]
   > | null>(null);
-  async function call(action: string, extra: Record<string, unknown> = {}) {
+  async function call(action: string, extra: Record<string, unknown> = {}, signal?: AbortSignal) {
     const { data, error } = await db.functions.invoke("booking-guarantee", {
       body: { action, client_id: clientId, ...extra },
+      ...(action === "list" ? {timeout:15000,signal} : {}),
     });
     if (error) {
       const detail = await error.context?.json?.().catch(() => null);
-      throw new Error(detail?.error || error.message);
+      throw new Error(detail?.error || (isConnectionError(error) ? "Network error" : error.message));
     }
     if (data.error) throw new Error(data.error);
     return data;
@@ -47,7 +50,7 @@ export default function BookingGuarantee({
       await task();
     } catch (e) {
       if (mounted.current)
-        setMessage(e instanceof Error ? e.message : "Card setup failed.");
+        setMessage(requestErrorMessage(e));
     } finally {
       if (mounted.current) setBusy(false);
     }
@@ -55,24 +58,28 @@ export default function BookingGuarantee({
   useEffect(() => {
     mounted.current = true;
     onChange("", false);
-    void call("list")
-      .then((data) => {
-        if (!mounted.current) return;
-        setCards(data.cards);
-        setOwner({ name: data.owner_name, email: data.owner_email });
-        setName(data.owner_name);
-        const defaultChoice = data.cards[0]?.id || "new";
-        setChoice(defaultChoice);
-        onChange(defaultChoice === "new" ? "" : defaultChoice, false);
-      })
-      .catch((e) => {
-        if (mounted.current) setMessage(e.message);
-      });
+    const controller = new AbortController();
+    let active = true;
+    setLoadingCards(true);setCardLoadError("");setCards([]);setChoice("");setOwner({name:"",email:""});
+    void (async()=>{
+      try {
+        let data;
+        for(let attempt=0;attempt<2;attempt++) {
+          try {data=await call("list",{},controller.signal);break;}
+          catch(e) {if(!active || !isConnectionError(e) || attempt===1)throw e;}
+        }
+        if(!active || !data)return;
+        setCards(data.cards);setOwner({name:data.owner_name,email:data.owner_email});setName(data.owner_name);
+        const next=data.cards[0]?.id || "new";setChoice(next);onChange(next === "new" ? "" : next,false);
+      } catch(e) {if(active)setCardLoadError(requestErrorMessage(e,"We couldn’t load your saved cards."));}
+      finally {if(active)setLoadingCards(false);}
+    })();
     return () => {
+      active=false;controller.abort();
       mounted.current = false;
       card.current?.destroy();
     };
-  }, [clientId, db]);
+  }, [clientId, db, cardListVersion]);
   async function verify(id = setup) {
     setRetryCheck(false);
     let data;
@@ -127,7 +134,7 @@ export default function BookingGuarantee({
         },
         onError(error) {
           if (mounted.current) {
-            setMessage(String(error));
+            setMessage(requestErrorMessage(error));
             setBusy(false);
           }
         },
@@ -163,7 +170,7 @@ export default function BookingGuarantee({
         will be taken. Late-cancellation charges are not enabled yet.
       </p>
       <p>
-        Guarantee card owner: <strong>{owner.name || "Loading…"}</strong>
+        Guarantee card owner: <strong>{owner.name || (loadingCards ? "Loading…" : "Unavailable")}</strong>
         {clientId
           ? " — obtain their consent before saving a card."
           : " — your card guarantees this booking, including bookings for someone else."}
@@ -171,7 +178,7 @@ export default function BookingGuarantee({
       <label>
         Card for your guarantee
         <select
-          disabled={busy}
+          disabled={busy || loadingCards || !!cardLoadError}
           value={choice}
           onChange={(e) => {
             const next = e.target.value;
@@ -185,7 +192,7 @@ export default function BookingGuarantee({
             onChange(next === "new" ? "" : next, consent);
           }}
         >
-          <option value="">Select a card option</option>
+          <option value="">{loadingCards ? "Loading saved cards…" : cardLoadError ? "Saved cards unavailable — retry below" : "Select a card option"}</option>
           {cards.map((c) => (
             <option key={c.id} value={c.id}>
               {c.brand}{" "}
@@ -195,11 +202,14 @@ export default function BookingGuarantee({
           <option value="new">Add a new card</option>
         </select>
       </label>
+      {loadingCards && <p role="status">Loading your saved cards. Please wait before choosing a card.</p>}
+      {cardLoadError && <div role="alert"><p>{cardLoadError}</p><button type="button" className="secondary" onClick={()=>setCardListVersion(v=>v+1)}>Retry loading saved cards</button></div>}
+      {!loadingCards && !cardLoadError && cards.length===0 && <p className="small">You have no saved cards yet. Add a new card below.</p>}
       <label className="check">
         <input
           type="checkbox"
           checked={consent}
-          disabled={busy}
+          disabled={busy || loadingCards || !!cardLoadError}
           onChange={(e) => {
             setConsent(e.target.checked);
             onChange(choice === "new" ? "" : choice, e.target.checked);
@@ -250,7 +260,7 @@ export default function BookingGuarantee({
                 savePaymentMethodFor: "merchant",
               });
             } catch (e) {
-              setMessage(String(e));
+              setMessage(requestErrorMessage(e));
               setBusy(false);
             }
           }}

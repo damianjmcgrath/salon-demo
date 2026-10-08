@@ -1,3 +1,4 @@
+import { isConnectionError, requestErrorMessage } from "./requestErrors";
 import { displayDate } from "./dateFormats";
 import BookingValueOptions, { type BookingValueChoice } from "./BookingValueOptions";
 import {diaryEntryLayout} from "./diaryLayout.js";
@@ -222,6 +223,8 @@ export default function App() {
           .map((r) => ({ id: r.id, name: r.name, photo_url: r.photo_url })),
       );
   }, [live, staffData.staffRecords]);
+  const [bookingHistoryError, setBookingHistoryError] = useState("");
+  const [bookingHistoryVersion, setBookingHistoryVersion] = useState(0);
   const [bookingHistoryLoaded, setBookingHistoryLoaded] = useState(!live);
   const defaultPrevious = useRef(false);
   const [remoteBreaks, setRemoteBreaks] = useState<DiaryBreak[]>([]),
@@ -861,9 +864,7 @@ export default function App() {
       ]);
       if (cancelled) return;
       if (ts.error || ss.error) {
-        setError(
-          "Database setup is needed. Run the two SQL files in the README first.",
-        );
+        setError(requestErrorMessage(ts.error || ss.error, "We couldn’t load the salon’s treatments and staff."));
         return;
       }
       setTreatments(ts.data);
@@ -976,22 +977,25 @@ export default function App() {
     }
     let cancelled = false;
     setBookingHistoryLoaded(false);
-    db.rpc("get_my_appointments").then(({ data, error }) => {
-      if (cancelled) return;
-      if (error) setError(error.message);
-      else {
-        setMyBookings(
-          (data || []).map((a: Appointment) =>
-            a.user_id !== session.user.id ? { ...a, booked_for_self: true } : a,
-          ),
-        );
-        setBookingHistoryLoaded(true);
-      }
-    });
+    setBookingHistoryError("");
+    void (async()=>{
+      try {
+        let result;
+        for(let attempt=0;attempt<2;attempt++) {
+          result=await db.rpc("get_my_appointments");
+          if(cancelled)return;
+          if(!result.error || !isConnectionError(result.error) || attempt===1)break;
+        }
+        if(result?.error)throw result.error;
+        if(cancelled)return;
+        setMyBookings((result?.data || []).map((a:Appointment)=>a.user_id !== session.user.id ? {...a,booked_for_self:true} : a));
+        setBookingHistoryLoaded(true);setBookingHistoryError("");
+      } catch(e) {if(!cancelled)setBookingHistoryError(requestErrorMessage(e,"We couldn’t load your appointments."));}
+    })();
     return () => {
       cancelled = true;
     };
-  }, [live, session?.user.id, activeRole, view, confirmation]);
+  }, [live, session?.user.id, activeRole, view, confirmation, bookingHistoryVersion]);
   useEffect(() => {
     if (!live || !db || !session || activeRole !== "client") {
       setOwnClient(null);
@@ -1721,10 +1725,11 @@ export default function App() {
       </header>
       {error && !selected && !breakDraft && (
         <div role="alert" className="error">
-          {error}
+          {requestErrorMessage(error)}
           <button onClick={() => setError("")}>Dismiss</button>
         </div>
       )}
+      {bookingHistoryError && activeRole === "client" && view === "my-bookings" && <div role="alert" className="error">{bookingHistoryError}<button onClick={()=>setBookingHistoryVersion(v=>v+1)}>Retry loading appointments</button></div>}
       <main
         className={
           activeRole === "client" && view === "book" && step === 0
@@ -2686,6 +2691,7 @@ export default function App() {
             {(["Upcoming Appointments", "Previous Appointments"] as const).map(
               (heading, index) => {
                 const now = new Date();
+                if (live && !bookingHistoryLoaded) return <p role="status">{bookingHistoryError ? "Your appointment list is unavailable until it can be reloaded." : "Loading your appointments…"}</p>;
                 const parts = new Intl.DateTimeFormat("en-CA", {
                   timeZone: "Europe/Dublin",
                   year: "numeric",
@@ -3130,7 +3136,7 @@ export default function App() {
             </button>
             {error && (
               <p role="alert" className="auth-error">
-                {error}
+                {requestErrorMessage(error)}
               </p>
             )}
             <h2>
@@ -3222,7 +3228,7 @@ export default function App() {
             </button>
             {error && (
               <p role="alert" className="auth-error">
-                {error}
+                {requestErrorMessage(error)}
               </p>
             )}
             <p className="eyebrow">APPOINTMENT DETAILS</p>
