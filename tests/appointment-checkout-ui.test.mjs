@@ -157,3 +157,20 @@ test('free checkout completes on the first click without payment choices and ret
  fireEvent.click(screen.getByRole('button',{name:'Check Client Out'}));
  await waitFor(()=>assert.equal(saved?.status,'completed'));assert.equal(saved.patch_for_treatment_id,8001);assert.equal(call[0],'checkout_appointment');assert.equal(call[1].p_method,null);assert.equal(call[1].p_revision,2);assert.equal(screen.queryByText('Select method of payment'),null);
 });
+
+test('discount saves a reduced total and revision before selecting payment; permission hides link',async()=>{
+ const calls=[];
+ const db={rpc:async(name,args)=>{calls.push([name,args]);return {data:name==='apply_appointment_discount'?{...appointment,price:60,revision:4}:name==='checkout_appointment'?{}:{vouchers:[],credit_notes:[]},error:null};}};
+ render(React.createElement(Component,{db,appointment,canDiscount:true,onSaved:async()=>{}}));
+ fireEvent.click(screen.getByRole('button',{name:'Check Client Out'}));
+ fireEvent.click(screen.getByRole('button',{name:'Apply discount'}));
+ assert.equal(screen.queryByRole('button',{name:'Card'}),null);
+ fireEvent.change(screen.getByLabelText('New treatment price'),{target:{value:'60'}});
+ fireEvent.click(screen.getByRole('button',{name:'Save discount'}));
+ await waitFor(()=>assert(screen.getByRole('button',{name:'Cash'})));
+ fireEvent.click(screen.getByRole('button',{name:'Cash'}));
+ fireEvent.click(screen.getByRole('button',{name:'Complete Appointment'}));
+ await waitFor(()=>assert(calls.some(([n,a])=>n==='checkout_appointment'&&a.p_revision===4)));
+ assert.equal(calls.find(([n])=>n==='apply_appointment_discount')[1].p_price,60);
+ cleanup();render(React.createElement(Component,{db,appointment,onSaved:async()=>{}}));fireEvent.click(screen.getByRole('button',{name:'Check Client Out'}));assert.equal(screen.queryByRole('button',{name:'Apply discount'}),null);
+});

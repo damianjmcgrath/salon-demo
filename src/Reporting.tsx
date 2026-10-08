@@ -1,3 +1,4 @@
+import DiscountsReport from "./DiscountsReport";
 import DailyActivityReport from "./DailyActivityReport";
 import VoucherStatusReport from "./VoucherStatusReport";
 import RevolutSandbox from "./RevolutSandbox";
@@ -48,6 +49,7 @@ export default function Reporting({
   onHome: () => void;
   allowSandbox?: boolean;
 }) {
+  const [discounts,setDiscounts] = useState(false);
   const [activity, setActivity] = useState(false);
   const [sandbox, setSandbox] = useState(false);
   const [vouchers, setVouchers] = useState(false);
@@ -159,6 +161,7 @@ export default function Reporting({
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  if (discounts) return <DiscountsReport db={db} onBack={()=>setDiscounts(false)}/>;
   if (activity) return <DailyActivityReport db={db} onBack={() => setActivity(false)} />;
   if (vouchers)
     return <VoucherStatusReport db={db} onBack={() => setVouchers(false)} />;
@@ -193,6 +196,7 @@ export default function Reporting({
             </p>
           )}
           <div className="workspace-grid">
+            <button className="panel workspace-card" onClick={()=>setDiscounts(true)}><h2>Discounts Report</h2><p>Discounts applied by staff.</p><span>Open →</span></button>
             <button className="panel workspace-card" onClick={() => setActivity(true)}><h2>Daily Activity Report</h2><p>Individual appointment payments and collected no-show fees.</p><span>Open →</span></button>
             <button
               className="panel workspace-card"

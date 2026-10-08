@@ -30,11 +30,20 @@ export default function AppointmentCheckout({
   db,
   appointment,
   onSaved,
+  canDiscount = false,
 }: {
   db: SupabaseClient | null;
   appointment: Appointment;
+  canDiscount?: boolean;
   onSaved: (completed: Appointment) => Promise<void>;
 }) {
+  const [current, setCurrent] = useState(appointment);
+  const [discountOpen,setDiscountOpen] = useState(false), [newPrice,setNewPrice] = useState("");
+  async function saveDiscount() {
+    if (!db || busy || !/^\d+(\.\d{1,2})?$/.test(newPrice)) {setError("Enter a valid price with at most two decimal places.");return;}
+    setBusy(true);setError("");
+    try {const r=await db.rpc("apply_appointment_discount",{p_id:current.id,p_revision:current.revision ?? 0,p_price:Number(newPrice)});if(r.error)throw r.error;setCurrent(r.data);setDiscountOpen(false);choose("");} catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  }
   const [open, setOpen] = useState(false),
     [method, setMethod] = useState(""),
     [editing, setEditing] = useState(false);
@@ -80,7 +89,7 @@ export default function AppointmentCheckout({
       active = false;
     };
   }, [open, db, appointment.id]);
-  const price = cents(appointment.price),
+  const price = cents(current.price),
     used = value ? Math.min(cents(value.balance), price) : 0;
   const remainder = price - used,
     isValue = method === "voucher" || method === "credit";
@@ -128,7 +137,7 @@ export default function AppointmentCheckout({
     try {
       const r = await db.rpc("checkout_appointment", {
         p_id: appointment.id,
-        p_revision: appointment.revision ?? 0,
+        p_revision: current.revision ?? 0,
         p_method: price === 0 ? null : method,
         p_voucher_code: method === "voucher" ? value?.code : null,
         p_credit_note_id: method === "credit" ? value?.id : null,
@@ -173,9 +182,11 @@ export default function AppointmentCheckout({
     >
       <h3>Check Client Out</h3>
       <p>
-        Treatment total: <strong>{money(price / 100)}</strong>
+        Treatment total: <strong>{money(price / 100)}</strong>{" "}
+        {canDiscount && price>0 && <button className="back" disabled={busy} onClick={()=>{setDiscountOpen(true);choose("");}}>Apply discount</button>}
       </p>
-      {!method || editing ? (
+      {discountOpen && <div><label>New treatment price<input inputMode="decimal" value={newPrice} disabled={busy} onChange={e=>{if(/^\d*(\.\d{0,2})?$/.test(e.target.value))setNewPrice(e.target.value);}}/></label><button className="secondary" disabled={busy} onClick={()=>void saveDiscount()}>Save discount</button><button className="back" disabled={busy} onClick={()=>setDiscountOpen(false)}>Cancel</button></div>}
+      {!discountOpen && (!method || editing) ? (
         <>
           <p>Select method of payment</p>
           <div className="payment-buttons">
@@ -186,7 +197,7 @@ export default function AppointmentCheckout({
             ))}
           </div>
         </>
-      ) : (
+      ) : !discountOpen ? (
         <p>
           Method of Payment: <strong>{labels[method]}</strong>{" "}
           <button
@@ -197,8 +208,8 @@ export default function AppointmentCheckout({
             Edit
           </button>
         </p>
-      )}
-      {isValue && !editing && (
+      ) : null}
+      {isValue && !editing && !discountOpen && (
         <>
           {loading ? (
             <p>Loading available balances…</p>
@@ -305,7 +316,7 @@ export default function AppointmentCheckout({
           )}
         </>
       )}
-      {ready && !editing && (
+      {ready && !editing && !discountOpen && (
         <>
           <h4>Payment breakdown</h4>
           <table className="checkout-breakdown">
@@ -355,7 +366,7 @@ export default function AppointmentCheckout({
         </p>
       )}
       <div className="record-actions">
-        {ready && !editing && !loading && (
+        {ready && !editing && !discountOpen && !loading && (
         <button
           className="primary"
           disabled={!db || !ready || editing || busy || loading}

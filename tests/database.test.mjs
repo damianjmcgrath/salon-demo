@@ -1478,3 +1478,14 @@ test('My Vouchers returns only own assigned voucher history and blocks staff ide
  await pg.exec('reset role');await pg.query("update no_show_fees set updated_at='1993-01-02T12:00:00Z' where order_id='revolut-order-test'");await as(accountant);
  rows=(await one("select get_daily_activity_report('1993-01-02','1993-01-02',array['card']) data")).data;assert.equal(rows.length,1);assert.equal(Number(rows[0].amount),10);summary=await one("select * from get_activity_report('1993-01-02','1993-01-02')");assert.equal(Number(summary.card_payments),10);
  });
+
+test('discounts require permission, preserve original price and feed payment totals',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/035_checkout_discounts.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ const a=await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,1,8001,'2098-01-01',600,15,'Client','123','Discount Test',80,'checked_in') returning *",[c.id,clientUser]);
+ await as(staffB);await assert.rejects(pg.query('select apply_appointment_discount($1,0,60)',[a.id]),/Permission denied/);await as(staffA);
+ for(const amount of [81,-1,60.123])await assert.rejects(pg.query('select apply_appointment_discount($1,0,$2)',[a.id,amount]),/lower price/);
+ const saved=await one('select * from apply_appointment_discount($1,0,60)',[a.id]);assert.equal(Number(saved.price),60);assert.equal(saved.revision,1);await assert.rejects(pg.query('select apply_appointment_discount($1,0,50)',[a.id]),/changed/);
+ await as(accountant);const rows=(await one('select get_discounts_report() data')).data;assert.equal(rows.length,1);assert.equal(Number(rows[0].original_price),80);assert.equal(Number(rows[0].discount_percentage),25);assert(rows[0].staff_name);await as(clientUser);await assert.rejects(pg.query('select get_discounts_report()'),/Permission denied/);
+ await as(staffA);const done=await one("select * from checkout_appointment($1,1,'cash')",[a.id]);assert.equal(Number(done.price),60);
+ });

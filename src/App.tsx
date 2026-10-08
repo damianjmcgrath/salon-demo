@@ -3287,6 +3287,7 @@ export default function App() {
             {selected.status === "checked_in" && (
               <AppointmentCheckout
                 key={`checkout-${selected.id}`}
+                canDiscount={allowed("perform.discounts")}
                 db={live ? db : null}
                 appointment={selected}
                 onSaved={async (completed) => {
