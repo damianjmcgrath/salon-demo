@@ -43,12 +43,14 @@ export default function StaffWorkspace({
   onStaffAdmin,
   onTreatments,
   onPermissions,
+  onEmails,
   permissions,
 }: {
   role: string;
   permissions?: Permissions;
   onTreatments?: () => void;
   onPermissions?: () => void;
+  onEmails?: () => void;
   initialScreen?: string;
   treatments: { id: number; name: string; category: string }[];
   staff: { id: number; name: string; active?: boolean }[];
@@ -607,6 +609,7 @@ export default function StaffWorkspace({
               "Choose which pages and actions staff can access.",
               onPermissions ?? (() => {}),
             )}
+            {role === "admin" && tile("Email Management", "Manage salon details and email templates.", onEmails ?? (() => {}))}
           </div>
         </>
       ) : screen === "vouchers" ? (

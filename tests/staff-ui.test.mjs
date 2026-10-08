@@ -289,9 +289,15 @@ test("UI: diary no-show is visibly marked and records no guarantee charge", asyn
   assert.equal(data.activity.at(-1).details.guarantee_charged, false);
   assert.equal(data.activity.at(-1).details.after, "no_show");
 });
-test("UI: admin has eight tiles, accountant only Reporting, and clocks remain profile specific", async () => {
+test("UI: admin has nine tiles, accountant only Reporting, and clocks remain profile specific", async () => {
   await login(/Aoife/);
-  assert.equal(document.querySelectorAll(".workspace-card").length, 8);
+  assert.equal(document.querySelectorAll(".workspace-card").length, 9);
+  const nav = document.getElementById("account-navigation");
+  assert.deepEqual([...nav.querySelectorAll(":scope > button")].map(b=>b.textContent),["Staff Home","Diary","Clients","Appointments","Treatments","Vouchers","Permissions","Reports","Emails"]);
+  fireEvent.click(screen.getByRole("button", {name:/Email Management Manage/}));
+  assert(screen.getByRole("heading",{name:"Email Management",exact:true}));
+  assert(screen.getByText(/available here in the next step/));
+  fireEvent.click(screen.getByRole("button",{name:"← Staff Home",exact:true}));
   const out = screen.getByRole("button", { name: "Clock-Out" });
   assert(out.disabled);
   fireEvent.click(screen.getByRole("button", { name: "Clock-In" }));
@@ -457,7 +463,7 @@ test("UI: admin creates staff, edits notes and skills, archives with retained hi
     assert.equal(screen.queryByText("Completed induction"), null),
   );
   fireEvent.click(
-    screen.getByRole("button", { name: "Treatments", exact: true }),
+    within(screen.getByRole("navigation", {name:"Staff record sections"})).getByRole("button", { name: "Treatments", exact: true }),
   );
   fireEvent.click(
     screen.getByRole("button", { name: "Select visible treatments" }),
@@ -862,7 +868,7 @@ test('UI: client deposit requirement defaults to Yes and can be saved as No',asy
 
 test('UI: checked-in diary offers checkout and reversal, restoring a single reminder and booking actions',async()=>{
  await login(/Aoife/);
- fireEvent.click(screen.getByRole('button',{name:'Staff Diary',exact:true}));
+ fireEvent.click(screen.getByRole('button',{name:'Diary',exact:true}));
  fireEvent.click(await screen.findByRole('button',{name:/Grace Demo.*Lash Lift/}));
  let modal=within(screen.getByRole('dialog',{name:'Appointment details'}));
  assert(modal.getByRole('button',{name:'Check Client Out'}));assert.equal(modal.queryByRole('button',{name:'Send Reminder'}),null);assert.equal(modal.queryByRole('button',{name:'Amend appointment'}),null);assert.equal(modal.queryByRole('button',{name:'Cancel appointment'}),null);

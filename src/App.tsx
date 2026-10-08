@@ -1665,70 +1665,14 @@ export default function App() {
               Staff Home
             </button>
           )}
-          {staffAccess &&
-            (["Appointments", "Clients"] as const)
-              .filter((label) =>
-                allowed(
-                  label === "Appointments"
-                    ? "view.appointments"
-                    : "view.clients",
-                ),
-              )
-              .map((label) => (
-                <button
-                  key={label}
-                  className={
-                    view === "staff-workspace" &&
-                    workspaceScreen === label.toLowerCase()
-                      ? "active"
-                      : ""
-                  }
-                  onClick={() => staffHome(label.toLowerCase())}
-                >
-                  {label}
-                </button>
-              ))}
-          {staffAccess && allowed("view.diary") && (
-            <button
-              className={view === "diary" ? "active" : ""}
-              onClick={() => {
-                setDate(today());
-                setView("diary");
-              }}
-            >
-              Staff Diary
-            </button>
-          )}
-          {staffAccess && allowed("view.vouchers") && (
-            <button
-              className={
-                view === "staff-workspace" && workspaceScreen === "vouchers"
-                  ? "active"
-                  : ""
-              }
-              onClick={() => staffHome("vouchers")}
-            >
-              Vouchers
-            </button>
-          )}
-          {staffAccess && allowed("view.staff") && (
-            <button
-              className={view === "staff-admin" ? "active" : ""}
-              onClick={() => setView("staff-admin")}
-            >
-              Staff Management
-            </button>
-          )}
-          {staffAccess && allowed("view.treatments") && (
-            <button onClick={() => setView("treatment-management")}>
-              Treatment Management
-            </button>
-          )}
-          {staffAccess && allowed("view.permissions") && (
-            <button onClick={() => setView("permission-management")}>
-              Permission Management
-            </button>
-          )}
+          {staffAccess && [
+            {label:"Diary", permission:"view.diary", view:"diary", action:()=>{setDate(today());setView("diary");}},
+            {label:"Clients", permission:"view.clients", screen:"clients", action:()=>staffHome("clients")},
+            {label:"Appointments", permission:"view.appointments", screen:"appointments", action:()=>staffHome("appointments")},
+            {label:"Treatments", permission:"view.treatments", view:"treatment-management", action:()=>setView("treatment-management")},
+            {label:"Vouchers", permission:"view.vouchers", screen:"vouchers", action:()=>staffHome("vouchers")},
+            {label:"Permissions", permission:"view.permissions", view:"permission-management", action:()=>setView("permission-management")},
+          ].filter(item=>allowed(item.permission)).map(item=><button key={item.label} className={(item.view ? view===item.view : view==="staff-workspace" && workspaceScreen===item.screen) ? "active" : ""} onClick={item.action}>{item.label}</button>)}
           {reportAccess && (
             <button
               className={view === "reporting-placeholder" ? "active" : ""}
@@ -1737,6 +1681,7 @@ export default function App() {
               Reports
             </button>
           )}
+          {activeRole === "admin" && <button className={view === "email-management" ? "active" : ""} onClick={()=>setView("email-management")}>Emails</button>}
           <div className={activeRole === "client" || staffAccess ? "client-sign-in" : ""}>
             {staffAccess && <span>Signed in as {actorName.trim().split(/\s+/)[0]}</span>}
             {activeRole === "client" && (
@@ -1888,6 +1833,7 @@ export default function App() {
             permissions={permissions}
             onTreatments={() => setView("treatment-management")}
             onPermissions={() => setView("permission-management")}
+            onEmails={() => setView("email-management")}
             onReporting={() => setView("reporting-placeholder")}
             onStaffAdmin={() => setView("staff-admin")}
             db={db}
@@ -2884,6 +2830,12 @@ export default function App() {
             onHome={staffHome}
             onChanged={() => setCatalogVersion((v) => v + 1)}
           />
+        ) : view === "email-management" && activeRole === "admin" ? (
+          <section className="panel">
+            <button className="back" onClick={()=>staffHome()}>← Staff Home</button>
+            <h1>Email Management</h1>
+            <p>Salon details and email template settings will be available here in the next step.</p>
+          </section>
         ) : view === "staff-admin" && staffAccess && allowed("view.staff") ? (
           <StaffAdministration
             key={`${live}-${session?.user.id || ownStaffId}`}

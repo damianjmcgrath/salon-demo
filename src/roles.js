@@ -23,6 +23,7 @@ export function canAccess(role, view, permissions) {
     }[view];
     if (key) return !!permissions[key];
   }
+  if (view === "email-management") return role === "admin";
   if (["login", "recovery"].includes(view)) return true;
   if (view === "book") return ["client", "staff", "admin"].includes(role);
   if (["staff-workspace", "diary"].includes(view))

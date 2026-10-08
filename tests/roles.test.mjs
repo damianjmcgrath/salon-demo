@@ -8,14 +8,14 @@ test("customers never get staff diary or financial reporting", () => {
 });
 test("accountant is reporting only; staff cannot see management reports", () => {
   assert.equal(canAccess("accountant", "report"), true);
-  for (const view of ["diary", "workspace", "book", "my-bookings"])
+  for (const view of ["diary", "workspace", "book", "my-bookings", "email-management"])
     assert.equal(canAccess("accountant", view), false);
   assert.equal(canAccess("staff", "diary"), true);
   assert.equal(canAccess("staff", "report"), false);
 });
 test("admin has operational access and IT Support is retired", () => {
   for (const role of ["admin"])
-    for (const view of ["diary", "staff-workspace", "report"])
+    for (const view of ["diary", "staff-workspace", "report", "email-management"])
       assert.equal(canAccess(role, view), true);
   assert.equal(roleHome("accountant"), "reporting-home");
   assert.equal(roleHome("staff"), "staff-workspace");
