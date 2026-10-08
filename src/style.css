@@ -1761,3 +1761,12 @@ nav .logout-link {
   font-size: 14px;
   color: #666054;
 }
+
+.mobile-treatment-categories { display: none; }
+@media (max-width: 800px) {
+  .catalog-layout aside { display: block; overflow: visible; }
+  .catalog-layout aside .category-filter { display: none; }
+  .catalog-layout aside .back { width: auto; padding-left: 0; }
+  .mobile-treatment-categories { display: block; margin: 16px 0 0; font-weight: 600; }
+  .mobile-treatment-categories select { font-weight: 400; min-height: 48px; }
+}

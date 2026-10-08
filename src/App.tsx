@@ -2059,10 +2059,16 @@ export default function App() {
                       {amending ? "Amending" : "Booking for"} {staffClient.name}
                     </p>
                   )}
+                  <label className="mobile-treatment-categories">
+                    Treatment category
+                    <select value={category} onChange={(e)=>{defaultPrevious.current=false;setCategory(e.target.value);}}>
+                      {categories.map(c=><option key={c} value={c}>{c} ({c === "Previous Bookings" ? previousIds.length : c === "All treatments" ? treatments.length : treatments.filter(t=>t.category===c).length})</option>)}
+                    </select>
+                  </label>
                   {categories.map((c) => (
                     <button
                       key={c}
-                      className={category === c ? "chosen" : ""}
+                      className={`category-filter ${category === c ? "chosen" : ""}`}
                       onClick={() => {
                         defaultPrevious.current = false;
                         setCategory(c);
