@@ -1770,3 +1770,13 @@ nav .logout-link {
   .mobile-treatment-categories { display: block; margin: 16px 0 0; font-weight: 600; }
   .mobile-treatment-categories select { font-weight: 400; min-height: 48px; }
 }
+
+.my-vouchers-cards { display: none; }
+@media (max-width: 700px) {
+  .my-vouchers-table { display: none; }
+  .my-vouchers-cards { display: grid; gap: 14px; }
+  .my-voucher-card { margin: 0; padding: 18px; border: 1px solid #e2ddd3; border-radius: 8px; background: #fffdf9; min-width: 0; }
+  .my-voucher-card > div + div { margin-top: 14px; }
+  .my-voucher-card dt { font-size: 12px; color: #786957; }
+  .my-voucher-card dd { margin: 4px 0 0; font-size: 15px; overflow-wrap: anywhere; }
+}
