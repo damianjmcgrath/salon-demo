@@ -28,3 +28,12 @@ test('prepaid confirmations name the payment and do not request payment in salon
  assert(payload.text.includes('No further payment is required'));assert(!payload.text.includes('Payment is made in the salon'));assert(payload.html.includes('Your payment'));if(method==='voucher')assert(payload.text.includes('SC-PREPAID'));
  }
 });
+
+test('confirmation email includes calendar links and a Unicode-safe ICS attachment', () => {
+ const payload = confirmationPayload({id:'calendar',client_name:'Jacqui',treatment_name:'Lash Lift',appointment_date:'2026-10-15',start_minute:840,duration:45,staff_name:'Leah',price:49},'Test <test@example.com>');
+ assert.match(payload.html,/Add to Google Calendar/);
+ assert.match(payload.html,/Add to Apple \/ Outlook Calendar/);
+ const ics = Buffer.from(payload.attachments[0].content,'base64').toString('utf8');
+ assert.match(ics,/DTSTART:20261015T130000Z/);
+ assert.match(ics,/DTEND:20261015T134500Z/);
+});

@@ -31,7 +31,13 @@ Deno.serve(async (req) => {
   let accepted = 0,
     failed = 0;
   for (const job of jobs || []) {
-    const payload = job.payload || confirmationPayload(job.snapshot, from);
+    // Queue snapshots predate calendar support; read the recorded appointment duration.
+    let payload = job.payload;
+    if (!payload) {
+      const appointment = await db.from("appointments").select("duration").eq("id", job.appointment_id).single();
+      if (appointment.error) { failed++; continue; }
+      payload = confirmationPayload({ ...job.snapshot, duration: appointment.data.duration }, from);
+    }
     const saved = await db
       .from("booking_email_queue")
       .update({ payload })

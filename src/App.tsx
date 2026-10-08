@@ -1,3 +1,4 @@
+import { bookingCalendar } from "../supabase/functions/send-booking-confirmations/calendar";
 import { isConnectionError, requestErrorMessage } from "./requestErrors";
 import { displayDate } from "./dateFormats";
 import BookingValueOptions, { type BookingValueChoice } from "./BookingValueOptions";
@@ -2439,6 +2440,13 @@ export default function App() {
                 </p>
                 {confirmation.prepaid_method && <p><strong>Paid already:</strong> {confirmation.prepaid_method === "voucher" ? `Voucher ID: ${confirmation.prepaid_voucher_code}` : "Credit Note"}. No further payment is required.</p>}
                 <p className="small">Your booking is saved.</p>
+                {(() => {
+                  const calendar = bookingCalendar({ ...confirmation, staff_name: staff.find(s => s.id === confirmation.staff_id)?.name });
+                  return <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12, margin: "20px 0" }}>
+                    <a className="secondary" style={{ padding: 14 }} href={calendar.google} target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>
+                    <a className="secondary" style={{ padding: 14 }} href={`data:text/calendar;charset=utf-8;base64,${calendar.base64}`} download="sculpted-appointment.ics">Add to Apple / Outlook Calendar</a>
+                  </div>;
+                })()}
                 <button
                   className="primary"
                   onClick={() => {

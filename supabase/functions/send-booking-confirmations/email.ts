@@ -1,3 +1,4 @@
+import { bookingCalendar } from "./calendar.ts";
 // Test recipient is deliberately fixed server-side. No client-supplied recipients.
 export const testRecipient = "damianjmcgrath@gmail.com";
 export function confirmationPayload(
@@ -5,6 +6,7 @@ export function confirmationPayload(
   from: string,
 ) {
   const s = snapshot;
+  const calendar = Number(s.duration) > 0 ? bookingCalendar(s as any) : null;
   const escape = (v: unknown) =>
     String(v ?? "").replace(
       /[&<>"']/g,
@@ -48,11 +50,13 @@ export function confirmationPayload(
     guaranteeText,
   ];
   return {
+    ...(calendar ? { attachments: [{ filename: "sculpted-appointment.ics", content: calendar.base64, content_type: "text/calendar" }] } : {}),
     from,
     to: [testRecipient],
     subject: "[TEST] Sculpted — Appointment confirmation",
     text: [
       ...lines,
+      ...(calendar ? [`Add to Google Calendar: ${calendar.google}`, `Add to Apple / Outlook Calendar: ${calendar.download}`] : []),
       "View my appointments: https://damianjmcgrath.github.io/salon-demo/",
     ].join("\n\n"),
     html: `<!doctype html>
@@ -90,6 +94,7 @@ ${[
 </td></tr>
 <tr><td align="center" style="padding:0 24px 28px;">
 <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" bgcolor="#303b30" style="border-radius:4px;"><a href="https://damianjmcgrath.github.io/salon-demo/" style="display:inline-block;padding:16px 28px;border:1px solid #303b30;border-radius:4px;font-size:14px;font-weight:bold;text-decoration:none;color:#ffffff;">View my appointments</a></td></tr></table>
+${calendar ? `<p style="margin:20px 0;line-height:2;"><a href="${escape(calendar.google)}" style="color:#303b30;">Add to Google Calendar</a><br><a href="${escape(calendar.download)}" style="color:#303b30;">Add to Apple / Outlook Calendar</a></p>` : ""}
 <p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#77756f;">Sign in to view your bookings.</p>
 </td></tr>
 <tr><td style="padding:22px 24px;background-color:#f2f0e8;">
