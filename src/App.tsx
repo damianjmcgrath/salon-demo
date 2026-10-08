@@ -958,9 +958,10 @@ export default function App() {
   }, [session?.user.id, live]);
   useEffect(() => {
     if (roleLoading || !activeRole || view === "recovery") return;
+    if (live && activeRole !== "client" && Object.keys(permissionGrants).length === 0) return;
     if (view === "login" || !canAccess(activeRole, view, permissions))
       setView(staffAccess && allowed("view.diary") ? "diary" : roleHome(activeRole));
-  }, [activeRole, roleLoading, view, permissions]);
+  }, [activeRole, roleLoading, view, permissions, live, permissionGrants]);
   useEffect(() => {
     void refresh();
   }, [live, session?.user.id, date, activeRole, roleLoading, permissionGrants]);
