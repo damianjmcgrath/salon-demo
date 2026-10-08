@@ -1466,3 +1466,15 @@ test('My Vouchers returns only own assigned voucher history and blocks staff ide
  await as(clientUser);const report=(await one('select get_my_voucher_history() data')).data;const own=(await one('select get_my_vouchers() data')).data;assert.deepEqual(report.vouchers.map(v=>v.id).sort(),own.map(v=>v.id).sort());assert(report.vouchers.every(v=>v.purchaser_name));assert(report.uses.every(r=>own.some(v=>v.id===r.voucher_id)));
  await as(accountant);await assert.rejects(pg.query('select get_my_voucher_history()'),/Client sign-in/);await as(null,'anon');await assert.rejects(pg.query('select get_my_voucher_history()'),/permission denied/);
 });
+
+ test('financial reports use recorded payment dates for future appointments and completion dates for counts',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/034_reporting_payment_dates.sql',import.meta.url),'utf8'));
+ const c=await one('select id from clients where auth_user_id=$1',[clientUser]);
+ const a=await one("insert into appointments(client_id,user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status,completed_at) values($1,$2,1,8001,'2099-01-01',600,15,'Client','123','Early Checkout',50,'completed','1993-01-02T11:15:00Z') returning *",[c.id,clientUser]);
+ await pg.query("insert into appointment_payments(appointment_id,method,amount,recorded_by,recorded_at) values($1,'cash',50,$2,'1993-01-02T11:15:00Z')",[a.id,staffA]);
+ await as(accountant);let rows=(await one("select get_daily_activity_report('1993-01-02','1993-01-02') data")).data;assert.equal(rows.length,1);assert.equal(rows[0].appointment_id,a.id);assert.equal(rows[0].start_minute,675);
+ let summary=await one("select * from get_activity_report('1993-01-02','1993-01-02')");assert.equal(Number(summary.cash_payments),50);assert.equal(Number(summary.appointments_completed),1);
+ summary=await one("select * from get_activity_report('1993-01-15','1993-01-15','month')");assert.equal(Number(summary.cash_payments),50);
+ await pg.exec('reset role');await pg.query("update no_show_fees set updated_at='1993-01-02T12:00:00Z' where order_id='revolut-order-test'");await as(accountant);
+ rows=(await one("select get_daily_activity_report('1993-01-02','1993-01-02',array['card']) data")).data;assert.equal(rows.length,1);assert.equal(Number(rows[0].amount),10);summary=await one("select * from get_activity_report('1993-01-02','1993-01-02')");assert.equal(Number(summary.card_payments),10);
+ });

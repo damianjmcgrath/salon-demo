@@ -267,7 +267,7 @@ export default function Reporting({
           </form>
           <p className="small">
             Scheduled counts exclude cancelled appointments. Completed counts
-            use appointment dates. Payments use the date completion was recorded
+            use completion dates. Payments use the date payment was recorded
             in Dublin time. Amounts are recorded treatment prices; card fees are
             calculated at 1.5% and rounded to cents for each row.
           </p>
