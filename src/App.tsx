@@ -1595,7 +1595,8 @@ export default function App() {
             aria-controls="account-navigation"
             onClick={() => setAccountMenuOpen(!accountMenuOpen)}
           >
-            Menu
+            <span aria-hidden="true">{accountMenuOpen ? "✕" : "☰"}</span>{" "}
+            {accountMenuOpen ? "Close" : "Menu"}
           </button>
         )}
         <nav

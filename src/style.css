@@ -1780,3 +1780,13 @@ nav .logout-link {
   .my-voucher-card dt { font-size: 12px; color: #786957; }
   .my-voucher-card dd { margin: 4px 0 0; font-size: 15px; overflow-wrap: anywhere; }
 }
+
+@media (max-width: 700px) {
+  .client-header .account-menu-toggle { display: inline-flex; align-items: center; gap: 8px; background: #fff; font-size: 14px; }
+  .client-header .account-menu-toggle span { font-size: 20px; line-height: 1; }
+  .client-header nav.menu-open { display: flex; flex-direction: column; align-items: stretch; gap: 0; width: 100%; margin-top: 0; padding: 8px 16px; background: #faf8f3; border: 1px solid #e3ded5; border-radius: 8px; }
+  .client-header nav.menu-open > button { width: 100%; min-height: 48px; padding: 14px 4px; font-size: 15px; text-align: left; border-bottom: 1px solid #e3ded5; }
+  .client-header nav.menu-open > button.active { font-weight: 700; color: #7d6650; }
+  .client-header nav.menu-open .client-sign-in { align-items: flex-start; gap: 4px; padding: 16px 4px 8px; }
+  .client-header nav.menu-open .client-sign-in button { font-size: 15px; font-weight: 700; min-height: 44px; padding: 10px 0; }
+}
