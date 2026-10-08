@@ -14,7 +14,7 @@ export default function AppointmentReminder({ db, appointmentId, initialEmail, d
  }
  return <>
   <button className="secondary appointment-action" disabled={disabled||busy||!db} onClick={()=>{setOpen(!open);setMessage("");setError("");}}>Send Reminder</button>
-  {open&&<form className="guarantee" onSubmit={send}><label>Client email address<input type="email" required maxLength={254} value={email} disabled={busy} onChange={e=>{setEmail(e.target.value);request.current=crypto.randomUUID();}} autoFocus/></label><p className="small">During testing, emails are sent to damianjmcgrath@gmail.com.</p><button className="primary" disabled={busy}>{busy?"Sending…":"Send"}</button></form>}
+  {open&&<form className="guarantee" onSubmit={send}><label>Client email address<input type="email" required maxLength={254} value={email} disabled={busy} onChange={e=>{setEmail(e.target.value);request.current=crypto.randomUUID();}} autoFocus/></label><p className="small">During testing, emails are sent to damianjmcgrath@gmail.com.</p><div className="record-actions"><button className="primary" disabled={busy}>{busy?"Sending…":"Send"}</button><button type="button" className="secondary" disabled={busy} onClick={()=>{setOpen(false);setError("");setMessage("");setEmail(initialEmail);}}>Cancel</button></div></form>}
   {error&&<p role="alert" className="auth-error">{error}</p>}{message&&<p role="status">{message}</p>}
  </>;
 }
