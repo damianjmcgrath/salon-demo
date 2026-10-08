@@ -345,6 +345,7 @@ export default function App() {
   const [patchChecking, setPatchChecking] = useState(false);
   const patchSelection = useRef(0);
 
+  const [valueRoute, setValueRoute] = useState<"checking" | "choose" | "later" | "value">("checking");
   const [prepayment, setPrepayment] = useState<BookingValueChoice | null>(null);
   const [guaranteeNeeded, setGuaranteeNeeded] = useState<boolean | null>(null);
   const [guaranteeError, setGuaranteeError] = useState("");
@@ -1212,6 +1213,7 @@ export default function App() {
     let active = true;
     setGuaranteeNeeded(null);
     setPrepayment(null);
+    setValueRoute("checking");
     setGuaranteeError("");
     if (step !== 3 || amending) return;
     if (!live) {
@@ -1321,12 +1323,13 @@ export default function App() {
             .find((r) => r.id === s.id)
             ?.treatment_ids?.includes(treatment.id)),
   );
+  const awaitingPaymentChoice = live && activeRole === "client" && Number(treatment?.price)>0 && (valueRoute === "checking" || valueRoute === "choose");
   async function book() {
     if (
       !treatment ||
       !slot ||
       (!amending &&
-        (guaranteeNeeded === null ||
+        (awaitingPaymentChoice || guaranteeNeeded === null ||
           (prepayment ? !prepayment.id : guaranteeNeeded && (!consent || !card)))) ||
       (!staffClient && activeRole !== "client") ||
       requiresPasswordChange
@@ -2260,7 +2263,7 @@ export default function App() {
                         ? "Confirm Appointment"
                         : "Booking Guarantee"}
                   </h2>
-                  {!amending && guaranteeNeeded === true && !prepayment && (
+                  {!amending && guaranteeNeeded === true && !prepayment && !awaitingPaymentChoice && (
                     <p>
                       Guarantee your booking using your saved card details, or
                       supply new card details.
@@ -2269,7 +2272,7 @@ export default function App() {
                   <p>
                     Booking for <strong>{name}</strong> · {email}
                   </p>
-                  {!amending && live && db && activeRole === "client" && Number(treatment.price)>0 && <BookingValueOptions db={db} treatmentId={treatment.id} requiresGuarantee={guaranteeNeeded} choice={prepayment} onChange={setPrepayment} disabled={busy} />}
+                  {!amending && live && db && activeRole === "client" && Number(treatment.price)>0 && <BookingValueOptions db={db} treatmentId={treatment.id} requiresGuarantee={guaranteeNeeded} choice={prepayment} onChange={setPrepayment} onRouteChange={setValueRoute} disabled={busy} />}
                   {amending ? (
                     <label>
                       Reason for amendment
@@ -2285,6 +2288,8 @@ export default function App() {
                     </p>
                   ) : guaranteeNeeded === null ? (
                     <p>Checking booking guarantee requirements…</p>
+                  ) : awaitingPaymentChoice ? (
+                    <p>{valueRoute === "checking" ? "" : "Choose a booking payment option to continue."}</p>
                   ) : prepayment ? (
                     <p>Your treatment will be paid upfront by {prepayment.method === "voucher" ? "voucher" : "credit note"}. No booking guarantee card is required.</p>
                   ) : guaranteeNeeded === false ? (
@@ -2369,7 +2374,7 @@ export default function App() {
                       busy ||
                       (amending
                         ? !changeReason.trim()
-                        : guaranteeNeeded === null ||
+                        : awaitingPaymentChoice || guaranteeNeeded === null ||
                           (prepayment ? !prepayment.id : guaranteeNeeded && (!consent || !card))) ||
                       !name.trim() ||
                       (live && (!session || !phone.trim()))

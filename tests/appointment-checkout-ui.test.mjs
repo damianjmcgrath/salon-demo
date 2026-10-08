@@ -185,11 +185,18 @@ test('prepaid checkout displays the voucher reference and completes without sele
 });
 
 test('booking offers both eligible balances and pay-in-salon for guarantee-exempt clients',async()=>{
- const changes=[];const onChange=c=>changes.push(c);
- const props={db:{rpc:async()=>({data:{vouchers:[{id:'v',code:'SC-123',balance:80}],credit_notes:[{id:'n',reason:'Goodwill',balance:90}]},error:null})},treatmentId:1,requiresGuarantee:false,choice:null,onChange,disabled:false};
+ const changes=[], routes=[];const onChange=c=>changes.push(c);const onRouteChange=r=>routes.push(r);
+ const props={db:{rpc:async()=>({data:{vouchers:[{id:'v',code:'SC-123',balance:80}],credit_notes:[{id:'n',reason:'Goodwill',balance:90}]},error:null})},treatmentId:1,requiresGuarantee:false,choice:null,onChange,onRouteChange,disabled:false};
  const view=render(React.createElement(ValueOptions,props));await waitFor(()=>assert(screen.getByLabelText('Booking payment option')));
+ assert.equal(screen.getByLabelText('Booking payment option').value,'');assert.equal(routes.at(-1),'choose');assert(screen.getByRole('option',{name:'Choose an option'}));
  assert(screen.getByRole('option',{name:'Pay in-salon after the treatment'}));assert(screen.getByRole('option',{name:'Use a credit note now'}));
  fireEvent.change(screen.getByLabelText('Booking payment option'),{target:{value:'voucher'}});assert.deepEqual(changes.at(-1),{method:'voucher',id:''});
  view.rerender(React.createElement(ValueOptions,{...props,choice:changes.at(-1)}));fireEvent.change(screen.getByLabelText('Choose a valid voucher'),{target:{value:'v'}});assert.deepEqual(changes.at(-1),{method:'voucher',id:'v'});
- fireEvent.change(screen.getByLabelText('Booking payment option'),{target:{value:'later'}});assert.equal(changes.at(-1),null);
+ fireEvent.change(screen.getByLabelText('Booking payment option'),{target:{value:'later'}});assert.equal(changes.at(-1),null);assert.equal(routes.at(-1),'later');
+ fireEvent.change(screen.getByLabelText('Booking payment option'),{target:{value:''}});assert.equal(routes.at(-1),'choose');
+});
+
+test('booking with no eligible voucher or credit note skips the payment option chooser',async()=>{
+ const routes=[];render(React.createElement(ValueOptions,{db:{rpc:async()=>({data:{vouchers:[],credit_notes:[]},error:null})},treatmentId:1,requiresGuarantee:true,choice:null,onChange:()=>{},onRouteChange:r=>routes.push(r),disabled:false}));
+ await waitFor(()=>assert.equal(routes.at(-1),'later'));assert.equal(screen.queryByLabelText('Booking payment option'),null);
 });
