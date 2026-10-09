@@ -1,4 +1,8 @@
-import { displayDate, displayDateTime, displayHistoryValue } from "./dateFormats";
+import {
+  displayDate,
+  displayDateTime,
+  displayHistoryValue,
+} from "./dateFormats";
 import { defaultPermissions, type Permissions } from "./permissions";
 import ClientSearch from "./ClientSearch";
 import ClientPatchTests from "./ClientPatchTests";
@@ -70,6 +74,8 @@ export default function StaffWorkspace({
 }) {
   const grants = permissions ?? defaultPermissions(role);
   const [requiresDeposit, setRequiresDeposit] = useState(true);
+  const [canAmend, setCanAmend] = useState(false),
+    [canCancel, setCanCancel] = useState(false);
   const [screen, setScreen] = useState(initialScreen),
     [intent, setIntent] = useState("profile"),
     [query, setQuery] = useState({ name: "", email: "", phone: "" }),
@@ -91,7 +97,14 @@ export default function StaffWorkspace({
   const profileTop = useRef<HTMLElement>(null);
   useEffect(() => {
     if (screen !== "record" || !client || window.innerWidth > 700) return;
-    const timer = window.setTimeout(() => profileTop.current?.scrollIntoView?.({behavior:"instant",block:"start"}),0);
+    const timer = window.setTimeout(
+      () =>
+        profileTop.current?.scrollIntoView?.({
+          behavior: "instant",
+          block: "start",
+        }),
+      0,
+    );
     return () => window.clearTimeout(timer);
   }, [screen, client?.id]);
   const generation = useRef(0),
@@ -121,6 +134,8 @@ export default function StaffWorkspace({
     const version = ++generation.current;
     setClient(c);
     setRequiresDeposit(c.requires_deposit !== false);
+    setCanAmend(c.requires_deposit === false || !!c.can_amend_anytime);
+    setCanCancel(c.requires_deposit === false || !!c.can_cancel_free);
     setClientTab("Personal Details");
     setDraft({ name: c.name, email: c.email, phone: c.phone });
     setScreen("record");
@@ -326,6 +341,8 @@ export default function StaffWorkspace({
           p_phone: draft.phone,
           p_revision: client.revision,
           p_requires_deposit: requiresDeposit,
+          p_can_amend_anytime: canAmend,
+          p_can_cancel_free: canCancel,
         });
         if (r.error) throw r.error;
         if (!mounted.current) return;
@@ -335,6 +352,8 @@ export default function StaffWorkspace({
           ...client,
           ...draft,
           requires_deposit: requiresDeposit,
+          can_amend_anytime: !requiresDeposit || canAmend,
+          can_cancel_free: !requiresDeposit || canCancel,
           revision: client.revision + 1,
         };
         setData((d) => ({
@@ -540,7 +559,11 @@ export default function StaffWorkspace({
       </section>
     );
   return (
-    <section ref={profileTop} className="staff-workspace" style={{scrollMarginTop:16}}>
+    <section
+      ref={profileTop}
+      className="staff-workspace"
+      style={{ scrollMarginTop: 16 }}
+    >
       <p className="eyebrow">STAFF PORTAL · {actor}</p>
       {screen !== "home" && (
         <button
@@ -609,7 +632,12 @@ export default function StaffWorkspace({
               "Choose which pages and actions staff can access.",
               onPermissions ?? (() => {}),
             )}
-            {role === "admin" && tile("Email Management", "Manage salon details and email templates.", onEmails ?? (() => {}))}
+            {role === "admin" &&
+              tile(
+                "Email Management",
+                "Manage salon details and email templates.",
+                onEmails ?? (() => {}),
+              )}
           </div>
         </>
       ) : screen === "vouchers" ? (
@@ -789,19 +817,45 @@ export default function StaffWorkspace({
                       <select
                         value={requiresDeposit ? "yes" : "no"}
                         disabled={busy}
-                        onChange={(e) =>
-                          setRequiresDeposit(e.target.value === "yes")
-                        }
+                        onChange={(e) => {
+                          setRequiresDeposit(e.target.value === "yes");
+                          if (e.target.value === "no") {
+                            setCanAmend(true);
+                            setCanCancel(true);
+                          }
+                        }}
                       >
                         <option value="yes">Yes</option>
                         <option value="no">No</option>
                       </select>
                     </label>
                     <p className="small">
-                      Yes requires a saved card for the booking guarantee of 50% of the treatment cost.
-                      No allows future bookings without card details; no payment
-                      is taken at booking.
+                      Yes requires a saved card for the booking guarantee of 50%
+                      of the treatment cost. No allows future bookings without
+                      card details; no payment is taken at booking.
                     </p>
+                    <label>
+                      Can Amend Appointment anytime for free
+                      <select
+                        disabled={busy || !requiresDeposit}
+                        value={canAmend ? "yes" : "no"}
+                        onChange={(e) => setCanAmend(e.target.value === "yes")}
+                      >
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </label>
+                    <label>
+                      Can Cancel anytime for free
+                      <select
+                        disabled={busy || !requiresDeposit}
+                        value={canCancel ? "yes" : "no"}
+                        onChange={(e) => setCanCancel(e.target.value === "yes")}
+                      >
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </label>
                     <button className="primary" disabled={busy}>
                       Save details
                     </button>
@@ -856,8 +910,7 @@ export default function StaffWorkspace({
                     <article className="client-note" key={n.id}>
                       <p>{n.body}</p>
                       <small>
-                        {n.author_name} ·{" "}
-                        {displayDateTime(n.created_at)}
+                        {n.author_name} · {displayDateTime(n.created_at)}
                       </small>
                     </article>
                   ))}
@@ -881,9 +934,19 @@ export default function StaffWorkspace({
                 />
               )}
               {clientTab === "Communications" && (
-                <ClientCommunications key={client.id} db={db} clientId={client.id} onSaved={() => {
-                  if (db) void db.rpc("get_client_activity", { p_client_id: client.id }).then(({ data }) => { if (data) setActivity(data); });
-                }} />
+                <ClientCommunications
+                  key={client.id}
+                  db={db}
+                  clientId={client.id}
+                  onSaved={() => {
+                    if (db)
+                      void db
+                        .rpc("get_client_activity", { p_client_id: client.id })
+                        .then(({ data }) => {
+                          if (data) setActivity(data);
+                        });
+                  }}
+                />
               )}
               {clientTab === "Patch Tests" && (
                 <ClientPatchTests
@@ -939,8 +1002,8 @@ export default function StaffWorkspace({
                       <div>
                         <h3>{a.treatment_name}</h3>
                         <p>
-                          {displayDate(a.appointment_date)} · {time(a.start_minute)} ·{" "}
-                          {a.client_name}
+                          {displayDate(a.appointment_date)} ·{" "}
+                          {time(a.start_minute)} · {a.client_name}
                         </p>
                         <span className={`status ${a.status}`}>
                           {a.status.replace("_", " ")}
@@ -985,8 +1048,7 @@ export default function StaffWorkspace({
                 <article className="activity-entry" key={a.id}>
                   <strong>{a.action.replaceAll("_", " ")}</strong>
                   <p>
-                    {a.actor_name} ·{" "}
-                    {displayDateTime(a.created_at)}
+                    {a.actor_name} · {displayDateTime(a.created_at)}
                   </p>
                   {a.details?.reason && <p>Reason: {a.details.reason}</p>}
                   {a.details?.before && a.details?.after && (

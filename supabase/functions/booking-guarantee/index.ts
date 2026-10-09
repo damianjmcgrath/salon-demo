@@ -112,7 +112,20 @@ Deno.serve(async (req: Request) => {
         return reply({ error: "Permission denied for this feature." }, 403);
     }
     if (["charge", "fee_status"].includes(input.action)) {
-      if (!isStaff) return reply({ error: "Staff access required." }, 403);
+      if (!isStaff) {
+        const policy = await userDb.rpc("client_appointment_policy", {
+          p_id: input.appointment_id,
+        });
+        if (policy.error)
+          return reply({ error: "Appointment access denied." }, 403);
+        const allowedFee = await db
+          .from("no_show_fees")
+          .select("purpose")
+          .eq("appointment_id", input.appointment_id)
+          .maybeSingle();
+        if (allowedFee.error || allowedFee.data?.purpose !== "cancellation")
+          return reply({ error: "Cancellation fee access required." }, 403);
+      }
       let row = await checked(
         db
           .from("no_show_fees")
@@ -143,7 +156,13 @@ Deno.serve(async (req: Request) => {
                 .eq("id", row.appointment_id)
                 .single(),
             );
-            if (appointment.status !== "no_show")
+            if (
+              appointment.status !== "no_show" &&
+              !(
+                row.purpose === "cancellation" &&
+                appointment.status === "cancelled"
+              )
+            )
               throw new Error("Appointment is not a no-show.");
             const card = appointment.guarantee_card_id
               ? await checked(
@@ -177,7 +196,13 @@ Deno.serve(async (req: Request) => {
                 amount: row.amount_cents,
                 currency: "EUR",
                 customer: { id: card.customer_id },
-                description: "Salon Sandbox no-show fee " + row.appointment_id,
+                description:
+                  "Salon Sandbox " +
+                  (row.purpose === "cancellation"
+                    ? "cancellation"
+                    : "no-show") +
+                  " fee " +
+                  row.appointment_id,
               });
               // Persist the order before submitting any payment. A request is never
               // automatically repeated if an external response is lost.

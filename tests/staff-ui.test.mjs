@@ -809,7 +809,8 @@ test("UI: appointment sections separate history and rebook directly into time se
     const upcoming = screen.getByRole("region", { name: /Upcoming Appointments/ });
     const previous = screen.getByRole("region", { name: /Previous Appointments/ });
     assert.equal(upcoming.querySelectorAll(".history-card").length, 1);
-    assert.equal(previous.querySelectorAll(".history-card").length, 2);
+    assert.equal(previous.querySelectorAll(".history-card").length, 1);
+    const cancelled=screen.getByRole("region",{name:/Cancelled Appointments/});assert.equal(cancelled.querySelectorAll(".history-card").length,1);assert.equal(cancelled.querySelector("button").textContent,"Rebook appointment");
     assert.equal(upcoming.querySelector("button"), null);
     fireEvent.click(previous.querySelector("button"));
     assert(screen.getByText(/Who would you like to see/i));

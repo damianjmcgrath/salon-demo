@@ -1594,3 +1594,27 @@ test('percentage guarantee snapshots 50% for new bookings, preserves old fees an
  await as(staffA);await pg.query("select record_no_show_decision($1,0,true,'Apply guarantee')",[a.id]);
  await pg.exec('reset role');assert.equal((await one('select amount_cents from no_show_fees where appointment_id=$1',[a.id])).amount_cents,2500);
 });
+
+test('client appointment policy guards ownership and cancellation; deposit exemption grants both flags',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/042_client_appointment_changes.sql',import.meta.url),'utf8'));
+ await pg.query('update clients set requires_deposit=true,can_amend_anytime=false,can_cancel_free=false where id=$1',[clientId]);
+ const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status) values($1,$2,1,8001,'Change test','Client','123456789',50,(now() at time zone 'Europe/Dublin')::date+1,600,60,'booked') returning *",[clientUser,clientId]);
+ await as(clientUser);let policy=(await one('select client_appointment_policy($1) data',[a.id])).data;assert.equal(policy.same_date_only,true);assert.equal(policy.cancel_free,true);
+ await assert.rejects(pg.query("select client_amend_appointment($1,8001,1,(now() at time zone 'Europe/Dublin')::date+4,600,0,'Move')",[a.id]),/Within three days/);
+ await assert.rejects(pg.query("select client_amend_appointment($1,8001,2,$2,600,0,'Move')",[a.id,a.appointment_date]),/date\/time only/);
+ await as(staffA);await assert.rejects(pg.query('select client_cancel_appointment($1,0)',[a.id]),/Client sign-in/);
+ await as(clientUser);const cancelled=(await one('select client_cancel_appointment($1,0) data',[a.id])).data;assert.equal(cancelled.fee_required,false);
+ await assert.rejects(pg.query('select client_cancel_appointment($1,0)',[a.id]),/no longer/);
+ await pg.exec('reset role');assert.equal((await one('select status from appointments where id=$1',[a.id])).status,'cancelled');
+ await pg.query('update clients set requires_deposit=false,can_amend_anytime=false,can_cancel_free=false where id=$1',[clientId]);const c=await one('select * from clients where id=$1',[clientId]);assert.equal(c.can_amend_anytime,true);assert.equal(c.can_cancel_free,true);
+});
+
+ test('client amendments preserve original details and card cancellations create one fee',async()=>{
+ await pg.exec('reset role');await pg.query('update clients set requires_deposit=true,can_amend_anytime=false,can_cancel_free=false where id=$1',[clientId]);
+ const card=await one('select id from booking_guarantee_cards where verified_at is not null limit 1');
+ const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status,guarantee_required,guarantee_card_id) values($1,$2,1,8001,'Original treatment label','Client','123456789',50,'2081-02-20',600,60,'booked',true,$3) returning *",[clientUser,clientId,card.id]);
+ await pg.query("insert into staff_day_shifts(staff_id,shift_date,start_minute,end_minute) values(1,'2081-02-21',540,1020) on conflict(staff_id,shift_date) do update set start_minute=540,end_minute=1020");
+ await as(clientUser);const moved=await one("select * from client_amend_appointment($1,8001,1,'2081-02-21',600,0,'Client rescheduled appointment')",[a.id]);assert.equal(new Date(moved.appointment_date).toISOString().slice(0,10),'2081-02-21');assert.equal(moved.treatment_name,'Original treatment label');assert.equal(moved.price,a.price);
+ const done=(await one('select client_cancel_appointment($1,1) data',[a.id])).data;assert.equal(done.fee_required,true);assert.equal(done.amount_cents,2500);
+ await pg.exec('reset role');const audit=await one("select details from audit_events where appointment_id=$1 and action='appointment_amended'",[a.id]);assert.equal(audit.details.before.appointment_date,'2081-02-20');assert.equal(audit.details.after.appointment_date,'2081-02-21');const fee=await one('select * from no_show_fees where appointment_id=$1',[a.id]);assert.equal(fee.purpose,'cancellation');assert.equal(fee.amount_cents,2500);
+ });

@@ -1,9 +1,12 @@
+import ClientAppointmentActions from "./ClientAppointmentActions";
 import { bookingCalendar } from "../supabase/functions/send-booking-confirmations/calendar";
 import { isConnectionError, requestErrorMessage } from "./requestErrors";
 import { displayDate } from "./dateFormats";
-import BookingValueOptions, { type BookingValueChoice } from "./BookingValueOptions";
-import {diaryEntryLayout} from "./diaryLayout.js";
-import {useCalendarEntries} from "./CalendarEntries";
+import BookingValueOptions, {
+  type BookingValueChoice,
+} from "./BookingValueOptions";
+import { diaryEntryLayout } from "./diaryLayout.js";
+import { useCalendarEntries } from "./CalendarEntries";
 import { lastBookedLabel } from "./bookingRecency.js";
 import AppointmentReminder from "./AppointmentReminder";
 import PermissionManagement from "./PermissionManagement";
@@ -162,6 +165,7 @@ export default function App() {
     [pin, setPin] = useState("");
   const [ownClient, setOwnClient] = useState<Client | null>(null);
   const [staffClient, setStaffClient] = useState<Client | null>(null),
+    [clientDateLocked, setClientDateLocked] = useState(false),
     [amending, setAmending] = useState<Appointment | null>(null),
     [changeReason, setChangeReason] = useState("");
   const [initialPatchRecord, setInitialPatchRecord] = useState(false);
@@ -349,7 +353,9 @@ export default function App() {
   const [patchChecking, setPatchChecking] = useState(false);
   const patchSelection = useRef(0);
 
-  const [valueRoute, setValueRoute] = useState<"checking" | "choose" | "later" | "value">("checking");
+  const [valueRoute, setValueRoute] = useState<
+    "checking" | "choose" | "later" | "value"
+  >("checking");
   const [prepayment, setPrepayment] = useState<BookingValueChoice | null>(null);
   const [guaranteeNeeded, setGuaranteeNeeded] = useState<boolean | null>(null);
   const [guaranteeError, setGuaranteeError] = useState("");
@@ -553,9 +559,21 @@ export default function App() {
         staffData.breaks,
       );
   const ownStaffId = live ? staffId : localStaffId;
-  useEffect(() => {setMobileDiaryStaff(null);}, [ownStaffId]);
-  const calendar = useCalendarEntries(live && allowed("view.diary") ? db : null,date,staff,ownStaffId,activeRole === "admin");
-  const mobileDiaryId = staff.some(s=>s.id===mobileDiaryStaff) ? mobileDiaryStaff : staff.some(s=>s.id===ownStaffId) ? ownStaffId : staff[0]?.id;
+  useEffect(() => {
+    setMobileDiaryStaff(null);
+  }, [ownStaffId]);
+  const calendar = useCalendarEntries(
+    live && allowed("view.diary") ? db : null,
+    date,
+    staff,
+    ownStaffId,
+    activeRole === "admin",
+  );
+  const mobileDiaryId = staff.some((s) => s.id === mobileDiaryStaff)
+    ? mobileDiaryStaff
+    : staff.some((s) => s.id === ownStaffId)
+      ? ownStaffId
+      : staff[0]?.id;
   const actorName =
     staff.find((s) => s.id === ownStaffId)?.name ||
     roleLabels[activeRole || "client"];
@@ -866,7 +884,12 @@ export default function App() {
       ]);
       if (cancelled) return;
       if (ts.error || ss.error) {
-        setError(requestErrorMessage(ts.error || ss.error, "We couldn’t load the salon’s treatments and staff."));
+        setError(
+          requestErrorMessage(
+            ts.error || ss.error,
+            "We couldn’t load the salon’s treatments and staff.",
+          ),
+        );
         return;
       }
       setTreatments(ts.data);
@@ -965,9 +988,16 @@ export default function App() {
   }, [session?.user.id, live]);
   useEffect(() => {
     if (roleLoading || !activeRole || view === "recovery") return;
-    if (live && activeRole !== "client" && Object.keys(permissionGrants).length === 0) return;
+    if (
+      live &&
+      activeRole !== "client" &&
+      Object.keys(permissionGrants).length === 0
+    )
+      return;
     if (view === "login" || !canAccess(activeRole, view, permissions))
-      setView(staffAccess && allowed("view.diary") ? "diary" : roleHome(activeRole));
+      setView(
+        staffAccess && allowed("view.diary") ? "diary" : roleHome(activeRole),
+      );
   }, [activeRole, roleLoading, view, permissions, live, permissionGrants]);
   useEffect(() => {
     void refresh();
@@ -980,24 +1010,46 @@ export default function App() {
     let cancelled = false;
     setBookingHistoryLoaded(false);
     setBookingHistoryError("");
-    void (async()=>{
+    void (async () => {
       try {
         let result;
-        for(let attempt=0;attempt<2;attempt++) {
-          result=await db.rpc("get_my_appointments");
-          if(cancelled)return;
-          if(!result.error || !isConnectionError(result.error) || attempt===1)break;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          result = await db.rpc("get_my_appointments");
+          if (cancelled) return;
+          if (
+            !result.error ||
+            !isConnectionError(result.error) ||
+            attempt === 1
+          )
+            break;
         }
-        if(result?.error)throw result.error;
-        if(cancelled)return;
-        setMyBookings((result?.data || []).map((a:Appointment)=>a.user_id !== session.user.id ? {...a,booked_for_self:true} : a));
-        setBookingHistoryLoaded(true);setBookingHistoryError("");
-      } catch(e) {if(!cancelled)setBookingHistoryError(requestErrorMessage(e,"We couldn’t load your appointments."));}
+        if (result?.error) throw result.error;
+        if (cancelled) return;
+        setMyBookings(
+          (result?.data || []).map((a: Appointment) =>
+            a.user_id !== session.user.id ? { ...a, booked_for_self: true } : a,
+          ),
+        );
+        setBookingHistoryLoaded(true);
+        setBookingHistoryError("");
+      } catch (e) {
+        if (!cancelled)
+          setBookingHistoryError(
+            requestErrorMessage(e, "We couldn’t load your appointments."),
+          );
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [live, session?.user.id, activeRole, view, confirmation, bookingHistoryVersion]);
+  }, [
+    live,
+    session?.user.id,
+    activeRole,
+    view,
+    confirmation,
+    bookingHistoryVersion,
+  ]);
   useEffect(() => {
     if (!live || !db || !session || activeRole !== "client") {
       setOwnClient(null);
@@ -1329,14 +1381,21 @@ export default function App() {
             .find((r) => r.id === s.id)
             ?.treatment_ids?.includes(treatment.id)),
   );
-  const awaitingPaymentChoice = live && activeRole === "client" && Number(treatment?.price)>0 && (valueRoute === "checking" || valueRoute === "choose");
+  const awaitingPaymentChoice =
+    live &&
+    activeRole === "client" &&
+    Number(treatment?.price) > 0 &&
+    (valueRoute === "checking" || valueRoute === "choose");
   async function book() {
     if (
       !treatment ||
       !slot ||
       (!amending &&
-        (awaitingPaymentChoice || guaranteeNeeded === null ||
-          (prepayment ? !prepayment.id : guaranteeNeeded && (!consent || !card)))) ||
+        (awaitingPaymentChoice ||
+          guaranteeNeeded === null ||
+          (prepayment
+            ? !prepayment.id
+            : guaranteeNeeded && (!consent || !card)))) ||
       (!staffClient && activeRole !== "client") ||
       requiresPasswordChange
     )
@@ -1349,31 +1408,45 @@ export default function App() {
       if (live) {
         if (!session || !db) throw Error("Please sign in first.");
         const r = amending
-          ? await db.rpc("amend_appointment", {
-              p_id: amending.id,
-              p_treatment_id: treatment.id,
-              p_staff_id: slot.staff_id,
-              p_date: date,
-              p_start: slot.start_minute,
-              p_revision: amending.revision || 0,
-              p_reason: changeReason,
-            })
-          : await db.rpc(prepayment ? "book_with_value" : "book_guaranteed_appointment", {
-              ...(prepayment ? {p_value_method: prepayment.method, p_value_id: prepayment.id} : {}),
-              p_treatment_id: treatment.id,
-              p_staff_id: slot.staff_id,
-              p_date: date,
-              p_start: slot.start_minute,
-              p_client_name: name.trim(),
-              p_phone: phone.trim(),
-              p_consent: consent,
-              p_booked_for_self: forSelf,
-              p_attendee_email: email.trim(),
-              p_guarantee_id: !prepayment && guaranteeNeeded ? card || null : null,
-              p_client_id: staffClient?.id || null,
-              p_patch_for_treatment_id:
-                patchPlan?.patch_for_treatment_id ?? null,
-            });
+          ? await db.rpc(
+              activeRole === "client"
+                ? "client_amend_appointment"
+                : "amend_appointment",
+              {
+                p_id: amending.id,
+                p_treatment_id: treatment.id,
+                p_staff_id: slot.staff_id,
+                p_date: date,
+                p_start: slot.start_minute,
+                p_revision: amending.revision || 0,
+                p_reason: changeReason,
+              },
+            )
+          : await db.rpc(
+              prepayment ? "book_with_value" : "book_guaranteed_appointment",
+              {
+                ...(prepayment
+                  ? {
+                      p_value_method: prepayment.method,
+                      p_value_id: prepayment.id,
+                    }
+                  : {}),
+                p_treatment_id: treatment.id,
+                p_staff_id: slot.staff_id,
+                p_date: date,
+                p_start: slot.start_minute,
+                p_client_name: name.trim(),
+                p_phone: phone.trim(),
+                p_consent: consent,
+                p_booked_for_self: forSelf,
+                p_attendee_email: email.trim(),
+                p_guarantee_id:
+                  !prepayment && guaranteeNeeded ? card || null : null,
+                p_client_id: staffClient?.id || null,
+                p_patch_for_treatment_id:
+                  patchPlan?.patch_for_treatment_id ?? null,
+              },
+            );
         if (r.error) throw r.error;
         if (operation !== identityVersion.current) return;
         a = r.data;
@@ -1468,24 +1541,44 @@ export default function App() {
   }
   async function cancelCheckIn() {
     if (!selected || busy) return;
-    const appointment = selected, operation = identityVersion.current;
-    setBusy(true); setError("");
+    const appointment = selected,
+      operation = identityVersion.current;
+    setBusy(true);
+    setError("");
     try {
       if (live && db) {
-        const result = await db.rpc("cancel_appointment_check_in", { p_id: appointment.id, p_revision: appointment.revision || 0 });
+        const result = await db.rpc("cancel_appointment_check_in", {
+          p_id: appointment.id,
+          p_revision: appointment.revision || 0,
+        });
         if (result.error) throw result.error;
         if (operation !== identityVersion.current) return;
         await refresh();
         if (operation !== identityVersion.current) return;
         setSelected(result.data);
       } else {
-        const restored = { ...appointment, status: "booked", checked_in_at: null, revision: (appointment.revision || 0) + 1 };
-        auditLocal("appointment_check_in_cancelled", appointment, { before: "checked_in", after: "booked" });
-        setLocal(prev => prev.map(a => a.id === appointment.id ? restored : a));
+        const restored = {
+          ...appointment,
+          status: "booked",
+          checked_in_at: null,
+          revision: (appointment.revision || 0) + 1,
+        };
+        auditLocal("appointment_check_in_cancelled", appointment, {
+          before: "checked_in",
+          after: "booked",
+        });
+        setLocal((prev) =>
+          prev.map((a) => (a.id === appointment.id ? restored : a)),
+        );
         setSelected(restored);
       }
-      setStatusAction(""); setStatusReason("");
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+      setStatusAction("");
+      setStatusReason("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
   async function changeStatus(status: string, payment = "") {
     if (!selected) return;
@@ -1556,7 +1649,10 @@ export default function App() {
   useEffect(() => {
     if (view !== "book" || step !== 4 || !confirmation) return;
     const frame = window.setTimeout(() => {
-      confirmationSection.current?.scrollIntoView?.({ behavior: "instant", block: "start" });
+      confirmationSection.current?.scrollIntoView?.({
+        behavior: "instant",
+        block: "start",
+      });
     });
     return () => window.clearTimeout(frame);
   }, [view, step, confirmation]);
@@ -1581,22 +1677,50 @@ export default function App() {
   const diaryStart = Math.min(
     480,
     ...dayAppointments.map((a) => Math.floor(a.start_minute / 60) * 60),
-    ...calendar.entries.map(e=>Math.floor(e.start_minute/60)*60),
+    ...calendar.entries.map((e) => Math.floor(e.start_minute / 60) * 60),
   );
   const diaryEnd = Math.max(
     1080,
-    ...calendar.entries.map(e=>Math.ceil((e.start_minute+e.duration)/60)*60),
+    ...calendar.entries.map(
+      (e) => Math.ceil((e.start_minute + e.duration) / 60) * 60,
+    ),
     ...dayAppointments.map(
       (a) => Math.ceil((a.start_minute + a.duration) / 60) * 60,
     ),
   );
   const diaryHeight = (diaryEnd - diaryStart) * 1.6;
-  const diaryLanes = Object.assign({},...staff.map(s=>diaryEntryLayout([...dayAppointments.filter(a=>a.status!=="cancelled"&&a.staff_id===s.id),...calendar.entries.filter(e=>e.staff_id===s.id)].map(e=>({...e,id:`${e.staff_id}-${e.id}`})))));
-  const laneStyle = (e: {staff_id:number;id?:string}) => {const lane=diaryLanes[`${e.staff_id}-${e.id}`];return lane ? {left:`calc(${lane.lane*lane.width}% + 4px)`,right:`calc(${100-(lane.lane+1)*lane.width}% + 4px)`} : {};};
+  const diaryLanes = Object.assign(
+    {},
+    ...staff.map((s) =>
+      diaryEntryLayout(
+        [
+          ...dayAppointments.filter(
+            (a) => a.status !== "cancelled" && a.staff_id === s.id,
+          ),
+          ...calendar.entries.filter((e) => e.staff_id === s.id),
+        ].map((e) => ({ ...e, id: `${e.staff_id}-${e.id}` })),
+      ),
+    ),
+  );
+  const laneStyle = (e: { staff_id: number; id?: string }) => {
+    const lane = diaryLanes[`${e.staff_id}-${e.id}`];
+    return lane
+      ? {
+          left: `calc(${lane.lane * lane.width}% + 4px)`,
+          right: `calc(${100 - (lane.lane + 1) * lane.width}% + 4px)`,
+        }
+      : {};
+  };
   return (
     <>
       {calendar.dialog}
-      <header className={activeRole === "client" || staffAccess || activeRole === "accountant" ? "client-header" : ""}>
+      <header
+        className={
+          activeRole === "client" || staffAccess || activeRole === "accountant"
+            ? "client-header"
+            : ""
+        }
+      >
         <a
           className="brand"
           href="#"
@@ -1614,7 +1738,9 @@ export default function App() {
             alt="Sculpted by Aoife Claire"
           />
         </a>
-        {(activeRole === "client" || staffAccess || activeRole === "accountant") && (
+        {(activeRole === "client" ||
+          staffAccess ||
+          activeRole === "accountant") && (
           <button
             className="account-menu-toggle"
             aria-label={accountMenuOpen ? "Close" : "Menu"}
@@ -1661,7 +1787,14 @@ export default function App() {
               My Profile
             </button>
           )}
-          {activeRole === "client" && <button className={view === "my-vouchers" ? "active" : ""} onClick={() => setView("my-vouchers")}>My Vouchers</button>}
+          {activeRole === "client" && (
+            <button
+              className={view === "my-vouchers" ? "active" : ""}
+              onClick={() => setView("my-vouchers")}
+            >
+              My Vouchers
+            </button>
+          )}
           {staffAccess && (
             <button
               className={
@@ -1674,14 +1807,67 @@ export default function App() {
               Staff Home
             </button>
           )}
-          {staffAccess && [
-            {label:"Diary", permission:"view.diary", view:"diary", action:()=>{setDate(today());setView("diary");}},
-            {label:"Clients", permission:"view.clients", screen:"clients", action:()=>staffHome("clients")},
-            {label:"Appointments", permission:"view.appointments", screen:"appointments", action:()=>staffHome("appointments")},
-            {label:"Treatments", permission:"view.treatments", view:"treatment-management", action:()=>setView("treatment-management")},
-            {label:"Vouchers", permission:"view.vouchers", screen:"vouchers", action:()=>staffHome("vouchers")},
-            {label:"Permissions", permission:"view.permissions", view:"permission-management", action:()=>setView("permission-management")},
-          ].filter(item=>allowed(item.permission)).map(item=><button key={item.label} className={(item.view ? view===item.view : view==="staff-workspace" && workspaceScreen===item.screen) ? "active" : ""} onClick={item.action}>{item.label}</button>)}
+          {staffAccess &&
+            [
+              {
+                label: "Diary",
+                permission: "view.diary",
+                view: "diary",
+                action: () => {
+                  setDate(today());
+                  setView("diary");
+                },
+              },
+              {
+                label: "Clients",
+                permission: "view.clients",
+                screen: "clients",
+                action: () => staffHome("clients"),
+              },
+              {
+                label: "Appointments",
+                permission: "view.appointments",
+                screen: "appointments",
+                action: () => staffHome("appointments"),
+              },
+              {
+                label: "Treatments",
+                permission: "view.treatments",
+                view: "treatment-management",
+                action: () => setView("treatment-management"),
+              },
+              {
+                label: "Vouchers",
+                permission: "view.vouchers",
+                screen: "vouchers",
+                action: () => staffHome("vouchers"),
+              },
+              {
+                label: "Permissions",
+                permission: "view.permissions",
+                view: "permission-management",
+                action: () => setView("permission-management"),
+              },
+            ]
+              .filter((item) => allowed(item.permission))
+              .map((item) => (
+                <button
+                  key={item.label}
+                  className={
+                    (
+                      item.view
+                        ? view === item.view
+                        : view === "staff-workspace" &&
+                          workspaceScreen === item.screen
+                    )
+                      ? "active"
+                      : ""
+                  }
+                  onClick={item.action}
+                >
+                  {item.label}
+                </button>
+              ))}
           {reportAccess && (
             <button
               className={view === "reporting-placeholder" ? "active" : ""}
@@ -1690,9 +1876,22 @@ export default function App() {
               Reports
             </button>
           )}
-          {activeRole === "admin" && <button className={view === "email-management" ? "active" : ""} onClick={()=>setView("email-management")}>Emails</button>}
-          <div className={activeRole === "client" || staffAccess ? "client-sign-in" : ""}>
-            {staffAccess && <span>Signed in as {actorName.trim().split(/\s+/)[0]}</span>}
+          {activeRole === "admin" && (
+            <button
+              className={view === "email-management" ? "active" : ""}
+              onClick={() => setView("email-management")}
+            >
+              Emails
+            </button>
+          )}
+          <div
+            className={
+              activeRole === "client" || staffAccess ? "client-sign-in" : ""
+            }
+          >
+            {staffAccess && (
+              <span>Signed in as {actorName.trim().split(/\s+/)[0]}</span>
+            )}
             {activeRole === "client" && (
               <span>
                 Signed in as{" "}
@@ -1731,7 +1930,16 @@ export default function App() {
           <button onClick={() => setError("")}>Dismiss</button>
         </div>
       )}
-      {bookingHistoryError && activeRole === "client" && view === "my-bookings" && <div role="alert" className="error">{bookingHistoryError}<button onClick={()=>setBookingHistoryVersion(v=>v+1)}>Retry loading appointments</button></div>}
+      {bookingHistoryError &&
+        activeRole === "client" &&
+        view === "my-bookings" && (
+          <div role="alert" className="error">
+            {bookingHistoryError}
+            <button onClick={() => setBookingHistoryVersion((v) => v + 1)}>
+              Retry loading appointments
+            </button>
+          </div>
+        )}
       <main
         className={
           activeRole === "client" && view === "book" && step === 0
@@ -1873,7 +2081,12 @@ export default function App() {
             onBuy={() => setView("voucher-purchase")}
           />
         ) : view === "my-vouchers" && activeRole === "client" ? (
-          <MyVouchers db={db} live={live} data={staffData} onBuy={() => setView("voucher-purchase")} />
+          <MyVouchers
+            db={db}
+            live={live}
+            data={staffData}
+            onBuy={() => setView("voucher-purchase")}
+          />
         ) : view === "voucher-purchase" && activeRole === "client" ? (
           <VoucherPurchase
             key={`${live}-${session?.user.id || "local"}`}
@@ -2044,8 +2257,25 @@ export default function App() {
                   )}
                   <label className="mobile-treatment-categories">
                     Treatment category
-                    <select value={category} onChange={(e)=>{defaultPrevious.current=false;setCategory(e.target.value);}}>
-                      {categories.map(c=><option key={c} value={c}>{c} ({c === "Previous Bookings" ? previousIds.length : c === "All treatments" ? treatments.length : treatments.filter(t=>t.category===c).length})</option>)}
+                    <select
+                      value={category}
+                      onChange={(e) => {
+                        defaultPrevious.current = false;
+                        setCategory(e.target.value);
+                      }}
+                    >
+                      {categories.map((c) => (
+                        <option key={c} value={c}>
+                          {c} (
+                          {c === "Previous Bookings"
+                            ? previousIds.length
+                            : c === "All treatments"
+                              ? treatments.length
+                              : treatments.filter((t) => t.category === c)
+                                  .length}
+                          )
+                        </option>
+                      ))}
                     </select>
                   </label>
                   {categories.map((c) => (
@@ -2105,16 +2335,30 @@ export default function App() {
                           </strong>
                         </div>
                         {t.description?.trim() && (
-                          <p className="treatment-description">{t.description}</p>
+                          <p className="treatment-description">
+                            {t.description}
+                          </p>
                         )}
                         <span className="choose">
                           {forSelf && !staffClient && previousIds.includes(t.id)
                             ? "Rebook Treatment ↗"
                             : "Choose treatment ↗"}
                         </span>
-                        {category === "Previous Bookings" && forSelf && !staffClient && (
-                          <span className="last-booked">{lastBookedLabel(live ? myBookings : local.filter(a => a.user_id === "local-client"), t.id, today())}</span>
-                        )}
+                        {category === "Previous Bookings" &&
+                          forSelf &&
+                          !staffClient && (
+                            <span className="last-booked">
+                              {lastBookedLabel(
+                                live
+                                  ? myBookings
+                                  : local.filter(
+                                      (a) => a.user_id === "local-client",
+                                    ),
+                                t.id,
+                                today(),
+                              )}
+                            </span>
+                          )}
                       </button>
                     ))}
                   </div>
@@ -2167,6 +2411,7 @@ export default function App() {
                     Who would you like to see?
                     <select
                       value={staffChoice}
+                      disabled={activeRole === "client" && !!amending}
                       onChange={(e) => setStaffChoice(Number(e.target.value))}
                     >
                       <option value={0}>No preference — first available</option>
@@ -2180,13 +2425,23 @@ export default function App() {
                   <label>
                     Appointment date
                     <input
-                      type="date" lang="en-GB"
+                      type="date"
+                      lang="en-GB"
                       min={today()}
+                      disabled={
+                        activeRole === "client" &&
+                        !!amending &&
+                        clientDateLocked
+                      }
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
                     />
                   </label>
                   <p className="small">
+                    {activeRole === "client" &&
+                      amending &&
+                      clientDateLocked &&
+                      "Your appointment is within three days, so only its time can be changed. "}
                     Demo opening hours: Monday–Saturday, 09:00–17:00. Lunch:
                     13:00–13:30.
                   </p>
@@ -2270,16 +2525,33 @@ export default function App() {
                         ? "Confirm Appointment"
                         : "Booking Guarantee"}
                   </h2>
-                  {!amending && guaranteeNeeded === true && !prepayment && !awaitingPaymentChoice && (
-                    <p>
-                      Guarantee your booking using your saved card details, or
-                      supply new card details.
-                    </p>
-                  )}
+                  {!amending &&
+                    guaranteeNeeded === true &&
+                    !prepayment &&
+                    !awaitingPaymentChoice && (
+                      <p>
+                        Guarantee your booking using your saved card details, or
+                        supply new card details.
+                      </p>
+                    )}
                   <p>
                     Booking for <strong>{name}</strong> · {email}
                   </p>
-                  {!amending && live && db && activeRole === "client" && Number(treatment.price)>0 && <BookingValueOptions db={db} treatmentId={treatment.id} requiresGuarantee={guaranteeNeeded} choice={prepayment} onChange={setPrepayment} onRouteChange={setValueRoute} disabled={busy} />}
+                  {!amending &&
+                    live &&
+                    db &&
+                    activeRole === "client" &&
+                    Number(treatment.price) > 0 && (
+                      <BookingValueOptions
+                        db={db}
+                        treatmentId={treatment.id}
+                        requiresGuarantee={guaranteeNeeded}
+                        choice={prepayment}
+                        onChange={setPrepayment}
+                        onRouteChange={setValueRoute}
+                        disabled={busy}
+                      />
+                    )}
                   {amending ? (
                     <label>
                       Reason for amendment
@@ -2296,9 +2568,19 @@ export default function App() {
                   ) : guaranteeNeeded === null ? (
                     <p>Checking booking guarantee requirements…</p>
                   ) : awaitingPaymentChoice ? (
-                    <p>{valueRoute === "checking" ? "" : "Choose a booking payment option to continue."}</p>
+                    <p>
+                      {valueRoute === "checking"
+                        ? ""
+                        : "Choose a booking payment option to continue."}
+                    </p>
                   ) : prepayment ? (
-                    <p>Your treatment will be paid upfront by {prepayment.method === "voucher" ? "voucher" : "credit note"}. No booking guarantee card is required.</p>
+                    <p>
+                      Your treatment will be paid upfront by{" "}
+                      {prepayment.method === "voucher"
+                        ? "voucher"
+                        : "credit note"}
+                      . No booking guarantee card is required.
+                    </p>
                   ) : guaranteeNeeded === false ? (
                     <p>
                       {Number(treatment.price) === 0 &&
@@ -2323,7 +2605,8 @@ export default function App() {
                       <p>
                         No payment will be taken now. Payment will be taken in
                         the salon after your treatment. The booking guarantee
-                        will charge 50% of the treatment cost for no-shows or late cancellations.
+                        will charge 50% of the treatment cost for no-shows or
+                        late cancellations.
                       </p>
                       <p className="small">
                         Demo only: cards and charges are simulated. Do not enter
@@ -2382,8 +2665,11 @@ export default function App() {
                       busy ||
                       (amending
                         ? !changeReason.trim()
-                        : awaitingPaymentChoice || guaranteeNeeded === null ||
-                          (prepayment ? !prepayment.id : guaranteeNeeded && (!consent || !card))) ||
+                        : awaitingPaymentChoice ||
+                          guaranteeNeeded === null ||
+                          (prepayment
+                            ? !prepayment.id
+                            : guaranteeNeeded && (!consent || !card))) ||
                       !name.trim() ||
                       (live && (!session || !phone.trim()))
                     }
@@ -2404,7 +2690,11 @@ export default function App() {
                 />
               </div>
             ) : confirmation ? (
-              <section ref={confirmationSection} className="success panel" style={{ scrollMarginTop: 20 }}>
+              <section
+                ref={confirmationSection}
+                className="success panel"
+                style={{ scrollMarginTop: 20 }}
+              >
                 <div className="success-icon">✓</div>
                 <p className="eyebrow">
                   {amending ? "APPOINTMENT UPDATED" : "YOU’RE ALL BOOKED"}
@@ -2440,14 +2730,52 @@ export default function App() {
                   <strong>With:</strong>{" "}
                   {staff.find((s) => s.id === confirmation.staff_id)?.name}
                 </p>
-                {confirmation.prepaid_method && <p><strong>Paid already:</strong> {confirmation.prepaid_method === "voucher" ? `Voucher ID: ${confirmation.prepaid_voucher_code}` : "Credit Note"}. No further payment is required.</p>}
+                {confirmation.prepaid_method && (
+                  <p>
+                    <strong>Paid already:</strong>{" "}
+                    {confirmation.prepaid_method === "voucher"
+                      ? `Voucher ID: ${confirmation.prepaid_voucher_code}`
+                      : "Credit Note"}
+                    . No further payment is required.
+                  </p>
+                )}
                 <p className="small">Your booking is saved.</p>
                 {(() => {
-                  const calendar = bookingCalendar({ ...confirmation, staff_name: staff.find(s => s.id === confirmation.staff_id)?.name });
-                  return <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12, margin: "20px 0" }}>
-                    <a className="secondary" style={{ padding: 14 }} href={calendar.google} target="_blank" rel="noopener noreferrer">Add to Google Calendar</a>
-                    <a className="secondary" style={{ padding: 14 }} href={`data:text/calendar;charset=utf-8;base64,${calendar.base64}`} download="sculpted-appointment.ics">Add to Apple / Outlook Calendar</a>
-                  </div>;
+                  const calendar = bookingCalendar({
+                    ...confirmation,
+                    staff_name: staff.find(
+                      (s) => s.id === confirmation.staff_id,
+                    )?.name,
+                  });
+                  return (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        justifyContent: "center",
+                        gap: 12,
+                        margin: "20px 0",
+                      }}
+                    >
+                      <a
+                        className="secondary"
+                        style={{ padding: 14 }}
+                        href={calendar.google}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Add to Google Calendar
+                      </a>
+                      <a
+                        className="secondary"
+                        style={{ padding: 14 }}
+                        href={`data:text/calendar;charset=utf-8;base64,${calendar.base64}`}
+                        download="sculpted-appointment.ics"
+                      >
+                        Add to Apple / Outlook Calendar
+                      </a>
+                    </div>
+                  );
                 })()}
                 <button
                   className="primary"
@@ -2605,7 +2933,11 @@ export default function App() {
                         )!;
                         setLocalStaffId(selected.staffId);
                         setLocalRole(selected.role);
-                        setView(["admin","staff"].includes(selected.role) ? "diary" : roleHome(selected.role));
+                        setView(
+                          ["admin", "staff"].includes(selected.role)
+                            ? "diary"
+                            : roleHome(selected.role),
+                        );
                         setPin("");
                         setDate(today());
                       }}
@@ -2698,128 +3030,186 @@ export default function App() {
             >
               Book a treatment →
             </button>
-            {(["Upcoming Appointments", "Previous Appointments"] as const).map(
-              (heading, index) => {
-                const now = new Date();
-                if (live && !bookingHistoryLoaded) return <p role="status">{bookingHistoryError ? "Your appointment list is unavailable until it can be reloaded." : "Loading your appointments…"}</p>;
-                const parts = new Intl.DateTimeFormat("en-CA", {
-                  timeZone: "Europe/Dublin",
-                  year: "numeric",
-                  month: "2-digit",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hourCycle: "h23",
-                }).formatToParts(now);
-                const part = (key: string) =>
-                  parts.find((p) => p.type === key)?.value || "";
-                const currentDay = `${part("year")}-${part("month")}-${part("day")}`;
-                const currentMinute =
-                  Number(part("hour")) * 60 + Number(part("minute"));
-                const upcoming = (a: Appointment) =>
-                  ["booked", "checked_in"].includes(a.status) &&
-                  (a.appointment_date > currentDay ||
-                    (a.appointment_date === currentDay &&
-                      a.start_minute + a.duration > currentMinute));
-                const appointments = (
-                  live
-                    ? myBookings
-                    : local.filter((a) => a.user_id === "local-client")
-                )
-                  .filter((a) => upcoming(a) === (index === 0))
-                  .sort(
-                    (a, b) =>
-                      (a.appointment_date.localeCompare(b.appointment_date) ||
-                        a.start_minute - b.start_minute) *
-                      (index === 0 ? 1 : -1),
-                  );
+            {(
+              [
+                "Upcoming Appointments",
+                "Previous Appointments",
+                "Cancelled Appointments",
+              ] as const
+            ).map((heading, index) => {
+              const now = new Date();
+              if (live && !bookingHistoryLoaded)
                 return (
-                  <section
-                    className="appointment-section"
-                    key={heading}
-                    aria-labelledby={`appointments-${index}`}
-                  >
-                    <h2 id={`appointments-${index}`}>
-                      {heading} <span>{appointments.length}</span>
-                    </h2>
-                    {appointments.length === 0 && (
-                      <p>
-                        {index === 0
-                          ? "You have no upcoming appointments."
-                          : "You have no previous appointments yet."}
-                      </p>
-                    )}
-                    {appointments.map((a) => {
-                      const currentTreatment =
-                        treatments.find(
-                          (t) =>
-                            t.id ===
-                            (a.patch_for_treatment_id ?? a.treatment_id),
-                        ) ||
-                        treatments.find((t) => t.name === a.treatment_name);
-                      return (
-                        <article className="history-card" key={a.id}>
-                          <div>
-                            <h3>{a.treatment_name}</h3>
-                            {a.booked_for_self === false && (
-                              <p className="booking-recipient-label">
-                                Booked by you, for {a.client_name}
-                              </p>
-                            )}
-                            <p>
-                              {displayDate(a.appointment_date)} · {time(a.start_minute)} ·{" "}
-                              {staff.find((s) => s.id === a.staff_id)?.name}
-                            </p>
-                          </div>
-                          <div className="appointment-actions">
-                            <strong>{money(a.price)}</strong>
-                            <p className="status">
-                              {a.status.replaceAll("_", " ")}
-                            </p>
-                            {index === 1 && (
-                              <button
-                                className="primary"
-                                disabled={!currentTreatment}
-                                onClick={() => {
-                                  if (!currentTreatment) return;
-                                  startBooking();
-                                  chooseRecipient(a.booked_for_self !== false);
-                                  if (a.booked_for_self === false) {
-                                    setName(a.client_name);
-                                    setEmail(a.attendee_email || "");
-                                    setPhone(a.phone || "");
-                                  }
-                                  setStaffClient(null);
-                                  setAmending(null);
-                                  setConfirmation(null);
-                                  setStaffChoice(0);
-                                  setDate(today());
-                                  void chooseTreatment(
-                                    currentTreatment,
-                                    a.booked_for_self !== false,
-                                  );
-                                }}
-                              >
-                                Rebook appointment
-                              </button>
-                            )}
-                            {index === 1 && !currentTreatment && (
-                              <p className="small">
-                                This treatment is no longer available.
-                              </p>
-                            )}
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </section>
+                  <p role="status">
+                    {bookingHistoryError
+                      ? "Your appointment list is unavailable until it can be reloaded."
+                      : "Loading your appointments…"}
+                  </p>
                 );
-              },
-            )}
-            <p className="small">
-              Cancellation and rescheduling will be added when the salon policy
-              is confirmed.
-            </p>
+              const parts = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Europe/Dublin",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hourCycle: "h23",
+              }).formatToParts(now);
+              const part = (key: string) =>
+                parts.find((p) => p.type === key)?.value || "";
+              const currentDay = `${part("year")}-${part("month")}-${part("day")}`;
+              const currentMinute =
+                Number(part("hour")) * 60 + Number(part("minute"));
+              const upcoming = (a: Appointment) =>
+                ["booked", "checked_in"].includes(a.status) &&
+                (a.appointment_date > currentDay ||
+                  (a.appointment_date === currentDay &&
+                    a.start_minute + a.duration > currentMinute));
+              const appointments = (
+                live
+                  ? myBookings
+                  : local.filter((a) => a.user_id === "local-client")
+              )
+                .filter((a) =>
+                  index === 2
+                    ? a.status === "cancelled"
+                    : a.status !== "cancelled" && upcoming(a) === (index === 0),
+                )
+                .sort(
+                  (a, b) =>
+                    (a.appointment_date.localeCompare(b.appointment_date) ||
+                      a.start_minute - b.start_minute) * (index === 0 ? 1 : -1),
+                );
+              return (
+                <section
+                  className="appointment-section"
+                  key={heading}
+                  aria-labelledby={`appointments-${index}`}
+                >
+                  <h2 id={`appointments-${index}`}>
+                    {heading} <span>{appointments.length}</span>
+                  </h2>
+                  {appointments.length === 0 && (
+                    <p>
+                      {index === 0
+                        ? "You have no upcoming appointments."
+                        : index === 2
+                          ? "You have no cancelled appointments."
+                          : "You have no previous appointments yet."}
+                    </p>
+                  )}
+                  {appointments.map((a) => {
+                    const currentTreatment =
+                      treatments.find(
+                        (t) =>
+                          t.id === (a.patch_for_treatment_id ?? a.treatment_id),
+                      ) || treatments.find((t) => t.name === a.treatment_name);
+                    return (
+                      <article className="history-card" key={a.id}>
+                        <div>
+                          <h3>{a.treatment_name}</h3>
+                          {a.booked_for_self === false && (
+                            <p className="booking-recipient-label">
+                              Booked by you, for {a.client_name}
+                            </p>
+                          )}
+                          <p>
+                            {displayDate(a.appointment_date)} ·{" "}
+                            {time(a.start_minute)} ·{" "}
+                            {staff.find((s) => s.id === a.staff_id)?.name}
+                          </p>
+                        </div>
+                        <div className="appointment-actions">
+                          <strong>{money(a.price)}</strong>
+                          {index === 0 && a.status === "booked" && db && (
+                            <ClientAppointmentActions
+                              db={db}
+                              appointment={a}
+                              onChanged={() =>
+                                setBookingHistoryVersion((v) => v + 1)
+                              }
+                              onAmend={(appointment, locked) => {
+                                const t = treatments.find(
+                                  (t) => t.id === appointment.treatment_id,
+                                );
+                                if (!t) {
+                                  setError(
+                                    "This treatment is unavailable. Please contact the salon.",
+                                  );
+                                  return;
+                                }
+                                startBooking();
+                                setAmending(appointment);
+                                setClientDateLocked(locked);
+                                setStaffClient(null);
+                                setTreatment({
+                                  ...t,
+                                  name: appointment.treatment_name,
+                                  duration: appointment.duration,
+                                  price: appointment.price,
+                                });
+                                setPatchPlan(null);
+                                setStaffChoice(appointment.staff_id);
+                                setDate(appointment.appointment_date);
+                                setName(appointment.client_name);
+                                setEmail(
+                                  appointment.attendee_email ||
+                                    session?.user.email ||
+                                    "",
+                                );
+                                setPhone(appointment.phone || "");
+                                setChangeReason(
+                                  "Client rescheduled appointment",
+                                );
+                                setSlot(null);
+                                setPeriod("");
+                                setStep(2);
+                                setView("book");
+                              }}
+                            />
+                          )}
+                          <p className="status">
+                            {a.status.replaceAll("_", " ")}
+                          </p>
+                          {index !== 0 && (
+                            <button
+                              className="primary"
+                              disabled={!currentTreatment}
+                              onClick={() => {
+                                if (!currentTreatment) return;
+                                startBooking();
+                                chooseRecipient(a.booked_for_self !== false);
+                                if (a.booked_for_self === false) {
+                                  setName(a.client_name);
+                                  setEmail(a.attendee_email || "");
+                                  setPhone(a.phone || "");
+                                }
+                                setStaffClient(null);
+                                setAmending(null);
+                                setConfirmation(null);
+                                setStaffChoice(0);
+                                setDate(today());
+                                void chooseTreatment(
+                                  currentTreatment,
+                                  a.booked_for_self !== false,
+                                );
+                              }}
+                            >
+                              Rebook appointment
+                            </button>
+                          )}
+                          {index !== 0 && !currentTreatment && (
+                            <p className="small">
+                              This treatment is no longer available.
+                            </p>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </section>
+              );
+            })}
           </section>
         ) : view === "reporting-home" && activeRole === "accountant" ? (
           <section className="owner-workspace">
@@ -2853,9 +3243,14 @@ export default function App() {
           />
         ) : view === "email-management" && activeRole === "admin" ? (
           <section className="panel">
-            <button className="back" onClick={()=>staffHome()}>← Staff Home</button>
+            <button className="back" onClick={() => staffHome()}>
+              ← Staff Home
+            </button>
             <h1>Email Management</h1>
-            <p>Salon details and email template settings will be available here in the next step.</p>
+            <p>
+              Salon details and email template settings will be available here
+              in the next step.
+            </p>
           </section>
         ) : view === "staff-admin" && staffAccess && allowed("view.staff") ? (
           <StaffAdministration
@@ -2917,7 +3312,8 @@ export default function App() {
                 </button>
                 <input
                   aria-label="Diary date"
-                  type="date" lang="en-GB"
+                  type="date"
+                  lang="en-GB"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                 />
@@ -2978,12 +3374,37 @@ export default function App() {
                   >
                     Add break time
                   </button>
-                  <button className="secondary" disabled={!live || !db || !ownStaffId} onClick={()=>calendar.open()}>Block Out Time</button>
+                  <button
+                    className="secondary"
+                    disabled={!live || !db || !ownStaffId}
+                    onClick={() => calendar.open()}
+                  >
+                    Block Out Time
+                  </button>
                 </div>
                 <div className="diary-scroll">
                   <div className="mobile-diary-selector">
-                    <strong>{new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", {weekday:"short",day:"numeric",month:"short"})}</strong>
-                    <label>View staff diary<select value={mobileDiaryId ?? ""} onChange={e=>setMobileDiaryStaff(Number(e.target.value))}>{staff.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+                    <strong>
+                      {new Date(`${date}T12:00:00`).toLocaleDateString(
+                        "en-GB",
+                        { weekday: "short", day: "numeric", month: "short" },
+                      )}
+                    </strong>
+                    <label>
+                      View staff diary
+                      <select
+                        value={mobileDiaryId ?? ""}
+                        onChange={(e) =>
+                          setMobileDiaryStaff(Number(e.target.value))
+                        }
+                      >
+                        {staff.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                   <div
                     className="diary"
@@ -3008,7 +3429,10 @@ export default function App() {
                       </div>
                     </div>
                     {staff.map((s) => (
-                      <div className={`staff-column ${s.id === mobileDiaryId ? "mobile-diary-selected" : ""}`} key={s.id}>
+                      <div
+                        className={`staff-column ${s.id === mobileDiaryId ? "mobile-diary-selected" : ""}`}
+                        key={s.id}
+                      >
                         <div className="staff-heading">
                           <span className="avatar">{s.name[0]}</span>
                           {s.name}
@@ -3054,7 +3478,33 @@ export default function App() {
                                 ))}
                             </>
                           )}
-                          {calendar.entries.filter(e=>e.staff_id===s.id).map((e)=><button key={e.id} className={`appointment calendar-entry ${e.show_as}`} style={{top:(e.start_minute-diaryStart)*1.6,height:Math.max(e.duration*1.6,40),...laneStyle(e)}} disabled={activeRole!=="admin"&&e.staff_id!==ownStaffId} onClick={()=>calendar.open(e)}><strong>{time(e.start_minute)}–{time(e.start_minute+e.duration)}</strong><span>{e.description}</span><small>{e.show_as==='busy'?'Busy':'Free'}</small></button>)}
+                          {calendar.entries
+                            .filter((e) => e.staff_id === s.id)
+                            .map((e) => (
+                              <button
+                                key={e.id}
+                                className={`appointment calendar-entry ${e.show_as}`}
+                                style={{
+                                  top: (e.start_minute - diaryStart) * 1.6,
+                                  height: Math.max(e.duration * 1.6, 40),
+                                  ...laneStyle(e),
+                                }}
+                                disabled={
+                                  activeRole !== "admin" &&
+                                  e.staff_id !== ownStaffId
+                                }
+                                onClick={() => calendar.open(e)}
+                              >
+                                <strong>
+                                  {time(e.start_minute)}–
+                                  {time(e.start_minute + e.duration)}
+                                </strong>
+                                <span>{e.description}</span>
+                                <small>
+                                  {e.show_as === "busy" ? "Busy" : "Free"}
+                                </small>
+                              </button>
+                            ))}
                           {dayAppointments
                             .filter(
                               (a) =>
@@ -3153,7 +3603,8 @@ export default function App() {
               {breakDraft.kind === "lunch" ? "Lunch time" : "Add break time"}
             </h2>
             <p>
-              {staff.find((s) => s.id === breakDraft.staff_id)?.name} · {displayDate(date)}
+              {staff.find((s) => s.id === breakDraft.staff_id)?.name} ·{" "}
+              {displayDate(date)}
             </p>
             <form
               onSubmit={(e) => {
@@ -3245,7 +3696,8 @@ export default function App() {
             <h2>{selected.client_name}</h2>
             <h3>{selected.treatment_name}</h3>
             <p>
-              {displayDate(selected.appointment_date)} · {time(selected.start_minute)}–
+              {displayDate(selected.appointment_date)} ·{" "}
+              {time(selected.start_minute)}–
               {time(selected.start_minute + selected.duration)}
             </p>
             <p>
@@ -3280,7 +3732,13 @@ export default function App() {
               </button>
             )}
             {selected.status === "booked" && (
-              <AppointmentReminder key={`reminder-${selected.id}`} db={live ? db : null} appointmentId={selected.id} initialEmail={selected.attendee_email || ""} disabled={busy} />
+              <AppointmentReminder
+                key={`reminder-${selected.id}`}
+                db={live ? db : null}
+                appointmentId={selected.id}
+                initialEmail={selected.attendee_email || ""}
+                disabled={busy}
+              />
             )}
             {selected.status === "booked" && (
               <button
@@ -3292,7 +3750,15 @@ export default function App() {
               </button>
             )}
             {selected.status === "checked_in" && (
-              <p><button className="back" disabled={busy} onClick={() => void cancelCheckIn()}>Cancel Check In</button></p>
+              <p>
+                <button
+                  className="back"
+                  disabled={busy}
+                  onClick={() => void cancelCheckIn()}
+                >
+                  Cancel Check In
+                </button>
+              </p>
             )}
             {selected.status === "completed" && (
               <CheckoutHistory
@@ -3389,7 +3855,7 @@ export default function App() {
                   Sandbox payment:{" "}
                   <strong>
                     {feeInfo?.state === "completed"
-                      ? `${new Intl.NumberFormat("en-IE", {style:"currency",currency:"EUR"}).format(Number(feeInfo?.amount_cents ?? selected.guarantee_fee_cents ?? 1000) / 100)} paid`
+                      ? `${new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Number(feeInfo?.amount_cents ?? selected.guarantee_fee_cents ?? 1000) / 100)} paid`
                       : feeInfo?.state === "waived"
                         ? "Waived — no payment taken"
                         : feeInfo?.state === "failed"
@@ -3479,7 +3945,7 @@ export default function App() {
                   <p>
                     {selected.guarantee_required === false
                       ? "This appointment has no card guarantee. Record the no-show without a card charge."
-                      : `Do you want to apply the ${new Intl.NumberFormat("en-IE", {style:"currency",currency:"EUR"}).format((selected.guarantee_fee_cents ?? 1000) / 100)} no-show fee? This is a Revolut Sandbox charge. Either choice marks the appointment as a no-show.`}
+                      : `Do you want to apply the ${new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format((selected.guarantee_fee_cents ?? 1000) / 100)} no-show fee? This is a Revolut Sandbox charge. Either choice marks the appointment as a no-show.`}
                   </p>
                 )}
                 <label>
@@ -3502,7 +3968,14 @@ export default function App() {
                         disabled={busy || !statusReason.trim()}
                         onClick={() => void recordNoShow(true)}
                       >
-                        Yes — apply {new Intl.NumberFormat("en-IE", {style:"currency",currency:"EUR"}).format((selected.guarantee_fee_cents ?? 1000) / 100)} fee
+                        Yes — apply{" "}
+                        {new Intl.NumberFormat("en-IE", {
+                          style: "currency",
+                          currency: "EUR",
+                        }).format(
+                          (selected.guarantee_fee_cents ?? 1000) / 100,
+                        )}{" "}
+                        fee
                       </button>
                     )}
                     {(selected.guarantee_required === false ||

@@ -40,7 +40,7 @@ class Query {
             ? fee
             : this.table === "appointments"
               ? {
-                  status: "no_show",
+                  status: fee.purpose === "cancellation" ? "cancelled" : "no_show",
                   guarantee_card_id: hasCard ? "card-id" : null,
                 }
               : {
@@ -208,3 +208,5 @@ test("revoked operational permission blocks worker charges before any provider r
  reset(); permitted=false;
  const r=await invoke(); assert.equal(r.status,403);assert.equal(calls.length,0);assert.equal(fee.state,"pending");
 });
+
+test("clients can charge their cancellation fee, but cannot charge a no-show fee",async()=>{reset();isStaff=false;fee.purpose="cancellation";const r=await invoke();assert.equal(r.status,200);assert(calls.some(c=>c.options?.method==="POST")||calls.length>0);reset();isStaff=false;const denied=await invoke();assert.equal(denied.status,403);});

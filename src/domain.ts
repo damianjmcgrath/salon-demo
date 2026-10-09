@@ -1,6 +1,8 @@
 export type Client = {
   id: string;
   requires_deposit?: boolean;
+  can_amend_anytime?: boolean;
+  can_cancel_free?: boolean;
   auth_user_id?: string | null;
   name: string;
   email: string;

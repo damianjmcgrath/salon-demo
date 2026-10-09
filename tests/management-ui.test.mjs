@@ -16,6 +16,7 @@ let dom,
   Communications,
   Reminder,
   DailyActivity,
+  ClientActions,
   render,
   screen,
   fireEvent,
@@ -42,6 +43,7 @@ before(async () => {
     "ClientCommunications",
     "AppointmentReminder",
     "DailyActivityReport",
+    "ClientAppointmentActions",
   ])
     await build({
       entryPoints: [
@@ -54,6 +56,7 @@ before(async () => {
       packages: "external",
       jsx: "automatic",
     });
+  ClientActions = (await import(pathToFileURL(dir + "/ClientAppointmentActions.mjs"))).default;
   DailyActivity = (await import(pathToFileURL(dir + "/DailyActivityReport.mjs"))).default;
   Reminder = (await import(pathToFileURL(dir + "/AppointmentReminder.mjs"))).default;
   Communications = (await import(pathToFileURL(dir + "/ClientCommunications.mjs"))).default;
@@ -563,3 +566,12 @@ test('daily activity supports multiple checked payment methods and displays exac
  fireEvent.click(screen.getByLabelText('All'));fireEvent.click(screen.getByLabelText('Card'));fireEvent.click(screen.getByLabelText('Vouchers'));fireEvent.click(screen.getByRole('button',{name:'Generate'}));
  await screen.findByText('Lash Lift (NO SHOW)');assert.deepEqual(calls,[{name:'get_daily_activity_report',args:{p_from:'2026-10-01',p_to:'2026-10-02',p_methods:['card','voucher']}}]);assert(screen.getByText('01/10/2026 10:30'));assert(screen.getByText('order-123'));assert(screen.getByText('damian@example.com'));assert(screen.getByRole('button',{name:'Export to CSV'}));
 });
+
+ test('client amendment intro preserves date lock and exempt clients bypass it',async()=>{
+ let selected;const appointment={id:'own',revision:0};let policy={can_manage:true,can_amend_anytime:false,same_date_only:true,cancel_free:true};const db={rpc:async()=>({data:policy,error:null})};
+ render(React.createElement(ClientActions,{db,appointment,onAmend:(a,locked)=>selected={a,locked},onChanged:()=>{}}));fireEvent.click(screen.getByRole('button',{name:'Amend Appointment'}));await screen.findByRole('button',{name:'Continue'});fireEvent.click(screen.getByRole('button',{name:'Continue'}));assert.equal(selected.locked,true);cleanup();
+ policy={...policy,can_amend_anytime:true};render(React.createElement(ClientActions,{db,appointment,onAmend:(a,locked)=>selected={a,locked},onChanged:()=>{}}));fireEvent.click(screen.getByRole('button',{name:'Amend Appointment'}));await waitFor(()=>assert.equal(selected.locked,false));assert.equal(screen.queryByRole('button',{name:'Continue'}),null);
+ });
+ test('free client cancellation asks Yes/No and never invokes card charge',async()=>{
+ let calls=0,changed=0;const db={rpc:async(name)=>{calls++;return {data:name==='client_appointment_policy'?{can_manage:true,cancel_free:true}:{fee_required:false},error:null};},functions:{invoke:()=>{throw Error('Must not charge');}}};render(React.createElement(ClientActions,{db,appointment:{id:'own',revision:0},onAmend:()=>{},onChanged:()=>changed++}));fireEvent.click(screen.getByRole('button',{name:'Cancel Appointment'}));await screen.findByRole('button',{name:'Yes'});assert(screen.getByRole('button',{name:'No'}));fireEvent.click(screen.getByRole('button',{name:'Yes'}));await screen.findByText('Appointment cancelled without a fee.');assert.equal(calls,2);fireEvent.click(screen.getByRole('button',{name:'Back to appointments'}));assert.equal(changed,1);
+ });
