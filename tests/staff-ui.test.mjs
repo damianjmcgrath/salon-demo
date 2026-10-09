@@ -651,7 +651,7 @@ test("UI: client profile, voucher purchase, print and simulated email work toget
     assert(
       document
         .querySelector(".voucher-print-area")
-        .textContent.includes("Updated Demo Client"),
+        .textContent.includes("Give the voucher code"),
     );
     let prints = 0;
     window.print = () => prints++;
@@ -686,7 +686,7 @@ test("UI: client profile, voucher purchase, print and simulated email work toget
     window.history.replaceState({}, "", "?portal=staff");
   }
 });
-test("UI: treatment-priced gift vouchers use the selected price and recipient details", async () => {
+test("UI: treatment-priced gift vouchers belong to the purchaser without recipient fields", async () => {
   try {
     await clientScreen("gift-voucher");
     fireEvent.click(
@@ -702,15 +702,7 @@ test("UI: treatment-priced gift vouchers use the selected price and recipient de
     fireEvent.change(screen.getByLabelText("Treatment"), {
       target: { value: String(t.id) },
     });
-    fireEvent.click(
-      screen.getByRole("radio", { name: "Someone Else", exact: true }),
-    );
-    fireEvent.change(screen.getByLabelText("Recipient name"), {
-      target: { value: "Gift Friend" },
-    });
-    fireEvent.change(screen.getByLabelText("Recipient email address"), {
-      target: { value: "gift@example.com" },
-    });
+    assert.equal(screen.queryByRole("radio", {name:"Someone Else",exact:true}),null);
     fireEvent.change(screen.getByLabelText("Payment Method"), {
       target: { value: "new_demo" },
     });
@@ -725,14 +717,12 @@ test("UI: treatment-priced gift vouchers use the selected price and recipient de
     await screen.findByRole("heading", { name: "Your voucher is confirmed." });
     const d = JSON.parse(localStorage.getItem("sculpted-staff-data-v1"));
     assert.equal(d.vouchers[0].original_amount, t.price);
-    assert.equal(d.vouchers[0].recipient_email, "gift@example.com");
-    assert.equal(d.vouchers[0].assigned_client_name, "Gift Friend");
+    assert(d.vouchers[0].client_id);
+    assert.equal(d.vouchers[0].recipient_email, "client@example.com");
     fireEvent.click(
       screen.getByRole("button", { name: /View My Profile and vouchers/ }),
     );
-    assert(
-      await screen.findByText("You don’t have any assigned vouchers yet."),
-    );
+    assert(await screen.findByText(d.vouchers[0].code));
   } finally {
     cleanup();
     window.history.replaceState({}, "", "?portal=staff");

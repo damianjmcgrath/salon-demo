@@ -33,9 +33,6 @@ export default function VoucherPurchase({
   const [option, setOption] = useState("custom"),
     [customAmount, setCustomAmount] = useState(""),
     [treatmentId, setTreatmentId] = useState(""),
-    [forSelf, setForSelf] = useState(true),
-    [name, setName] = useState(""),
-    [email, setEmail] = useState(""),
     [card, setCard] = useState(""),
     [holder, setHolder] = useState("Demo Cardholder"),
     [number, setNumber] = useState("4242 4242 4242 4242"),
@@ -69,8 +66,6 @@ export default function VoucherPurchase({
         throw Error(
           "Choose a value, a demo card and confirm this is a demo purchase.",
         );
-      if (!forSelf && (!name.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())))
-        throw Error("Enter the recipient’s name and email.");
       if (
         card === "new_demo" &&
         (!holder.trim() ||
@@ -84,9 +79,9 @@ export default function VoucherPurchase({
         const r = await db!.rpc("purchase_demo_voucher", {
           p_option: option === "custom" ? customAmount : option,
           p_treatment_id: option === "treatment" ? Number(treatmentId) : null,
-          p_for_self: forSelf,
-          p_recipient_name: name,
-          p_recipient_email: email,
+          p_for_self: true,
+          p_recipient_name: "",
+          p_recipient_email: "",
           p_card: card,
           p_ack: ack,
           p_request: request.current,
@@ -102,9 +97,9 @@ export default function VoucherPurchase({
           original_amount: amount,
           balance: amount,
           expires_on: expiryDate(),
-          client_id: forSelf ? own.id : null,
-          assigned_client_name: forSelf ? own.name : name.trim(),
-          recipient_email: (forSelf ? own.email : email.trim()).toLowerCase(),
+          client_id: own.id,
+          assigned_client_name: own.name,
+          recipient_email: own.email.toLowerCase(),
           revision: 0,
           created_at: new Date().toISOString(),
           demo_purchase: true,
@@ -236,10 +231,7 @@ export default function VoucherPurchase({
             {voucher.treatment_name && (
               <p>Value based on: {voucher.treatment_name}</p>
             )}
-            <p>
-              For: <strong>{voucher.assigned_client_name}</strong>
-            </p>
-            <p>{voucher.recipient_email}</p>
+            <p>Give the voucher code to the person you want to use it. They can add it to their account or present it in the salon.</p>
             <p>Voucher code</p>
             <strong className="voucher-code">{voucher.code}</strong>
             <p>Valid through: {voucherDate(voucher.expires_on)}</p>
@@ -317,48 +309,6 @@ export default function VoucherPurchase({
             <p className="voucher-total">
               Voucher value: <strong>{euro(amount)}</strong>
             </p>
-            <fieldset className="voucher-recipient-options">
-              <legend>Who is the voucher for?</legend>
-              <label>
-                <input
-                  type="radio"
-                  name="voucher-recipient"
-                  checked={forSelf}
-                  onChange={() => setForSelf(true)}
-                />{" "}
-                Yourself
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="voucher-recipient"
-                  checked={!forSelf}
-                  onChange={() => setForSelf(false)}
-                />{" "}
-                Someone Else
-              </label>
-            </fieldset>
-            {!forSelf && (
-              <div className="staff-form-grid">
-                <label>
-                  Recipient name
-                  <input
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Recipient email address
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </label>
-              </div>
-            )}
             <label>
               Payment Method
               <select

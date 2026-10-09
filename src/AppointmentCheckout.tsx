@@ -111,12 +111,13 @@ export default function AppointmentCheckout({
     setBusy(true);
     setError("");
     try {
-      const r = await db.rpc("get_checkout_options", {
+      const r = await db.rpc("claim_checkout_voucher", {
         p_id: appointment.id,
         p_code: code.trim(),
       });
       if (r.error) throw r.error;
       if (alive.current) {
+        setOptions(r.data);
         setValue(r.data.found_voucher);
         setRemainderMethod("");
       }

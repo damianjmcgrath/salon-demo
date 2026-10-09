@@ -8,7 +8,7 @@ before(async()=>{
  const source=(await readFile('supabase/functions/send-voucher-email/index.ts','utf8')).replace(/import \{ createClient \} from "npm:[^"]+";/,'const createClient = globalThis.__voucherCreateClient;');
  globalThis.__voucherCreateClient=()=>({auth:{getUser:async()=>({data:{user:signedIn?{id:'staff'}:null},error:null})},rpc:async(name,args)=>{
  if(name==='has_permission')return {data:permitted,error:null};
- if(name==='prepare_staff_voucher_email'||name==='prepare_client_voucher_email'){prepared=args;return {data:{id:'request-id',status:accepted?'accepted':'pending',snapshot:{code:'SERVER-CODE',original_amount:75,balance:50,assigned_client_name:'<script>',expires_on:'2030-01-01'}},error:null};}
+ if(name==='prepare_staff_voucher_email'||name==='prepare_client_voucher_email'){prepared=args;return {data:{id:'request-id',status:accepted?'accepted':'pending',snapshot:{code:'SERVER-CODE <script>',original_amount:75,balance:50,assigned_client_name:'<script>',expires_on:'2030-01-01'}},error:null};}
  finished=args;return {error:null};}});
  globalThis.Deno={serve:h=>{handler=h;},env:{get:k=>({SUPABASE_URL:'https://example.test',SUPABASE_ANON_KEY:'anon',SUPABASE_SERVICE_ROLE_KEY:'secret',RESEND_API_KEY:'resend',SALON_EMAIL_ENABLED:'true',SALON_EMAIL_FROM:'Salon <sender@example.com>'})[k]}};
  const r=await build({stdin:{contents:source,resolveDir:process.cwd()+'/supabase/functions/send-voucher-email',loader:'ts'},bundle:true,format:'esm',write:false});

@@ -1540,3 +1540,34 @@ test('client voucher email preparation requires purchase ownership and preserves
  await assert.rejects(pg.query('select prepare_client_voucher_email($1,$2,gen_random_uuid())',[other.id,'edited@example.com']),/purchased by you/);
  await as(staffA);await assert.rejects(pg.query('select prepare_client_voucher_email($1,$2,gen_random_uuid())',[v.id,'edited@example.com']),/Client sign-in/);
 });
+
+test('voucher purchases belong to purchaser; code claims transfer remaining balance and email ownership',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/039_voucher_claims.sql',import.meta.url),'utf8'));
+ const recipient='10000000-0000-0000-0000-000000000039';
+ await pg.query("insert into auth.users(id,email,raw_user_meta_data) values($1,'claim-client@example.com','{\"full_name\":\"Voucher Recipient\"}')",[recipient]);
+ await as(clientUser);const owner=await one('select ensure_own_client() id');
+ const v=(await one("select purchase_demo_voucher('45.99',null,false,'Ignored','ignored@example.com','saved_demo',true,gen_random_uuid()) data")).data;
+ assert.equal(v.client_id,owner.id);assert.equal(Number(v.original_amount),45.99);
+ await assert.rejects(pg.query("select purchase_demo_voucher('4.99',null,true,'','','saved_demo',true,gen_random_uuid())"),/between/);
+ await assert.rejects(pg.query("select purchase_demo_voucher('501',null,true,'','','saved_demo',true,gen_random_uuid())"),/between/);
+ await assert.rejects(pg.query("select purchase_demo_voucher('hello',null,true,'','','saved_demo',true,gen_random_uuid())"),/Choose a voucher amount/);
+ await as(recipient);const claimed=await one('select * from claim_my_voucher($1)',[v.code.toLowerCase()]);assert.notEqual(claimed.client_id,owner.id);
+ const own=(await one('select get_my_voucher_history() data')).data;assert(own.vouchers.some(x=>x.id===v.id));
+ await one("select prepare_client_voucher_email($1,'recipient@example.com',gen_random_uuid()) data",[v.id]);
+ await one('select claim_my_voucher($1)',[v.code]);
+ await as(clientUser);const history=(await one('select get_my_voucher_history() data')).data;assert(!history.vouchers.some(x=>x.id===v.id));const transfers=history.transfers.filter(x=>x.code===v.code);assert.equal(transfers.length,1);assert.equal(transfers[0].transferred_to,'Voucher Recipient');
+ await assert.rejects(pg.query("select prepare_client_voucher_email($1,'other@example.com',gen_random_uuid())",[v.id]),/currently assigned/);
+ await as(staffA);await assert.rejects(pg.query('select claim_my_voucher($1)',[v.code]),/Client sign-in/);
+ await as(recipient);await assert.rejects(pg.query("select claim_my_voucher('SC-NOT-A-REAL-CODE')"),/not found/);
+ await pg.exec('reset role');await pg.query("update vouchers set expires_on='2000-01-01' where id=$1",[v.id]);await as(clientUser);await assert.rejects(pg.query('select claim_my_voucher($1)',[v.code]),/expired/);
+});
+
+test('checkout voucher lookup transfers a gift to the appointment client and preserves split redemption',async()=>{
+ await as(clientUser);const owner=await one('select ensure_own_client() id');const v=(await one("select purchase_demo_voucher('20',null,true,'','','saved_demo',true,gen_random_uuid()) data")).data;
+ await pg.exec('reset role');const target=await one("select id from clients where email='claim-client@example.com'");
+ const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status) values($1,$2,1,8001,'Test transfer checkout','Recipient','123456789',50,'2080-02-20',600,60,'checked_in') returning *",[clientUser,target.id]);
+ await as(staffA);const options=(await one('select claim_checkout_voucher($1,$2) data',[a.id,v.code])).data;assert.equal(options.found_voucher.id,v.id);assert(options.vouchers.some(x=>x.id===v.id));
+ const done=await one("select * from checkout_appointment($1,0,'voucher',$2,null,'card',20)",[a.id,v.code]);assert.equal(done.status,'completed');
+ await pg.exec('reset role');const nowOwner=await one('select client_id from vouchers where id=$1',[v.id]);assert.equal(nowOwner.client_id,target.id);const used=await one('select amount from client_value_redemptions where appointment_id=$1',[a.id]);assert.equal(Number(used.amount),20);
+ await as(clientUser);const h=(await one('select get_my_voucher_history() data')).data;assert(h.transfers.some(x=>x.code===v.code));assert(!h.uses.some(x=>x.voucher_id===v.id));
+});
