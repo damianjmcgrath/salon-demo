@@ -174,7 +174,7 @@ Deno.serve(async (req: Request) => {
               );
             } else {
               const order = await api("/orders", {
-                amount: 1000,
+                amount: row.amount_cents,
                 currency: "EUR",
                 customer: { id: card.customer_id },
                 description: "Salon Sandbox no-show fee " + row.appointment_id,
@@ -243,6 +243,7 @@ Deno.serve(async (req: Request) => {
         }
       }
       return reply({
+        amount_cents: row.amount_cents,
         state: row.state,
         provider_state: providerState,
         status_error: statusError,
@@ -296,7 +297,7 @@ Deno.serve(async (req: Request) => {
         return reply(
           {
             error:
-              "Agree to save the card for the €10 no-show guarantee first.",
+              "Agree to save the card for the 50% no-show / late-cancellation guarantee first.",
           },
           400,
         );

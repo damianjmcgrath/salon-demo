@@ -37,7 +37,7 @@ export function confirmationPayload(
         ? "Payment has already been made online by Credit Note. No further payment is required."
         : s.guarantee_required === false
       ? "No payment is taken now. No card guarantee is required for this booking. Payment is made in the salon after treatment."
-      : "No payment is taken now. Payment is made in the salon after treatment. The booking guarantee is €10 for no-shows or late cancellations.";
+      : `No payment is taken now. Payment is made in the salon after treatment. The booking guarantee is €${(Number(s.guarantee_fee_cents ?? 1000) / 100).toFixed(2)} for no-shows or late cancellations.`;
   const lines = [
     "TEST EMAIL — routed to Damian during salon testing.",
     `See you soon, ${String(s.client_name).trim().split(/\s+/)[0]}.`,

@@ -5,10 +5,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export default function BookingGuarantee({
   db,
   clientId,
+  treatmentPrice = 0,
   onChange,
 }: {
   db: SupabaseClient;
   clientId?: string;
+  treatmentPrice?: number;
   onChange: (id: string, consent: boolean) => void;
 }) {
   const [cards, setCards] = useState<
@@ -163,7 +165,7 @@ export default function BookingGuarantee({
     <div className="guarantee">
       <p>
         No payment will be taken now. Pay for your treatment in the salon. Your
-        saved card may be charged €10 if you do not attend.
+        saved card may be charged 50% of the treatment cost ({new Intl.NumberFormat("en-IE", {style:"currency",currency:"EUR"}).format(Math.round(treatmentPrice * 50) / 100)}) for a no-show or late cancellation.
       </p>
       <p className="small">
         <strong>Revolut Sandbox:</strong> use test cards only. No real money
@@ -216,7 +218,7 @@ export default function BookingGuarantee({
           }}
         />
         {clientId ? "The client agrees" : "I agree"} to save this card and allow
-        a €10 no-show charge for this booking. This is a Sandbox test.
+        a charge of 50% of the treatment cost for a no-show or late cancellation for this booking. This is a Sandbox test.
       </label>
       {choice === "new" && (
         <>

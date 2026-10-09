@@ -798,7 +798,7 @@ export default function StaffWorkspace({
                       </select>
                     </label>
                     <p className="small">
-                      Yes requires a saved card for the €10 booking guarantee.
+                      Yes requires a saved card for the booking guarantee of 50% of the treatment cost.
                       No allows future bookings without card details; no payment
                       is taken at booking.
                     </p>

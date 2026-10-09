@@ -1582,3 +1582,15 @@ test('treatment rebook windows validate permitted values and preserve permission
  args[6]=saved.revision;args[8]='5 months';await assert.rejects(pg.query(sql,args),/valid rebook/);
  args[8]='12 months';await as(clientUser);await assert.rejects(pg.query(sql,args),/Permission denied/);
 });
+
+test('percentage guarantee snapshots 50% for new bookings, preserves old fees and queues the exact amount',async()=>{
+ await pg.exec('reset role');const legacy=await one('select id from appointments limit 1');
+ await pg.exec(await readFile(new URL('../supabase/041_percentage_booking_guarantee.sql',import.meta.url),'utf8'));
+ assert.equal((await one('select guarantee_fee_cents from appointments where id=$1',[legacy.id])).guarantee_fee_cents,1000);
+ const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status) values($1,$2,1,8001,'Percentage','Client','123456789',49.99,'2080-02-21',600,60,'booked') returning *",[clientUser,clientId]);
+ assert.equal(a.guarantee_fee_cents,2500);
+ const snapshot=await one('select snapshot from booking_email_queue where appointment_id=$1',[a.id]);assert.equal(snapshot.snapshot.guarantee_fee_cents,2500);
+ await pg.query('update appointments set price=60 where id=$1',[a.id]);assert.equal((await one('select guarantee_fee_cents from appointments where id=$1',[a.id])).guarantee_fee_cents,2500);
+ await as(staffA);await pg.query("select record_no_show_decision($1,0,true,'Apply guarantee')",[a.id]);
+ await pg.exec('reset role');assert.equal((await one('select amount_cents from no_show_fees where appointment_id=$1',[a.id])).amount_cents,2500);
+});

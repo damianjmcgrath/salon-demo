@@ -432,6 +432,7 @@ export default function App() {
     comments?: string;
     error?: string;
     provider_state?: string | null;
+    amount_cents?: number;
     status_error?: string | null;
   } | null>(null);
   const [feeChecking, setFeeChecking] = useState(false);
@@ -2310,6 +2311,7 @@ export default function App() {
                     <BookingGuarantee
                       key={staffClient?.id || session?.user.id}
                       db={db}
+                      treatmentPrice={treatment.price}
                       clientId={staffClient?.id}
                       onChange={(id, agreed) => {
                         setCard(id);
@@ -2321,7 +2323,7 @@ export default function App() {
                       <p>
                         No payment will be taken now. Payment will be taken in
                         the salon after your treatment. The booking guarantee
-                        will only charge €10 for no-shows or late cancellations.
+                        will charge 50% of the treatment cost for no-shows or late cancellations.
                       </p>
                       <p className="small">
                         Demo only: cards and charges are simulated. Do not enter
@@ -2369,7 +2371,7 @@ export default function App() {
                           checked={consent}
                           onChange={(e) => setConsent(e.target.checked)}
                         />
-                        I agree to the €10 no-show / late-cancellation guarantee
+                        I agree to the 50% no-show / late-cancellation guarantee
                         and understand this booking is simulated.
                       </label>
                     </div>
@@ -3387,7 +3389,7 @@ export default function App() {
                   Sandbox payment:{" "}
                   <strong>
                     {feeInfo?.state === "completed"
-                      ? "€10 paid"
+                      ? `${new Intl.NumberFormat("en-IE", {style:"currency",currency:"EUR"}).format(Number(feeInfo?.amount_cents ?? selected.guarantee_fee_cents ?? 1000) / 100)} paid`
                       : feeInfo?.state === "waived"
                         ? "Waived — no payment taken"
                         : feeInfo?.state === "failed"
@@ -3460,7 +3462,7 @@ export default function App() {
                     {feeChecking
                       ? "Checking…"
                       : feeInfo?.state === "pending"
-                        ? "Finish approved €10 charge"
+                        ? "Finish approved guarantee charge"
                         : "Check payment status again"}
                   </button>
                 ) : null}
@@ -3477,7 +3479,7 @@ export default function App() {
                   <p>
                     {selected.guarantee_required === false
                       ? "This appointment has no card guarantee. Record the no-show without a card charge."
-                      : "Do you want to apply the €10 no-show fee? This is a Revolut Sandbox charge. Either choice marks the appointment as a no-show."}
+                      : `Do you want to apply the ${new Intl.NumberFormat("en-IE", {style:"currency",currency:"EUR"}).format((selected.guarantee_fee_cents ?? 1000) / 100)} no-show fee? This is a Revolut Sandbox charge. Either choice marks the appointment as a no-show.`}
                   </p>
                 )}
                 <label>
@@ -3500,7 +3502,7 @@ export default function App() {
                         disabled={busy || !statusReason.trim()}
                         onClick={() => void recordNoShow(true)}
                       >
-                        Yes — apply €10 fee
+                        Yes — apply {new Intl.NumberFormat("en-IE", {style:"currency",currency:"EUR"}).format((selected.guarantee_fee_cents ?? 1000) / 100)} fee
                       </button>
                     )}
                     {(selected.guarantee_required === false ||

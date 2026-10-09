@@ -129,6 +129,7 @@ function reset() {
   fee = {
     appointment_id: "appointment-id",
     state: "pending",
+    amount_cents: 2475,
     comments: "Client did not attend",
     apply_fee: true,
   };
@@ -151,14 +152,14 @@ async function invoke(action = "charge") {
   );
   return { status: r.status, data: await r.json() };
 }
-test("parallel/repeated staff requests submit one €10 MIT charge and confirm its order", async () => {
+test("parallel/repeated staff requests submit one recorded percentage MIT charge and confirm its order", async () => {
   reset();
   await Promise.all([invoke(), invoke()]);
   const r = await invoke();
   assert.equal(r.data.state, "completed");
   const orders = calls.filter((c) => c.url.endsWith("/orders"));
   assert.equal(orders.length, 1);
-  assert.equal(orders[0].body.amount, 1000);
+  assert.equal(orders[0].body.amount, 2475);
   assert.equal(orders[0].body.currency, "EUR");
   assert.equal(orders[0].body.customer.id, "customer-id");
   const payments = calls.filter((c) => c.url.endsWith("/payments"));
