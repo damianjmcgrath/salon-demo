@@ -1571,3 +1571,14 @@ test('checkout voucher lookup transfers a gift to the appointment client and pre
  await pg.exec('reset role');const nowOwner=await one('select client_id from vouchers where id=$1',[v.id]);assert.equal(nowOwner.client_id,target.id);const used=await one('select amount from client_value_redemptions where appointment_id=$1',[a.id]);assert.equal(Number(used.amount),20);
  await as(clientUser);const h=(await one('select get_my_voucher_history() data')).data;assert(h.transfers.some(x=>x.code===v.code));assert(!h.uses.some(x=>x.voucher_id===v.id));
 });
+
+test('treatment rebook windows validate permitted values and preserve permission and revision guards',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/040_treatment_rebook_window.sql',import.meta.url),'utf8'));await as(staffA);
+ let t=await one('select * from treatments where id=8001');
+ const sql='select * from save_treatment($1,$2,$3,$4,$5,$6,$7,$8,$9)';
+ const args=[t.id,t.name,t.description||'',t.duration,t.price,t.patch_required,t.revision,t.guarantee_required,'4 weeks'];
+ const saved=await one(sql,args);assert.equal(saved.rebook_window,'4 weeks');assert.equal(saved.revision,t.revision+1);
+ await assert.rejects(pg.query(sql,args),/changed/);
+ args[6]=saved.revision;args[8]='5 months';await assert.rejects(pg.query(sql,args),/valid rebook/);
+ args[8]='12 months';await as(clientUser);await assert.rejects(pg.query(sql,args),/Permission denied/);
+});

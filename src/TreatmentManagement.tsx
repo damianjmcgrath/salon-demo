@@ -11,6 +11,7 @@ export type ManagedTreatment = {
   revision?: number;
   active?: boolean;
   guarantee_required?: boolean;
+  rebook_window?: string | null;
 };
 export default function TreatmentManagement({
   db,
@@ -22,6 +23,7 @@ export default function TreatmentManagement({
   onChanged: () => void;
 }) {
   const [treatments, setTreatments] = useState<ManagedTreatment[]>([]),
+    [categoryFilter, setCategoryFilter] = useState(""),
     [draft, setDraft] = useState<ManagedTreatment | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -59,6 +61,7 @@ export default function TreatmentManagement({
         p_patch_required: draft.patch_required,
         p_revision: draft.revision ?? 0,
         p_guarantee_required: draft.guarantee_required !== false,
+        p_rebook_window: draft.rebook_window || null,
       });
       if (r.error) throw r.error;
       setTreatments((ts) => ts.map((t) => (t.id === draft.id ? r.data : t)));
@@ -85,6 +88,12 @@ export default function TreatmentManagement({
         </p>
       )}
       {message && <p role="status">{message}</p>}
+      {!draft && <label style={{ maxWidth: 420, marginBottom: 20 }}>Treatment category
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+          <option value="">All categories</option>
+          {[...new Set(treatments.map(t => t.category))].map(category => <option key={category} value={category}>{category}</option>)}
+        </select>
+      </label>}
       {!db && <p>Connect to Supabase to manage treatments.</p>}
       {draft ? (
         <form className="panel" onSubmit={(e) => void save(e)}>
@@ -141,6 +150,13 @@ export default function TreatmentManagement({
             />
           </label>
           <label>
+            Rebook Window
+            <select value={draft.rebook_window || ""} disabled={busy} onChange={e => setDraft({...draft,rebook_window:e.target.value || null})}>
+              <option value="">Not set</option>
+              {["1 week","2 weeks","4 weeks","2 months","3 months","6 months","12 months"].map(window => <option key={window} value={window}>{window}</option>)}
+            </select>
+          </label>
+          <label>
             Patch test required
             <select
               value={draft.patch_required ? "yes" : "no"}
@@ -188,7 +204,7 @@ export default function TreatmentManagement({
           </div>
         </form>
       ) : (
-        [...new Set(treatments.map((t) => t.category))].map((category) => (
+        [...new Set(treatments.map((t) => t.category))].filter(category => !categoryFilter || category === categoryFilter).map((category) => (
           <section className="panel" key={category}>
             <h2>{category}</h2>
             <div className="management-list">
@@ -209,7 +225,7 @@ export default function TreatmentManagement({
                       {t.duration} mins · €{Number(t.price).toFixed(2)} · Patch
                       test: {t.patch_required ? "Yes" : "No"}
                     </span>
-                    <span>Edit →</span>
+                    <strong style={{ color: "#292822", textDecoration: "underline", fontSize: 16 }}>Edit →</strong>
                   </button>
                 ))}
             </div>

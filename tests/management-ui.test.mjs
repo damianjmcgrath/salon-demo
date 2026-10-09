@@ -127,6 +127,7 @@ test("treatment edit submits name, description, price, duration and patch test f
     ["Price (€)", "35.50"],
     ["Patch test required", "yes"],
     ["Booking guarantee required", "no"],
+    ["Rebook Window", "4 weeks"],
   ])
     fireEvent.change(screen.getByLabelText(label), { target: { value } });
   fireEvent.click(screen.getByRole("button", { name: "Save Treatment" }));
@@ -142,6 +143,7 @@ test("treatment edit submits name, description, price, duration and patch test f
       p_patch_required: true,
       p_revision: 2,
       p_guarantee_required: false,
+      p_rebook_window: "4 weeks",
     },
   ]);
 });
