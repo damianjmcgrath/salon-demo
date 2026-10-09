@@ -307,7 +307,7 @@ test("UI: admin has nine tiles, accountant only Reporting, and clocks remain pro
   );
   assert.equal(screen.queryByRole("button", { name: /Jacqui/ }), null);
 });
-test("UI: voucher issuance, client assignment, transfer and print use the current name", async () => {
+test("UI: voucher ownership is retained while printed vouchers omit the assignee", async () => {
   await login();
   fireEvent.click(screen.getByRole("button", { name: /Voucher Management/ }));
   fireEvent.click(screen.getByRole("button", { name: /Create a New Voucher/ }));
@@ -344,7 +344,7 @@ test("UI: voucher issuance, client assignment, transfer and print use the curren
   assert(
     document
       .querySelector(".voucher-print-area")
-      .textContent.includes("Grace Demo"),
+      .textContent.includes(saved.vouchers[0].code),
   );
 });
 

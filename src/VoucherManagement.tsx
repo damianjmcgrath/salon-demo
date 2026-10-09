@@ -614,10 +614,6 @@ export default function VoucherManagement({
             <h3>{euro(Number(voucher.original_amount))}</h3>
             <p>Voucher ID</p>
             <strong className="voucher-code">{voucher.code}</strong>
-            <p>
-              Assigned to:{" "}
-              <strong>{voucher.assigned_client_name || ""}</strong>
-            </p>
             <p>Valid through: {voucherDate(voucher.expires_on)}</p>
             <p>
               Remaining value:{" "}
