@@ -14,6 +14,7 @@ import { diaryEntryLayout } from "./diaryLayout.js";
 import { useCalendarEntries } from "./CalendarEntries";
 import { lastBookedLabel } from "./bookingRecency.js";
 import AppointmentReminder from "./AppointmentReminder";
+import AppointmentTransfer from "./AppointmentTransfer";
 import PermissionManagement from "./PermissionManagement";
 import TreatmentManagement from "./TreatmentManagement";
 import { defaultPermissions, type Permissions } from "./permissions";
@@ -3724,14 +3725,10 @@ export default function App() {
               {time(selected.start_minute + selected.duration)}
             </p>
             <p>
-              {staff.find((s) => s.id === selected.staff_id)?.name} (
-              {selected.staff_selected === true
-                ? "specifically chosen"
-                : selected.staff_selected === false
-                  ? "no preference"
-                  : "preference not recorded"}
-              ) · {money(selected.price)}
+              {staff.find((s) => s.id === selected.staff_id)?.name}
+              {(allowed("view.diary") || allowed("view.appointments")) && <AppointmentTransfer db={db} appointment={selected} onTransferred={async appointment => {setSelected(appointment); await refresh();}} />}
             </p>
+            <p>{money(selected.price)}</p>
             <span className="status">{selected.status.replace("_", " ")}</span>
             <p>
               {selected.attendee_email || ""} · {selected.phone || ""}

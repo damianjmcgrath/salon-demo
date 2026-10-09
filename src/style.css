@@ -1808,3 +1808,5 @@ nav .logout-link {
 @media print {
   .voucher-print-area button { display: none; }
 }
+
+.appointment-transfer { margin-left: 1rem; font-weight: 600; }

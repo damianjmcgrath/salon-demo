@@ -18,6 +18,7 @@ let dom,
   DailyActivity,
   ClientActions,
   Preference,
+  Transfer,
   render,
   screen,
   fireEvent,
@@ -46,6 +47,7 @@ before(async () => {
     "DailyActivityReport",
     "ClientAppointmentActions",
     "StaffPreferenceReport",
+    "AppointmentTransfer",
   ])
     await build({
       entryPoints: [
@@ -58,6 +60,7 @@ before(async () => {
       packages: "external",
       jsx: "automatic",
     });
+  Transfer = (await import(pathToFileURL(dir + "/AppointmentTransfer.mjs"))).default;
   Preference = (await import(pathToFileURL(dir + "/StaffPreferenceReport.mjs"))).default;
   ClientActions = (await import(pathToFileURL(dir + "/ClientAppointmentActions.mjs"))).default;
   DailyActivity = (await import(pathToFileURL(dir + "/DailyActivityReport.mjs"))).default;
@@ -584,4 +587,11 @@ test('daily activity supports multiple checked payment methods and displays exac
  });
  test('prepaid cancellation explains retained fee and refund without requesting a card charge',async()=>{
  const db={rpc:async(name)=>({data:name==='client_appointment_policy'?{can_manage:true,cancel_free:false,fee_cents:2500,prepaid_method:'voucher'}:{fee_required:false,amount_cents:2500,prepaid_method:'voucher',refund_amount:25}}),functions:{invoke:()=>{throw Error('Must not charge card');}}};render(React.createElement(ClientActions,{db,appointment:{id:'paid',revision:0},onAmend:()=>{},onChanged:()=>{}}));fireEvent.click(screen.getByRole('button',{name:'Cancel Appointment'}));await screen.findByText(/As you paid by voucher/);fireEvent.click(screen.getByRole('button',{name:'Confirm'}));await screen.findByText(/€25.00 returned to your voucher/);assert.equal(screen.queryByRole('button',{name:'Check payment status'}),null);
+ });
+
+ test('appointment transfer shows only available colleagues and sends current revision',async()=>{
+ const a={id:'appointment',staff_id:1,status:'checked_in',revision:4};let updated;const calls=[];
+ const db={rpc:async(name,args)=>{calls.push([name,args]);return {data:name==='get_appointment_transfer_options'?[{id:2,name:'Leah'}]:{...a,staff_id:2,revision:5},error:null};}};
+ render(React.createElement(Transfer,{db,appointment:a,onTransferred:async value=>{updated=value;}}));fireEvent.click(await screen.findByRole('button',{name:'Move to Leah'}));await waitFor(()=>assert.equal(updated.staff_id,2));assert.deepEqual(calls[1],['transfer_appointment',{p_id:'appointment',p_staff_id:2,p_revision:4}]);
+ cleanup();render(React.createElement(Transfer,{db:{rpc:async()=>({data:[],error:null})},appointment:a,onTransferred:async()=>{}}));await waitFor(()=>assert.equal(screen.queryByRole('button',{name:/Move to/}),null));
  });

@@ -1665,3 +1665,18 @@ test('lifecycle emails snapshot amended details and staff preference reports exp
  const value=(await one("select purchase_demo_voucher('100',null,true,'','','saved_demo',true,gen_random_uuid()) data")).data;
  const b=await one("select * from book_with_value(90999,1,'2085-02-20',660,$1,$2,true,$3,null,false,null,null,'voucher',$4,true)",[c.name,c.phone,c.email,value.id]);assert.equal(b.staff_selected,true);assert.equal(b.preferred_staff_id,1);
  });
+
+test('staff transfers preserve preference, original allocation and booked details; enforce exact availability and revision',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/044_staff_appointment_transfers.sql',import.meta.url),'utf8'));
+ await pg.exec("insert into staff_treatments(staff_id,treatment_id) values(2,90999) on conflict do nothing;insert into staff_day_shifts(staff_id,shift_date,start_minute,end_minute) values(1,'2086-02-20',540,1020),(2,'2086-02-20',540,1020);");
+ const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status,staff_selected,preferred_staff_id) values($1,$2,1,90999,'Transfer snapshot','Client','123456789',35,'2086-02-20',600,45,'checked_in',true,1) returning *",[clientUser,clientId]);
+ await as(clientUser);await assert.rejects(pg.query('select * from get_appointment_transfer_options($1)',[a.id]),/Permission denied/);await assert.rejects(pg.query('select * from transfer_appointment($1,2,0)',[a.id]),/Permission denied/);
+ await as(staffA);assert((await pg.query('select * from get_appointment_transfer_options($1)',[a.id])).rows.some(x=>x.id===2));
+ await pg.exec('reset role');const conflict=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status) values($1,$2,2,90999,'Conflict','Client','123456789',20,'2086-02-20',630,30,'booked') returning *",[clientUser,clientId]);
+ await as(staffA);assert.equal((await pg.query('select * from get_appointment_transfer_options($1)',[a.id])).rows.length,0);await assert.rejects(pg.query('select * from transfer_appointment($1,2,0)',[a.id]),/no longer available/);
+ await pg.exec('reset role');await pg.query("update appointments set status='cancelled' where id=$1",[conflict.id]);
+ await as(staffA);await assert.rejects(pg.query('select * from transfer_appointment($1,2,99)',[a.id]),/changed/);
+ const moved=await one('select * from transfer_appointment($1,2,0)',[a.id]);assert.equal(moved.staff_id,2);assert.equal(moved.original_staff_id,1);assert.equal(moved.preferred_staff_id,1);assert.equal(moved.staff_selected,true);assert.equal(moved.duration,45);assert.equal(moved.treatment_name,a.treatment_name);assert.equal(moved.price,a.price);assert.equal(moved.status,'checked_in');
+ const report=(await one("select get_staff_preference_report('2086-02-20','2086-02-20') data")).data;assert.equal(Number(report.rows.find(x=>x.treatment_name==='Transfer snapshot').selected[1]),1);
+ await pg.exec('reset role');assert.equal((await one("select count(*)::integer n from audit_events where appointment_id=$1 and action='appointment_transferred'",[a.id])).n,1);assert.equal((await one("select count(*)::integer n from booking_email_queue where appointment_id=$1 and event_kind='amended'",[a.id])).n,1);
+});
