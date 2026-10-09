@@ -1,3 +1,4 @@
+import StaffPreferenceReport from "./StaffPreferenceReport";
 import DiscountsReport from "./DiscountsReport";
 import DailyActivityReport from "./DailyActivityReport";
 import VoucherStatusReport from "./VoucherStatusReport";
@@ -49,7 +50,8 @@ export default function Reporting({
   onHome: () => void;
   allowSandbox?: boolean;
 }) {
-  const [discounts,setDiscounts] = useState(false);
+  const [preference, setPreference] = useState(false);
+  const [discounts, setDiscounts] = useState(false);
   const [activity, setActivity] = useState(false);
   const [sandbox, setSandbox] = useState(false);
   const [vouchers, setVouchers] = useState(false);
@@ -161,8 +163,14 @@ export default function Reporting({
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  if (discounts) return <DiscountsReport db={db} onBack={()=>setDiscounts(false)}/>;
-  if (activity) return <DailyActivityReport db={db} onBack={() => setActivity(false)} />;
+  if (preference)
+    return (
+      <StaffPreferenceReport db={db} onBack={() => setPreference(false)} />
+    );
+  if (discounts)
+    return <DiscountsReport db={db} onBack={() => setDiscounts(false)} />;
+  if (activity)
+    return <DailyActivityReport db={db} onBack={() => setActivity(false)} />;
   if (vouchers)
     return <VoucherStatusReport db={db} onBack={() => setVouchers(false)} />;
   if (sandbox && allowSandbox)
@@ -196,8 +204,32 @@ export default function Reporting({
             </p>
           )}
           <div className="workspace-grid">
-            <button className="panel workspace-card" onClick={()=>setDiscounts(true)}><h2>Discounts Report</h2><p>Discounts applied by staff.</p><span>Open →</span></button>
-            <button className="panel workspace-card" onClick={() => setActivity(true)}><h2>Daily Activity Report</h2><p>Individual appointment payments and collected no-show fees.</p><span>Open →</span></button>
+            <button
+              className="panel workspace-card"
+              onClick={() => setPreference(true)}
+            >
+              <h2>Staff Preference Report</h2>
+              <p>
+                Specific staff choices and no-preference bookings by treatment.
+              </p>
+              <span>Open →</span>
+            </button>
+            <button
+              className="panel workspace-card"
+              onClick={() => setDiscounts(true)}
+            >
+              <h2>Discounts Report</h2>
+              <p>Discounts applied by staff.</p>
+              <span>Open →</span>
+            </button>
+            <button
+              className="panel workspace-card"
+              onClick={() => setActivity(true)}
+            >
+              <h2>Daily Activity Report</h2>
+              <p>Individual appointment payments and collected no-show fees.</p>
+              <span>Open →</span>
+            </button>
             <button
               className="panel workspace-card"
               onClick={() => setVouchers(true)}
@@ -271,8 +303,8 @@ export default function Reporting({
           </form>
           <p className="small">
             Scheduled counts exclude cancelled appointments. Completed counts
-            use completion dates. Payments use the date payment was recorded
-            in Dublin time. Amounts are recorded treatment prices; card fees are
+            use completion dates. Payments use the date payment was recorded in
+            Dublin time. Amounts are recorded treatment prices; card fees are
             calculated at 1.5% and rounded to cents for each row.
           </p>
           {error && (

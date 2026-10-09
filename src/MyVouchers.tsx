@@ -6,26 +6,377 @@ import { assignedVouchers, localClient, euro } from "./clientModel";
 import { requestErrorMessage } from "./requestErrors";
 type Row = Record<string, any>;
 type Column = [string, (r: Row) => ReactNode];
-function Table({rows,columns,empty}:{rows:Row[];columns:Column[];empty:string}) {
- return rows.length ? <><div className="my-vouchers-table report-table-scroll"><table className="activity-report-table"><thead><tr>{columns.map(([name])=><th key={name}>{name}</th>)}</tr></thead><tbody>{rows.map(r=><tr key={r.id}>{columns.map(([name,format])=><td key={name}>{format(r)}</td>)}</tr>)}</tbody></table></div><div className="my-vouchers-cards">{rows.map(r=><dl className="my-voucher-card" key={r.id}>{columns.map(([name,format])=><div key={name}><dt>{name}</dt><dd>{format(r)}</dd></div>)}</dl>)}</div></> : <p>{empty}</p>;
+function Table({
+  rows,
+  columns,
+  empty,
+}: {
+  rows: Row[];
+  columns: Column[];
+  empty: string;
+}) {
+  return rows.length ? (
+    <>
+      <div className="my-vouchers-table report-table-scroll">
+        <table className="activity-report-table">
+          <thead>
+            <tr>
+              {columns.map(([name]) => (
+                <th key={name}>{name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                {columns.map(([name, format]) => (
+                  <td key={name}>{format(r)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="my-vouchers-cards">
+        {rows.map((r) => (
+          <dl className="my-voucher-card" key={r.id}>
+            {columns.map(([name, format]) => (
+              <div key={name}>
+                <dt>{name}</dt>
+                <dd>{format(r)}</dd>
+              </div>
+            ))}
+          </dl>
+        ))}
+      </div>
+    </>
+  ) : (
+    <p>{empty}</p>
+  );
 }
-export default function MyVouchers({db,live,data,onBuy}:{db:SupabaseClient|null;live:boolean;data:LocalStaffData;onBuy:()=>void}) {
- const [vouchers,setVouchers]=useState<Row[]>([]),[uses,setUses]=useState<Row[]>([]),[transfers,setTransfers]=useState<Row[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[version,setVersion]=useState(0);
- const [adding,setAdding]=useState(false),[code,setCode]=useState(""),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
- const [emailVoucher,setEmailVoucher]=useState<Row|null>(null),[email,setEmail]=useState(""),[printed,setPrinted]=useState<Row|null>(null);
- const emailRequest=useRef(crypto.randomUUID());
- useEffect(()=>{let current=true;setLoading(true);setError("");async function load(){try{if(live&&db){const r=await db.rpc("get_my_voucher_history");if(r.error)throw r.error;if(current){setVouchers(r.data.vouchers||[]);setUses(r.data.uses||[]);setTransfers(r.data.transfers||[]);}}else if(current){setVouchers(assignedVouchers(data,localClient(data).email));setUses([]);setTransfers([]);}}catch(e){if(current)setError(requestErrorMessage(e));}finally{if(current)setLoading(false);}}void load();return()=>{current=false;};},[db,live,data,version]);
- useEffect(()=>{if(printed){const timer=setTimeout(()=>window.print(),100);return()=>clearTimeout(timer);}},[printed]);
- async function claim(e:React.FormEvent){e.preventDefault();if(busy)return;setBusy(true);setError("");try{if(!live||!db)throw Error("Voucher transfers are available when connected to the salon.");const r=await db.rpc("claim_my_voucher",{p_code:code.trim()});if(r.error)throw r.error;setAdding(false);setCode("");setMessage("Voucher added to your account.");setVersion(v=>v+1);}catch(e){setError(requestErrorMessage(e));}finally{setBusy(false);}}
- async function send(e:React.FormEvent){e.preventDefault();if(!emailVoucher||busy)return;setBusy(true);setError("");try{if(!live||!db)throw Error("Voucher emails are available when connected to the salon.");const r=await db.functions.invoke("send-voucher-email",{body:{voucher_id:emailVoucher.id,email:email.trim(),request_id:emailRequest.current,client_purchase:true}});if(r.error)throw r.error;if(!r.data?.accepted)throw Error(r.data?.error||"The email could not be sent.");setEmailVoucher(null);setMessage("Voucher email accepted for sending to damianjmcgrath@gmail.com (testing).");}catch(e){setError(requestErrorMessage(e));}finally{setBusy(false);}}
- const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Dublin",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
- const columns:Column[]=[["Purchase Date/Time",r=>displayDateTime(r.created_at)],["Purchased By",r=>r.purchaser_name||"Not recorded"],["Voucher Code",r=>r.code],["Voucher Amount",r=>euro(Number(r.original_amount))],["Remaining Amount",r=>euro(Number(r.balance))],["Expiry Date",r=>voucherDate(r.expires_on)],["Actions",r=><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><button className="back" onClick={()=>setPrinted({...r})}>Print Voucher</button><button className="back" onClick={()=>{setEmailVoucher(r);setEmail(r.recipient_email||"");emailRequest.current=crypto.randomUUID();}}>Email Voucher</button></div>]];
- return <section className="panel"><h1>My Vouchers</h1>{error&&<p className="auth-error" role="alert">{error}</p>}{message&&<p role="status">{message}</p>}
- <button className="secondary" onClick={()=>{setAdding(true);setError("");}}>Add a Voucher</button>
- {adding&&<form onSubmit={e=>void claim(e)}><label>Voucher Code<input autoFocus required maxLength={100} value={code} onChange={e=>setCode(e.target.value)}/></label><p className="small">Adding this code transfers the voucher’s remaining balance to your account.</p><div className="record-actions"><button className="primary" disabled={busy}>Add Voucher</button><button type="button" className="secondary" disabled={busy} onClick={()=>setAdding(false)}>Cancel</button></div></form>}
- {emailVoucher&&<form onSubmit={e=>void send(e)}><h2>Email Voucher {emailVoucher.code}</h2><label>Email address<input type="email" autoFocus required maxLength={254} value={email} onChange={e=>{setEmail(e.target.value);emailRequest.current=crypto.randomUUID();}}/></label><div className="record-actions"><button className="primary" disabled={busy}>Send Email</button><button className="secondary" type="button" disabled={busy} onClick={()=>setEmailVoucher(null)}>Cancel</button></div><p className="small">During testing, emails go to damianjmcgrath@gmail.com.</p></form>}
- {loading?<p>Loading vouchers…</p>:<><h2>Active Vouchers</h2><Table rows={vouchers.filter(v=>v.expires_on>=today&&Number(v.balance)>0)} columns={columns} empty="No active vouchers."/><h2>Used Vouchers</h2><Table rows={uses} columns={[["Date/Time Used",r=>displayDateTime(r.used_at)],["Voucher Code",r=>r.voucher_code],["Amount Used",r=>euro(Number(r.amount))],["Treatment",r=>r.treatment_name],["Staff Member",r=>r.staff_name]]} empty="No voucher redemptions recorded."/><h2>Transferred Vouchers</h2><Table rows={transfers} columns={[["Voucher Code",r=>r.code],["Voucher Amount",r=>euro(Number(r.original_amount))],["Date Transferred",r=>displayDateTime(r.transferred_at)],["Transferred To",r=>r.transferred_to]]} empty="No transferred vouchers."/></>}
- <div className="record-actions"><button className="primary" onClick={onBuy}>Buy a Voucher</button></div>
- {printed&&<div className="voucher-print-area" style={{marginTop:24}}><h2>Gift Voucher</h2><h3>{euro(Number(printed.original_amount))}</h3><p>Remaining value: {euro(Number(printed.balance))}</p><strong className="voucher-code">{printed.code}</strong><p>Valid through: {voucherDate(printed.expires_on)}</p><p>Present this code at the salon or add it to your account under My Vouchers.</p></div>}
- </section>;
+export default function MyVouchers({
+  db,
+  live,
+  data,
+  onBuy,
+}: {
+  db: SupabaseClient | null;
+  live: boolean;
+  data: LocalStaffData;
+  onBuy: () => void;
+}) {
+  const [creditNotes, setCreditNotes] = useState<Row[]>([]),
+    [creditUses, setCreditUses] = useState<Row[]>([]);
+  const [vouchers, setVouchers] = useState<Row[]>([]),
+    [uses, setUses] = useState<Row[]>([]),
+    [transfers, setTransfers] = useState<Row[]>([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [version, setVersion] = useState(0);
+  const [adding, setAdding] = useState(false),
+    [code, setCode] = useState(""),
+    [busy, setBusy] = useState(false),
+    [message, setMessage] = useState("");
+  const [emailVoucher, setEmailVoucher] = useState<Row | null>(null),
+    [email, setEmail] = useState(""),
+    [printed, setPrinted] = useState<Row | null>(null);
+  const emailRequest = useRef(crypto.randomUUID());
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    setError("");
+    async function load() {
+      try {
+        if (live && db) {
+          const [r, n] = await Promise.all([
+            db.rpc("get_my_voucher_history"),
+            db.rpc("get_my_credit_notes"),
+          ]);
+          if (r.error) throw r.error;
+          if (n.error) throw n.error;
+          if (current) {
+            setVouchers(r.data.vouchers || []);
+            setUses(r.data.uses || []);
+            setTransfers(r.data.transfers || []);
+            setCreditNotes(n.data.credit_notes || []);
+            setCreditUses(n.data.uses || []);
+          }
+        } else if (current) {
+          setVouchers(assignedVouchers(data, localClient(data).email));
+          setUses([]);
+          setTransfers([]);
+        }
+      } catch (e) {
+        if (current) setError(requestErrorMessage(e));
+      } finally {
+        if (current) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      current = false;
+    };
+  }, [db, live, data, version]);
+  useEffect(() => {
+    if (printed) {
+      const timer = setTimeout(() => window.print(), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [printed]);
+  async function claim(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (!live || !db)
+        throw Error(
+          "Voucher transfers are available when connected to the salon.",
+        );
+      const r = await db.rpc("claim_my_voucher", { p_code: code.trim() });
+      if (r.error) throw r.error;
+      setAdding(false);
+      setCode("");
+      setMessage("Voucher added to your account.");
+      setVersion((v) => v + 1);
+    } catch (e) {
+      setError(requestErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    if (!emailVoucher || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (!live || !db)
+        throw Error(
+          "Voucher emails are available when connected to the salon.",
+        );
+      const r = await db.functions.invoke("send-voucher-email", {
+        body: {
+          voucher_id: emailVoucher.id,
+          email: email.trim(),
+          request_id: emailRequest.current,
+          client_purchase: true,
+        },
+      });
+      if (r.error) throw r.error;
+      if (!r.data?.accepted)
+        throw Error(r.data?.error || "The email could not be sent.");
+      setEmailVoucher(null);
+      setMessage(
+        "Voucher email accepted for sending to damianjmcgrath@gmail.com (testing).",
+      );
+    } catch (e) {
+      setError(requestErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Dublin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const columns: Column[] = [
+    ["Purchase Date/Time", (r) => displayDateTime(r.created_at)],
+    ["Purchased By", (r) => r.purchaser_name || "Not recorded"],
+    ["Voucher Code", (r) => r.code],
+    ["Voucher Amount", (r) => euro(Number(r.original_amount))],
+    ["Remaining Amount", (r) => euro(Number(r.balance))],
+    ["Expiry Date", (r) => voucherDate(r.expires_on)],
+    [
+      "Actions",
+      (r) => (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <button className="back" onClick={() => setPrinted({ ...r })}>
+            Print Voucher
+          </button>
+          <button
+            className="back"
+            onClick={() => {
+              setEmailVoucher(r);
+              setEmail(r.recipient_email || "");
+              emailRequest.current = crypto.randomUUID();
+            }}
+          >
+            Email Voucher
+          </button>
+        </div>
+      ),
+    ],
+  ];
+  return (
+    <section className="panel">
+      <h1>My Vouchers</h1>
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}
+        </p>
+      )}
+      {message && <p role="status">{message}</p>}
+      <button
+        className="secondary"
+        onClick={() => {
+          setAdding(true);
+          setError("");
+        }}
+      >
+        Add a Voucher
+      </button>
+      {adding && (
+        <form onSubmit={(e) => void claim(e)}>
+          <label>
+            Voucher Code
+            <input
+              autoFocus
+              required
+              maxLength={100}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+          </label>
+          <p className="small">
+            Adding this code transfers the voucher’s remaining balance to your
+            account.
+          </p>
+          <div className="record-actions">
+            <button className="primary" disabled={busy}>
+              Add Voucher
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => setAdding(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      {emailVoucher && (
+        <form onSubmit={(e) => void send(e)}>
+          <h2>Email Voucher {emailVoucher.code}</h2>
+          <label>
+            Email address
+            <input
+              type="email"
+              autoFocus
+              required
+              maxLength={254}
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                emailRequest.current = crypto.randomUUID();
+              }}
+            />
+          </label>
+          <div className="record-actions">
+            <button className="primary" disabled={busy}>
+              Send Email
+            </button>
+            <button
+              className="secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => setEmailVoucher(null)}
+            >
+              Cancel
+            </button>
+          </div>
+          <p className="small">
+            During testing, emails go to damianjmcgrath@gmail.com.
+          </p>
+        </form>
+      )}
+      {loading ? (
+        <p>Loading vouchers…</p>
+      ) : (
+        <>
+          <h2>Active Vouchers</h2>
+          <Table
+            rows={vouchers.filter(
+              (v) => v.expires_on >= today && Number(v.balance) > 0,
+            )}
+            columns={columns}
+            empty="No active vouchers."
+          />
+          <h2>Used Vouchers</h2>
+          <Table
+            rows={uses}
+            columns={[
+              ["Date/Time Used", (r) => displayDateTime(r.used_at)],
+              ["Voucher Code", (r) => r.voucher_code],
+              ["Amount Used", (r) => euro(Number(r.amount))],
+              ["Treatment", (r) => r.treatment_name],
+              ["Staff Member", (r) => r.staff_name],
+            ]}
+            empty="No voucher redemptions recorded."
+          />
+          <h2>Transferred Vouchers</h2>
+          <Table
+            rows={transfers}
+            columns={[
+              ["Voucher Code", (r) => r.code],
+              ["Voucher Amount", (r) => euro(Number(r.original_amount))],
+              ["Date Transferred", (r) => displayDateTime(r.transferred_at)],
+              ["Transferred To", (r) => r.transferred_to],
+            ]}
+            empty="No transferred vouchers."
+          />
+        </>
+      )}
+      {!loading && (
+        <>
+          <h1>My Credit Notes</h1>
+          <h2>Active Credit Notes</h2>
+          <Table
+            rows={creditNotes.filter((n) => Number(n.balance) > 0)}
+            columns={[
+              ["Date/Time Created", (r) => displayDateTime(r.created_at)],
+              ["Created By", (r) => r.staff_name],
+              ["Credit Note Amount", (r) => euro(Number(r.amount))],
+              ["Remaining Amount", (r) => euro(Number(r.balance))],
+              ["Reason", (r) => r.reason],
+            ]}
+            empty="No active credit notes."
+          />
+          <h2>Used Credit Notes</h2>
+          <Table
+            rows={creditUses}
+            columns={[
+              ["Date/Time Used", (r) => displayDateTime(r.used_at)],
+              ["Amount Used", (r) => euro(Number(r.amount))],
+              ["Treatment", (r) => r.treatment_name],
+              ["Staff Member", (r) => r.staff_name],
+            ]}
+            empty="No credit note redemptions recorded."
+          />
+        </>
+      )}
+      <div className="record-actions">
+        <button className="primary" onClick={onBuy}>
+          Buy a Voucher
+        </button>
+      </div>
+      {printed && (
+        <div className="voucher-print-area" style={{ marginTop: 24 }}>
+          <h2>Gift Voucher</h2>
+          <h3>{euro(Number(printed.original_amount))}</h3>
+          <p>Remaining value: {euro(Number(printed.balance))}</p>
+          <strong className="voucher-code">{printed.code}</strong>
+          <p>Valid through: {voucherDate(printed.expires_on)}</p>
+          <p>
+            Present this code at the salon or add it to your account under My
+            Vouchers.
+          </p>
+        </div>
+      )}
+    </section>
+  );
 }

@@ -1618,3 +1618,50 @@ test('client appointment policy guards ownership and cancellation; deposit exemp
  const done=(await one('select client_cancel_appointment($1,1) data',[a.id])).data;assert.equal(done.fee_required,true);assert.equal(done.amount_cents,2500);
  await pg.exec('reset role');const audit=await one("select details from audit_events where appointment_id=$1 and action='appointment_amended'",[a.id]);assert.equal(audit.details.before.appointment_date,'2081-02-20');assert.equal(audit.details.after.appointment_date,'2081-02-21');const fee=await one('select * from no_show_fees where appointment_id=$1',[a.id]);assert.equal(fee.purpose,'cancellation');assert.equal(fee.amount_cents,2500);
  });
+
+test('prepaid cancellation refunds full or half atomically and retains original payment history',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/043_booking_lifecycle_values_preferences.sql',import.meta.url),'utf8'));
+ await pg.query('update clients set requires_deposit=true,can_cancel_free=false,can_amend_anytime=false where id=$1',[clientId]);
+ for(const method of ['voucher','credit'])for(const free of [false,true]){
+  await pg.exec('reset role');await pg.query('update clients set can_cancel_free=$2 where id=$1',[clientId,free]);
+  let value;
+  if(method==='voucher'){
+   await as(clientUser);value=(await one("select purchase_demo_voucher('100',null,true,'','','saved_demo',true,gen_random_uuid()) data")).data;await pg.exec('reset role');
+  }else value=await one("insert into client_credit_notes(client_id,amount,reason,created_by,staff_name) values($1,100,'Test',$2,'Aoife') returning *",[clientId,staffA]);
+  const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status) values($1,$2,1,8001,'Prepaid test','Client','123456789',50,'2082-02-20',600,60,'booked') returning *",[clientUser,clientId]);
+  const redemption=await one("insert into client_value_redemptions(client_id,voucher_id,credit_note_id,appointment_id,amount,treatment_name,staff_name,recorded_by) values($1,$2,$3,$4,50,'Prepaid test','Aoife',$5) returning *",[clientId,method==='voucher'?value.id:null,method==='credit'?value.id:null,a.id,clientUser]);
+  await pg.query("insert into appointment_payments(appointment_id,method,amount,redemption_id,recorded_by) values($1,$2,50,$3,$4)",[a.id,method,redemption.id,clientUser]);
+  await pg.query("update appointments set prepaid_method=$2,prepaid_value_id=$3,prepaid_at=now(),guarantee_required=false where id=$1",[a.id,method,value.id]);
+  await as(clientUser);const policy=(await one('select client_appointment_policy($1) data',[a.id])).data;assert.equal(policy.cancel_free,free);assert.equal(policy.prepaid_method,method);
+  const result=(await one('select client_cancel_appointment($1,0) data',[a.id])).data;assert.equal(result.fee_required,false);assert.equal(result.refund_amount,free?50:25);
+  await assert.rejects(pg.query('select client_cancel_appointment($1,0)',[a.id]),/no longer/);
+  const history=(await one(method==='voucher'?'select get_my_voucher_history() data':'select get_my_credit_notes() data')).data;
+  const values=method==='voucher'?history.vouchers:history.credit_notes;assert.equal(Number(values.find(x=>x.id===value.id).balance),free?100:75);
+  const uses=history.uses.filter(x=>x.appointment_id===a.id);assert.equal(uses.length,free?0:1);if(!free){assert.equal(Number(uses[0].amount),25);assert.equal(uses[0].treatment_name,'Prepaid test (cancellation fee)');}
+  await pg.exec('reset role');assert.equal(Number((await one('select amount from appointment_payments where appointment_id=$1',[a.id])).amount),50);
+  const adjustment=await one('select * from prepaid_cancellation_adjustments where appointment_id=$1',[a.id]);assert.equal(Number(adjustment.original_amount),50);assert.equal(Number(adjustment.refund_amount),free?50:25);
+  const jobs=(await pg.query("select * from booking_email_queue where appointment_id=$1 and event_kind='cancelled'",[a.id])).rows;assert.equal(jobs.length,1);assert.equal(Number(jobs[0].snapshot.refund_amount),free?50:25);
+  await as(staffA);const day=(await one("select (now() at time zone 'Europe/Dublin')::date::text today_label")).today_label;const rows=(await one('select get_daily_activity_report($1,$1) data',[day])).data.filter(x=>x.appointment_id===a.id);assert.equal(rows.reduce((sum,x)=>sum+Number(x.amount),0),free?0:25);
+ }
+ await as(staffA);await assert.rejects(pg.query('select get_my_credit_notes()'),/Client sign-in/);
+});
+
+test('lifecycle emails snapshot amended details and staff preference reports expand dynamically',async()=>{
+ await pg.exec('reset role');const added=await one("insert into staff(id,name,active) values(90099,'New Therapist',true) returning id");
+ const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status,staff_selected,preferred_staff_id) values($1,$2,1,8001,'Preference test','Client','123456789',50,'2083-02-20',600,60,'booked',true,$3) returning *",[clientUser,clientId,added.id]);
+ await pg.query("update appointments set appointment_date='2083-02-21',start_minute=660,revision=revision+1 where id=$1",[a.id]);
+ const job=await one("select * from booking_email_queue where appointment_id=$1 and event_kind='amended'",[a.id]);assert.equal(job.snapshot.original_date,'2083-02-20');assert.equal(job.snapshot.appointment_date,'2083-02-21');
+ await pg.query("update appointments set status='cancelled',revision=revision+1 where id=$1",[a.id]);assert.equal((await one("select status from booking_email_queue where id=$1",[job.id])).status,'cancelled');
+ await as(clientUser);await assert.rejects(pg.query('select get_staff_preference_report()'),/Permission denied/);
+ await as(staffA);const report=(await one("select get_staff_preference_report('2083-02-21','2083-02-21') data")).data;assert(report.staff.some(x=>x.id===added.id));assert.equal(Number(report.rows.find(x=>x.treatment_name==='Preference test').selected[added.id]),1);
+ const none=(await one("select get_staff_preference_report('2099-01-01','2099-01-02') data")).data;assert(!none.rows.some(x=>x.treatment_name==='Preference test'));
+});
+
+ test('new client bookings record explicit and no-preference choices at the booking boundary',async()=>{
+ await pg.exec('reset role');await pg.query('update clients set requires_deposit=false where id=$1',[clientId]);
+ await pg.exec("insert into treatments(id,name,category,price,price_type,duration,patch_required,guarantee_required) values(90999,'Preference boundary','Test',20,'Fixed',60,false,false);insert into staff_treatments(staff_id,treatment_id) values(1,90999);insert into staff_day_shifts(staff_id,shift_date,start_minute,end_minute) values(1,'2085-02-20',540,1020);");
+ await as(clientUser);const c=await one('select * from get_my_profile()');
+ const a=await one("select * from book_guaranteed_appointment(90999,1,'2085-02-20',600,$1,$2,true,$3,null,false,null,null,false)",[c.name,c.phone,c.email]);assert.equal(a.staff_selected,false);assert.equal(a.preferred_staff_id,null);
+ const value=(await one("select purchase_demo_voucher('100',null,true,'','','saved_demo',true,gen_random_uuid()) data")).data;
+ const b=await one("select * from book_with_value(90999,1,'2085-02-20',660,$1,$2,true,$3,null,false,null,null,'voucher',$4,true)",[c.name,c.phone,c.email,value.id]);assert.equal(b.staff_selected,true);assert.equal(b.preferred_staff_id,1);
+ });

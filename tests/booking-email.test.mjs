@@ -37,3 +37,9 @@ test('confirmation email includes calendar links and a Unicode-safe ICS attachme
  assert.match(ics,/DTSTART:20261015T130000Z/);
  assert.match(ics,/DTEND:20261015T134500Z/);
 });
+
+test('amendment emails show original/new times and cancellation emails show refund without calendar attachment',()=>{
+ const base={id:'changed',client_name:'Jacqui',treatment_name:'Lash <Lift>',appointment_date:'2026-10-15',start_minute:840,duration:45,staff_name:'Aoife',original_date:'2026-10-14',original_start:600};
+ const amended=confirmationPayload({...base,event_kind:'amended'},'Test <test@example.com>');assert.match(amended.subject,/amended/);assert.match(amended.text,/Original appointment/);assert.match(amended.html,/Lash &lt;Lift&gt;/);assert.deepEqual(amended.to,['damianjmcgrath@gmail.com']);
+ const cancelled=confirmationPayload({...base,event_kind:'cancelled',prepaid_method:'voucher',refund_amount:25,retained_fee:25},'Test <test@example.com>');assert.match(cancelled.subject,/cancelled/);assert.match(cancelled.text,/Cancellation fee retained: €25.00/);assert.equal(cancelled.attachments,undefined);
+});

@@ -85,9 +85,11 @@ export default function ClientAppointmentActions({
       if (r.error) throw r.error;
       setCancelled(true);
       setResult(
-        r.data.fee_required
-          ? "Appointment cancelled. Submitting cancellation payment…"
-          : "Appointment cancelled without a fee.",
+        r.data.prepaid_method
+          ? `Appointment cancelled. €${Number(r.data.refund_amount).toFixed(2)} returned to your ${r.data.prepaid_method === "voucher" ? "voucher" : "credit note"}. ${r.data.amount_cents ? `€${(r.data.amount_cents / 100).toFixed(2)} retained as the cancellation fee.` : "No cancellation fee charged."}`
+          : r.data.fee_required
+            ? "Appointment cancelled. Submitting cancellation payment…"
+            : "Appointment cancelled without a fee.",
       );
       if (r.data.fee_required) await charge();
     } catch (e) {
@@ -115,11 +117,20 @@ export default function ClientAppointmentActions({
               ? "You can amend your appointment time for free if you are keeping the same date but just amending the time, or if your original booking is more than 3 days away. Click Continue to select a new appointment time, or alternatively you can contact the salon on"
               : policy.cancel_free
                 ? "Are you sure you want to cancel this appointment? No cancellation fee will be charged. Contact the salon on"
-                : "Cancelling the appointment will incur the agreed booking guarantee fee (50% of the treatment value for new bookings). Please Confirm to accept this and cancel your appointment, or alternatively, you can contact the salon on"}{" "}
+                : policy.prepaid_method
+                  ? `Cancelling the appointment will incur a 50% fee of the treatment value. As you paid by ${policy.prepaid_method === "voucher" ? "voucher" : "credit note"}, the 50% fee will be deducted from the ${policy.prepaid_method === "voucher" ? "voucher" : "credit note"} amount. Please Confirm to accept this and cancel your appointment, or alternatively, you can contact the salon on`
+                  : "Cancelling the appointment will incur the agreed booking guarantee fee (50% of the treatment value for new bookings). Please Confirm to accept this and cancel your appointment, or alternatively, you can contact the salon on"}{" "}
             <a href="tel:0871815137">087 1815137</a> or Email:{" "}
             <a href="mailto:sculptedbyac@gmail.com">sculptedbyac@gmail.com</a>{" "}
             for further information.
           </p>
+          {mode === "cancel" && policy.prepaid_method && (
+            <p>
+              {policy.cancel_free
+                ? "Your full prepayment will be returned to its balance."
+                : "The remaining half of your prepayment will be returned to its balance."}
+            </p>
+          )}
           {mode === "cancel" && !policy.cancel_free && (
             <p>Cancellation fee: €{(policy.fee_cents / 100).toFixed(2)}</p>
           )}
@@ -150,7 +161,7 @@ export default function ClientAppointmentActions({
       )}
       {result && <p role="status">{result}</p>}
       {error && <p role="alert">{error}</p>}
-      {cancelled && !policy.cancel_free && (
+      {cancelled && !policy.cancel_free && !policy.prepaid_method && (
         <>
           <button disabled={busy} onClick={() => void status()}>
             Check payment status

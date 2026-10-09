@@ -17,6 +17,7 @@ let dom,
   Reminder,
   DailyActivity,
   ClientActions,
+  Preference,
   render,
   screen,
   fireEvent,
@@ -44,6 +45,7 @@ before(async () => {
     "AppointmentReminder",
     "DailyActivityReport",
     "ClientAppointmentActions",
+    "StaffPreferenceReport",
   ])
     await build({
       entryPoints: [
@@ -56,6 +58,7 @@ before(async () => {
       packages: "external",
       jsx: "automatic",
     });
+  Preference = (await import(pathToFileURL(dir + "/StaffPreferenceReport.mjs"))).default;
   ClientActions = (await import(pathToFileURL(dir + "/ClientAppointmentActions.mjs"))).default;
   DailyActivity = (await import(pathToFileURL(dir + "/DailyActivityReport.mjs"))).default;
   Reminder = (await import(pathToFileURL(dir + "/AppointmentReminder.mjs"))).default;
@@ -574,4 +577,11 @@ test('daily activity supports multiple checked payment methods and displays exac
  });
  test('free client cancellation asks Yes/No and never invokes card charge',async()=>{
  let calls=0,changed=0;const db={rpc:async(name)=>{calls++;return {data:name==='client_appointment_policy'?{can_manage:true,cancel_free:true}:{fee_required:false},error:null};},functions:{invoke:()=>{throw Error('Must not charge');}}};render(React.createElement(ClientActions,{db,appointment:{id:'own',revision:0},onAmend:()=>{},onChanged:()=>changed++}));fireEvent.click(screen.getByRole('button',{name:'Cancel Appointment'}));await screen.findByRole('button',{name:'Yes'});assert(screen.getByRole('button',{name:'No'}));fireEvent.click(screen.getByRole('button',{name:'Yes'}));await screen.findByText('Appointment cancelled without a fee.');assert.equal(calls,2);fireEvent.click(screen.getByRole('button',{name:'Back to appointments'}));assert.equal(changed,1);
+ });
+
+ test('staff preference report generates dynamic columns and sends date filters',async()=>{
+ const calls=[];const db={rpc:async(name,args)=>{calls.push([name,args]);return {data:{staff:[{id:1,name:'Aoife'},{id:9,name:'New Therapist'}],rows:[{treatment_id:1,treatment_name:'Lash Lift',selected:{1:2,9:1},no_preference:3,unknown:4,total:10}]}};}};render(React.createElement(Preference,{db,onBack:()=>{}}));await screen.findByRole('columnheader',{name:'New Therapist specifically chosen'});assert(screen.getByRole('columnheader',{name:'Not recorded'}));assert.equal(calls[0][1].p_from,null);fireEvent.change(screen.getByLabelText('From Date'),{target:{value:'2026-10-01'}});fireEvent.change(screen.getByLabelText('To Date'),{target:{value:'2026-10-09'}});fireEvent.click(screen.getByRole('button',{name:'Generate'}));await waitFor(()=>assert.equal(calls.length,2));assert.equal(calls[1][1].p_to,'2026-10-09');assert(screen.getByRole('button',{name:'Export to CSV'}));
+ });
+ test('prepaid cancellation explains retained fee and refund without requesting a card charge',async()=>{
+ const db={rpc:async(name)=>({data:name==='client_appointment_policy'?{can_manage:true,cancel_free:false,fee_cents:2500,prepaid_method:'voucher'}:{fee_required:false,amount_cents:2500,prepaid_method:'voucher',refund_amount:25}}),functions:{invoke:()=>{throw Error('Must not charge card');}}};render(React.createElement(ClientActions,{db,appointment:{id:'paid',revision:0},onAmend:()=>{},onChanged:()=>{}}));fireEvent.click(screen.getByRole('button',{name:'Cancel Appointment'}));await screen.findByText(/As you paid by voucher/);fireEvent.click(screen.getByRole('button',{name:'Confirm'}));await screen.findByText(/€25.00 returned to your voucher/);assert.equal(screen.queryByRole('button',{name:'Check payment status'}),null);
  });

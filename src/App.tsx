@@ -1445,6 +1445,8 @@ export default function App() {
                 p_client_id: staffClient?.id || null,
                 p_patch_for_treatment_id:
                   patchPlan?.patch_for_treatment_id ?? null,
+                p_staff_selected:
+                  activeRole === "client" ? staffChoice !== 0 : null,
               },
             );
         if (r.error) throw r.error;
@@ -3701,8 +3703,13 @@ export default function App() {
               {time(selected.start_minute + selected.duration)}
             </p>
             <p>
-              {staff.find((s) => s.id === selected.staff_id)?.name} ·{" "}
-              {money(selected.price)}
+              {staff.find((s) => s.id === selected.staff_id)?.name} (
+              {selected.staff_selected === true
+                ? "specifically chosen"
+                : selected.staff_selected === false
+                  ? "no preference"
+                  : "preference not recorded"}
+              ) · {money(selected.price)}
             </p>
             <span className="status">{selected.status.replace("_", " ")}</span>
             <p>
