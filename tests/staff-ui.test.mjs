@@ -87,6 +87,9 @@ async function findEmma() {
   fireEvent.click(screen.getByRole("button", { name: "Search", exact: true }));
   fireEvent.click(await screen.findByRole("button", { name: /Emma Demo/ }));
   await screen.findByRole("heading", { name: "Emma Demo", exact: true });
+  const tabs=screen.getByRole("navigation",{name:"Client record sections"});
+  assert(within(tabs).getByRole("button",{name:"Appointments",exact:true}).className.includes("active"));
+  fireEvent.click(within(tabs).getByRole("button",{name:"Personal Details",exact:true}));
 }
 test("UI: staff tiles, PIN preview, home tiles and profile locking work", async () => {
   assert(screen.getByRole("heading", { name: "Select a Staff Profile" }));
@@ -866,4 +869,22 @@ test('UI: checked-in diary offers checkout and reversal, restoring a single remi
  fireEvent.click(modal.getByRole('button',{name:'Cancel Check In'}));
  await waitFor(()=>assert(screen.getByRole('button',{name:'Check client in'})));
  modal=within(screen.getByRole('dialog',{name:'Appointment details'}));assert.equal(modal.getAllByRole('button',{name:'Send Reminder'}).length,1);assert(modal.getByRole('button',{name:'Amend appointment'}));assert(modal.getByRole('button',{name:'Cancel appointment'}));
+});
+
+ test('browser Back/Forward restores client search and record without changing signed-in staff',async()=>{
+ await login();fireEvent.click(screen.getByRole('button',{name:/Client Management/}));fireEvent.click(screen.getByRole('button',{name:/Search for a Client/}));fireEvent.change(screen.getByLabelText('Name'),{target:{value:'Emma'}});fireEvent.click(screen.getByRole('button',{name:'Search',exact:true}));fireEvent.click(await screen.findByRole('button',{name:/Emma Demo/}));await screen.findByRole('heading',{name:'Emma Demo',exact:true});await waitFor(()=>assert(window.location.hash.includes('record')));
+ window.history.back();await screen.findByRole('button',{name:'Search',exact:true});assert.equal(screen.getByLabelText('Name').value,'Emma');assert(screen.getByRole('button',{name:/Emma Demo/}));assert(screen.getByText(/STAFF PORTAL · Leah/));
+ window.history.forward();await screen.findByRole('heading',{name:'Emma Demo',exact:true});assert(screen.getByRole('navigation',{name:'Client record sections'}));assert(screen.getByText(/STAFF PORTAL · Leah/));
+ });
+
+ test('browser Back from a diary client record returns to its appointment window',async()=>{
+ cleanup();const rows=JSON.parse(localStorage.getItem('sculpted-demo-v1'));rows[0].client_id='demo-emma';localStorage.setItem('sculpted-demo-v1',JSON.stringify(rows));render(React.createElement(App));await login();fireEvent.click(screen.getByRole('button',{name:/Staff Diary Today/}));await waitFor(()=>assert.equal(window.location.hash,'#diary'));const before=window.history.state.salonNavigation.id;fireEvent.click(screen.getByRole('button',{name:/09:30 · Emma Demo/}));await waitFor(()=>assert.notEqual(window.history.state.salonNavigation.id,before));fireEvent.click(screen.getByRole('button',{name:/Open client record/}));await screen.findByRole('heading',{name:'Emma Demo',exact:true});const tabs=screen.getByRole('navigation',{name:'Client record sections'});assert.equal(within(tabs).getByRole('button',{name:'Appointments',exact:true}).getAttribute('aria-current'),'page');await waitFor(()=>assert(window.location.hash.includes('record')));window.history.back();await screen.findByRole('button',{name:/Open client record/});assert(screen.getByRole('button',{name:/09:30 · Emma Demo/}));assert(screen.getByText(/Signed in as Leah/));
+ });
+
+test('client page Back returns from vouchers to appointments without logging out',async()=>{
+ try{await clientScreen('browser-back-client');fireEvent.click(screen.getByRole('button',{name:'My appointments',exact:true}));await screen.findByRole('heading',{name:'Your appointments.'});await waitFor(()=>assert.equal(window.location.hash,'#my-bookings'));fireEvent.click(screen.getByRole('button',{name:'My Vouchers',exact:true}));await screen.findByRole('heading',{name:'My Vouchers',exact:true});await waitFor(()=>assert.equal(window.location.hash,'#my-vouchers'));window.history.back();await screen.findByRole('heading',{name:'Your appointments.'});assert(screen.getByRole('button',{name:'Sign Out',exact:true}));}
+ finally{cleanup();window.history.replaceState({},'','?portal=staff');}
+});
+test('Back after switching profiles does not restore the previous staff identity',async()=>{
+ await login(/Leah/);fireEvent.click(screen.getByRole('button',{name:'Log Out',exact:true}));await screen.findByRole('heading',{name:'Select a Staff Profile'});await login(/Aoife/);await waitFor(()=>assert(window.history.state?.salonNavigation));window.history.back();await waitFor(()=>assert(screen.getByText(/Signed in as Aoife/)));assert.equal(screen.queryByText(/Signed in as Leah/),null);assert(!JSON.stringify(window.history.state).includes('1234'));
 });

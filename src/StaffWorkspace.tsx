@@ -1,3 +1,4 @@
+import { useNavigationState } from "./navigation";
 import {
   displayDate,
   displayDateTime,
@@ -76,11 +77,30 @@ export default function StaffWorkspace({
   const [requiresDeposit, setRequiresDeposit] = useState(true);
   const [canAmend, setCanAmend] = useState(false),
     [canCancel, setCanCancel] = useState(false);
-  const [screen, setScreen] = useState(initialScreen),
-    [intent, setIntent] = useState("profile"),
-    [query, setQuery] = useState({ name: "", email: "", phone: "" }),
-    [results, setResults] = useState<Client[]>([]),
-    [client, setClient] = useState<Client | null>(null),
+  const [screen, setScreen] = useNavigationState(
+      "workspace.screen",
+      initialAppointment ? "record" : initialScreen,
+    ),
+    [intent, setIntent] = useNavigationState(
+      "workspace.intent",
+      "profile",
+      false,
+    ),
+    [query, setQuery] = useNavigationState(
+      "workspace.query",
+      { name: "", email: "", phone: "" },
+      false,
+    ),
+    [results, setResults] = useNavigationState<Client[]>(
+      "workspace.results",
+      [],
+      false,
+    ),
+    [client, setClient] = useNavigationState<Client | null>(
+      "workspace.client",
+      null,
+      false,
+    ),
     [draft, setDraft] = useState({ name: "", email: "", phone: "" }),
     [password, setPassword] = useState(""),
     [notes, setNotes] = useState<Note[]>([]),
@@ -92,7 +112,10 @@ export default function StaffWorkspace({
     [message, setMessage] = useState(""),
     [cancel, setCancel] = useState<Appointment | null>(null),
     [reason, setReason] = useState("");
-  const [clientTab, setClientTab] = useState("Personal Details");
+  const [clientTab, setClientTab] = useNavigationState(
+    "workspace.tab",
+    "Appointments",
+  );
   const [patchPrompt, setPatchPrompt] = useState(initialPatchRecord);
   const profileTop = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -130,13 +153,15 @@ export default function StaffWorkspace({
     actor_name: actor,
     details,
   });
+  const loadedClient = useRef<string | null>(null);
   async function loadClient(c: Client, nextIntent = intent) {
+    loadedClient.current = c.id;
     const version = ++generation.current;
     setClient(c);
     setRequiresDeposit(c.requires_deposit !== false);
     setCanAmend(c.requires_deposit === false || !!c.can_amend_anytime);
     setCanCancel(c.requires_deposit === false || !!c.can_cancel_free);
-    setClientTab("Personal Details");
+    setClientTab("Appointments");
     setDraft({ name: c.name, email: c.email, phone: c.phone });
     setScreen("record");
     setError("");
@@ -213,6 +238,12 @@ export default function StaffWorkspace({
       stopped = true;
     };
   }, [initialAppointment?.id]);
+  useEffect(() => {
+    if (screen !== "record" || !client || loadedClient.current === client.id)
+      return;
+    const tab = clientTab;
+    void loadClient(client, intent).then(() => setClientTab(tab));
+  }, [screen, client?.id]);
   function beginSearch(nextIntent: string) {
     generation.current++;
     setIntent(nextIntent);

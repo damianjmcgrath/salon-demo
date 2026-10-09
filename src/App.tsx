@@ -1,3 +1,8 @@
+import {
+  useNavigationState,
+  resetNavigationScope,
+  clearWorkspaceNavigation,
+} from "./navigation";
 import ClientAppointmentActions from "./ClientAppointmentActions";
 import { bookingCalendar } from "../supabase/functions/send-booking-confirmations/calendar";
 import { isConnectionError, requestErrorMessage } from "./requestErrors";
@@ -149,7 +154,7 @@ const sample: Appointment[] = [
 ];
 export default function App() {
   const [live] = useState(!offlineTest),
-    [view, setView] = useState("login"),
+    [view, setView] = useNavigationState("app.view", "login"),
     [treatments, setTreatments] = useState<Treatment[]>(catalog),
     [staff, setStaff] = useState<Staff[]>(initialStaff),
     [session, setSession] = useState<Session | null>(null),
@@ -159,6 +164,11 @@ export default function App() {
     [myBookings, setMyBookings] = useState<Appointment[]>([]);
   const [staffId, setStaffId] = useState<number | null>(null),
     [localStaffId, setLocalStaffId] = useState<number | null>(null);
+  useEffect(() => {
+    resetNavigationScope(
+      `${staffPortal ? "staff" : accountantPortal ? "accountant" : "client"}:${live ? session?.user.id || "signed-out" : localRole || "signed-out"}`,
+    );
+  }, [session?.user.id, localRole, live]);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [mobileDiaryStaff, setMobileDiaryStaff] = useState<number | null>(null);
   const [loginTile, setLoginTile] = useState<number | null>(null),
@@ -170,7 +180,11 @@ export default function App() {
     [changeReason, setChangeReason] = useState("");
   const [initialPatchRecord, setInitialPatchRecord] = useState(false);
   const [initialStaffAppointment, setInitialStaffAppointment] =
-    useState<Appointment | null>(null);
+    useNavigationState<Appointment | null>(
+      "app.workspaceAppointment",
+      null,
+      false,
+    );
   const [staffData, setStaffData] = useState<LocalStaffData>(() => {
     try {
       return (
@@ -427,7 +441,10 @@ export default function App() {
     [consent, setConsent] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [selected, setSelected] = useState<Appointment | null>(null);
+    [selected, setSelected] = useNavigationState<Appointment | null>(
+      "app.diaryAppointment",
+      null,
+    );
   const appointments = live
     ? remote
     : activeRole === "accountant"
@@ -601,9 +618,13 @@ export default function App() {
       ],
     }));
   }
-  const [workspaceScreen, setWorkspaceScreen] = useState("home");
+  const [workspaceScreen, setWorkspaceScreen] = useNavigationState(
+    "app.workspace",
+    "home",
+  );
   const [workspaceNavigation, setWorkspaceNavigation] = useState(0);
   function staffHome(screen = "home") {
+    clearWorkspaceNavigation();
     setInitialPatchRecord(false);
     setWorkspaceScreen(screen);
     setWorkspaceNavigation((n) => n + 1);
@@ -3720,6 +3741,7 @@ export default function App() {
                 className="back"
                 onClick={() => {
                   setInitialPatchRecord(false);
+                  clearWorkspaceNavigation();
                   setInitialStaffAppointment(selected);
                   setSelected(null);
                   setView("staff-workspace");
@@ -3795,6 +3817,7 @@ export default function App() {
                   ) {
                     if (allowed("view.clients")) {
                       setInitialPatchRecord(true);
+                      clearWorkspaceNavigation();
                       setInitialStaffAppointment(completed);
                       setView("staff-workspace");
                     } else
