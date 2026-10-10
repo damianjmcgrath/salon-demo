@@ -19,8 +19,9 @@ export default function VisitSelection({ items, prompt, onAdd, onProceed, onRemo
   return <>
     <section className="panel visit-selection">{summary}<button type="button" className="primary" onClick={onProceed}>Choose a Date/Time</button></section>
     {prompt && <div className="modal-backdrop"><section className="panel modal" role="dialog" aria-modal="true" aria-label="Add another treatment" onKeyDown={e => { if(e.key === "Escape") onAdd(); if(e.key === "Tab") { const bs=e.currentTarget.querySelectorAll('button'); const first=bs[0],last=bs[bs.length-1]; if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();} } }}>
-      <h2>Do you want to add another treatment, or proceed to selecting an Available Time?</h2>
-      <p>{items.length} treatment{items.length===1?'':'s'} selected · {items.reduce((n,t)=>n+t.duration,0)} minutes</p>
+      <h2>{items[items.length - 1].name} selected.</h2>
+      <p>Do you want to choose an available time for {items.length === 1 ? "that treatment" : "those treatments"} or add more treatments?</p>
+      <p>{items.length} treatment{items.length===1?'':'s'} selected - total time: {items.reduce((n,t)=>n+t.duration,0)} minutes</p>
       <div className="record-actions"><button ref={button} type="button" className="secondary" disabled={items.length>=12} onClick={onAdd}>Add Another Treatment</button><button type="button" className="primary" onClick={onProceed}>Choose a Date/Time</button></div>
     </section></div>}
   </>;
