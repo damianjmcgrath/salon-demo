@@ -226,7 +226,7 @@ export default function VoucherPurchase({
           <p>This is a demo purchase. No payment was taken.</p>
           <div className="voucher-print-area">
             <div className="voucher-salon-heading">
-              <img className="voucher-salon-logo" src={`${import.meta.env.BASE_URL}images/salon-logo.png`} alt="Sculpted by Aoife Clare" />
+              <img className="voucher-salon-logo" src={`${(import.meta as unknown as { env: { BASE_URL: string } }).env.BASE_URL}images/salon-logo.png`} alt="Sculpted by Aoife Clare" />
               <p className="eyebrow voucher-salon-contact">Williams St., Mulladrillen, Ardee, Co. Louth A92 HW30</p>
               <p className="eyebrow voucher-salon-contact">087 1815137</p>
             </div>
