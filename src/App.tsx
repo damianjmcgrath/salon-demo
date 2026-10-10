@@ -180,7 +180,22 @@ export default function App() {
   const [visitPrompt, setVisitPrompt] = useState(false);
   const [visitConfirmed, setVisitConfirmed] = useState<Appointment[]>([]);
   const visitRequest = useRef(crypto.randomUUID());
-  function proceedVisit() {
+  const [flowPlan, setFlowPlan] = useState<{needed:number[];patch:Treatment|null;earliest:string|null}|null>(null);
+  const [patchChoice, setPatchChoice] = useState<{date:string;slot:Slot}|null>(null);
+  const [choosingPatch, setChoosingPatch] = useState(false);
+  async function proceedVisit() {
+    if (live && db && visitItems.length) {
+      const operation=identityVersion.current;
+      setPatchChecking(true);
+      const r = await db.rpc("get_booking_flow_plan", {p_treatments:visitItems.map(t=>t.id),p_email:forSelf?null:email.trim()});
+      if(operation!==identityVersion.current)return;
+      setPatchChecking(false);
+      if(r.error){setError(r.error.message);return;}
+      setFlowPlan(r.data);setPatchChoice(null);setChoosingPatch(!!r.data.patch);
+      if(r.data.patch){setTreatment(r.data.patch);setPatchPlan(null);setVisitPrompt(false);setSlot(null);setPeriod("");setStaffChoice(0);setStep(2);return;}
+      if(r.data.earliest && salonDate(new Date(r.data.earliest))>date)setDate(salonDate(new Date(r.data.earliest)));
+    }
+
     if (!visitItems.length) return;
     const first = visitItems[0];
     setTreatment(visitItems.length === 1 ? first : { ...first, name: visitItems.map(t => t.name).join(" + "), duration: visitItems.reduce((n,t) => n+t.duration,0), price: visitItems.reduce((n,t) => n+Number(t.price),0), price_type: visitItems.some(t=>t.price_type==="From") ? "From" : "Fixed" });
@@ -1199,8 +1214,9 @@ export default function App() {
     setView("login");
     setBusy(false);
   }
-  const multiVisit = !amending && !staffClient && activeRole === "client" && visitItems.length > 1;
-  useEffect(() => { setVisitItems([]); setVisitPrompt(false); setVisitConfirmed([]); }, [session?.user.id, forSelf, staffClient?.id, amending?.id]);
+  const flowBooking = !amending && !staffClient && activeRole === "client" && visitItems.length > 0 && !!flowPlan;
+  const multiVisit = !choosingPatch && !amending && !staffClient && activeRole === "client" && visitItems.length > 1;
+  useEffect(() => { setVisitItems([]); setVisitPrompt(false); setVisitConfirmed([]); setFlowPlan(null);setPatchChoice(null);setChoosingPatch(false); }, [session?.user.id, forSelf, staffClient?.id, amending?.id]);
   useEffect(() => { visitRequest.current = crypto.randomUUID(); }, [visitItems, date, slot?.start_minute, slot?.staff_id]);
   useEffect(() => {
     let cancelled = false;
@@ -1209,7 +1225,7 @@ export default function App() {
     if (!treatment) return;
     if (live && db && session) {
       db.rpc(
-        multiVisit ? "get_visit_slots" : patchPlan && activeRole === "client"
+        flowBooking ? "get_booking_flow_slots" : multiVisit ? "get_visit_slots" : patchPlan && activeRole === "client"
           ? forSelf
             ? "get_self_booking_slots"
             : "get_proxy_booking_slots"
@@ -1217,7 +1233,7 @@ export default function App() {
             ? "get_booking_slots"
             : "get_available_slots",
         {
-          ...(multiVisit ? { p_treatments: visitItems.map(t=>t.id) } : patchPlan && activeRole === "client"
+          ...(flowBooking ? {p_treatments:visitItems.map(t=>t.id),p_email:forSelf?null:email.trim(),p_select_patch:choosingPatch,p_patch_date:patchChoice?.date??null,p_patch_start:patchChoice?.slot.start_minute??null} : multiVisit ? { p_treatments: visitItems.map(t=>t.id) } : patchPlan && activeRole === "client"
             ? {
                 p_requested_treatment: patchPlan.requested_treatment_id,
                 ...(!forSelf ? { p_attendee_email: email.trim() } : {}),
@@ -1287,6 +1303,9 @@ export default function App() {
     treatment,
     visitItems,
     multiVisit,
+    flowBooking,
+    choosingPatch,
+    patchChoice,
     date,
     staffChoice,
     live,
@@ -1366,21 +1385,17 @@ export default function App() {
         )
           return;
         const plan = r.data as PatchPlan;
-        setPatchPlan(plan);
-        setTreatment(plan.treatment);
-        if (plan.earliest_treatment_at) {
-          const earliestDay = new Intl.DateTimeFormat("en-CA", {
-            timeZone: "Europe/Dublin",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-          }).format(new Date(plan.earliest_treatment_at));
-          if (earliestDay > today()) setDate(earliestDay);
-        }
-        if (allowAdditional && !plan.patch_needed && !amending && !staffClient) {
+        setPatchPlan(null);setFlowPlan(null);setPatchChoice(null);setChoosingPatch(false);setTreatment(t);
+        if (!amending && !staffClient) {
           if (visitItems.length >= 12) throw Error("You can select up to 12 treatments for one visit.");
-          setVisitItems(items => [...items, plan.treatment]); setVisitPrompt(true); setStep(1);
-        } else { setVisitItems([]); setStep(2); }
+          if(allowAdditional){setVisitItems(items=>[...items,t]);setVisitPrompt(true);setStep(1);}
+          else {
+            setVisitItems([t]);
+            const f=await db.rpc("get_booking_flow_plan",{p_treatments:[t.id],p_email:self?null:email.trim()});
+            if(f.error)throw f.error;
+            setFlowPlan(f.data);setChoosingPatch(!!f.data.patch);setTreatment(f.data.patch??t);setStep(2);
+          }
+        } else {setPatchPlan(plan);setTreatment(plan.treatment);setVisitItems([]);setStep(2);}
       } catch (e) {
         if (
           selection === patchSelection.current &&
@@ -1403,10 +1418,18 @@ export default function App() {
       setStep(2);
     }
   }
+  function continueTime() {
+    if(choosingPatch && slot){
+      setPatchChoice({date,slot});setChoosingPatch(false);
+      const first=visitItems[0];setTreatment({...first,name:visitItems.map(t=>t.name).join(" + "),duration:visitItems.reduce((n,t)=>n+t.duration,0),price:visitItems.reduce((n,t)=>n+Number(t.price),0)});
+      const d=new Date(date+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+1);setDate(d.toISOString().slice(0,10));setSlot(null);setPeriod("");setStaffChoice(0);return;
+    }
+    setStep(3);
+  }
   const eligibleStaff = staff.filter(
     (s) =>
       !treatment ||
-      (multiVisit ? visitItems.every(t => staffSkills.some(k => k.staff_id === s.id && k.treatment_id === t.id)) : (live
+      (choosingPatch ? !!flowPlan?.patch && staffSkills.some(k=>k.staff_id===s.id && k.treatment_id===flowPlan.patch!.id) && flowPlan.needed.every(id=>staffSkills.some(k=>k.staff_id===s.id&&k.treatment_id===id)) : multiVisit ? visitItems.every(t => staffSkills.some(k => k.staff_id === s.id && k.treatment_id === t.id)) : (live
         ? staffSkills.some(
             (k) => k.staff_id === s.id && k.treatment_id === treatment.id,
           ) &&
@@ -1446,8 +1469,9 @@ export default function App() {
       let a: Appointment;
       if (live) {
         if (!session || !db) throw Error("Please sign in first.");
-        const r = multiVisit
-          ? await db.rpc("book_treatment_visit", {
+        const r = (flowBooking || multiVisit)
+          ? await db.rpc(flowBooking ? "book_booking_flow" : "book_treatment_visit", {
+              ...(flowBooking ? {p_patch_date:patchChoice?.date??null,p_patch_start:patchChoice?.slot.start_minute??null,p_patch_staff:patchChoice?.slot.staff_id??null}:{}),
               p_treatments: visitItems.map(t=>t.id),
               p_expected: visitItems.map(t=>({id:t.id,revision:t.revision ?? 0,price:Number(t.price),duration:t.duration})),
               p_request: visitRequest.current, p_staff: slot.staff_id, p_date: date, p_start: slot.start_minute,
@@ -1499,8 +1523,8 @@ export default function App() {
             );
         if (r.error) throw r.error;
         if (operation !== identityVersion.current) return;
-        if (multiVisit) { setVisitConfirmed(r.data.appointments); a = r.data.appointments[0]; } else { setVisitConfirmed([]); a = r.data; }
-        if (multiVisit) { setConfirmation(a); setStep(4); }
+        if (flowBooking || multiVisit) { setVisitConfirmed(r.data.appointments); a = r.data.appointments.find((x:Appointment)=>!x.patch_target_ids?.length) ?? r.data.appointments[0]; } else { setVisitConfirmed([]); a = r.data; }
+        if (flowBooking || multiVisit) { setConfirmation(a); setStep(4); }
         await refresh();
       } else {
         if (!name.trim()) throw Error("Please enter a name.");
@@ -2235,9 +2259,9 @@ export default function App() {
                     <p>
                       If the person you are booking for isn't an existing
                       client, and you are booking a treatment that requires a
-                      Patch Test, please be aware that you will only be able to
-                      book the Patch Test online. They can book their Treatment
-                      in-salon after completing the Patch Test. If the Treatment
+                      Patch Test, you will be asked to choose a Patch Test appointment
+                      first, then book the Treatment at least 24 hours later.
+                      Both appointments will be confirmed together. If the Treatment
                       does not require a Patch Test, then you can book the
                       treatment session immediately.
                     </p>
@@ -2433,7 +2457,8 @@ export default function App() {
                   <button className="back" onClick={() => setStep(1)}>
                     ← Treatments
                   </button>
-                  <h2>Find your perfect time</h2>
+                  <h2>{choosingPatch ? "Choose your patch-test time" : "Find your perfect time"}</h2>
+                  {flowPlan?.patch && <div className="guarantee" role="status"><p>{choosingPatch ? "A patch test is required for " + visitItems.filter(t=>flowPlan.needed.includes(t.id)).map(t=>t.name).join(", ") + ". Choose its time first, then book your treatments at least 24 hours later. Nothing is saved until you confirm everything." : "Patch test selected: " + displayDate(patchChoice!.date) + " at " + time(patchChoice!.slot.start_minute) + ". Treatment times must be at least 24 hours later."}</p>{!choosingPatch && <button className="back" onClick={()=>{setChoosingPatch(true);setTreatment(flowPlan.patch);setDate(patchChoice!.date);setPatchChoice(null);setSlot(null);setPeriod("");setStaffChoice(0);}}>Change patch-test time</button>}</div>}
                   {patchPlan?.patch_needed && (
                     <div
                       className="guarantee patch-booking-notice"
@@ -2555,7 +2580,7 @@ export default function App() {
                   <button
                     className="primary"
                     disabled={!slot}
-                    onClick={() => setStep(3)}
+                    onClick={continueTime}
                   >
                     Continue →
                   </button>
@@ -2566,7 +2591,7 @@ export default function App() {
                   slot={slot}
                   date={date}
                   staff={staff}
-                  onContinue={() => setStep(3)}
+                  onContinue={continueTime}
                 />
               </div>
             ) : step === 3 && treatment ? (
@@ -2764,6 +2789,7 @@ export default function App() {
                   <strong>Salon Address:</strong> Williams St., Mulladrillen,
                   Ardee, Co. Louth A92 HW30
                 </p>
+                {visitConfirmed.length <= 1 && <>
                 <p>
                   <strong>Treatment Booked:</strong>{" "}
                   {visitConfirmed.length > 1 ? "Multiple treatments" : confirmation.treatment_name}
@@ -2790,6 +2816,7 @@ export default function App() {
                   <strong>With:</strong>{" "}
                   {staff.find((s) => s.id === confirmation.staff_id)?.name}
                 </p>
+                </>}
                 {confirmation.prepaid_method && (
                   <p>
                     <strong>Paid already:</strong>{" "}
@@ -2799,12 +2826,13 @@ export default function App() {
                     . No further payment is required.
                   </p>
                 )}
-                {visitConfirmed.length > 1 && <div className="visit-confirmed"><h3>Your treatments</h3><ol>{visitConfirmed.map(a=><li key={a.id}><strong>{a.treatment_name}</strong> · {time(a.start_minute)}–{time(a.start_minute+a.duration)} · {money(Number(a.price))}</li>)}</ol><p><strong>Total: {money(visitConfirmed.reduce((n,a)=>n+Number(a.price),0))}</strong></p><p>Each treatment is a separate appointment in My Appointments.</p></div>}
+                {visitConfirmed.length > 1 && <div className="visit-confirmed"><h3>Your appointments</h3><ol>{visitConfirmed.map(a=><li key={a.id}><strong>Treatment Booked: {a.treatment_name}</strong><br />{displayDate(a.appointment_date)} · {time(a.start_minute)}–{time(a.start_minute+a.duration)}<br />With: {staff.find(s=>s.id===a.staff_id)?.name} · {money(Number(a.price))}</li>)}</ol><p><strong>Total: {money(visitConfirmed.reduce((n,a)=>n+Number(a.price),0))}</strong></p><p>Each treatment is a separate appointment in My Appointments.</p></div>}
                 <p className="small">Your booking is saved.</p>
+                {visitConfirmed.some(a=>a.patch_target_ids?.length) && <p>Your patch test and treatments are booked. Please attend the patch test before your treatment visit. The calendar buttons below add the treatment visit.</p>}
                 {amending ? <p className="small">If you have added your original appointment to your Google, Apple or Outlook calendar, please manually update this for the new date and time.</p> : (() => {
                   const calendar = bookingCalendar({
                     ...confirmation,
-                    ...(visitConfirmed.length > 1 ? {treatment_name:visitConfirmed.map(a=>a.treatment_name).join(" + "),duration:visitConfirmed.reduce((n,a)=>n+a.duration,0)} : {}),
+                    ...(visitConfirmed.length > 1 ? {treatment_name:visitConfirmed.filter(a=>!a.patch_target_ids?.length).map(a=>a.treatment_name).join(" + "),duration:visitConfirmed.filter(a=>!a.patch_target_ids?.length).reduce((n,a)=>n+a.duration,0)} : {}),
                     staff_name: staff.find(
                       (s) => s.id === confirmation.staff_id,
                     )?.name,
@@ -2857,7 +2885,7 @@ export default function App() {
                       return;
                     }
                     setStep(1);
-                    setVisitItems([]); setVisitConfirmed([]);
+                    setVisitItems([]); setVisitConfirmed([]);setFlowPlan(null);setPatchChoice(null);setChoosingPatch(false);
                     setConfirmation(null);
                     setStep(0);
                     setPeriod("");
@@ -3168,6 +3196,7 @@ export default function App() {
                       <article className="history-card" key={a.id}>
                         <div>
                           <h3>{a.treatment_name}</h3>
+                          {a.patch_test_pending && <p role="status">{a.patch_test_alert || "Patch test pending — please attend your patch-test appointment first."}</p>}
                           {index === 1 && <p className="last-booked">{appointmentBookedLabel(a, currentDay)}</p>}
                           {a.booked_for_self === false && (
                             <p className="booking-recipient-label">
@@ -3816,6 +3845,7 @@ export default function App() {
                 Check client in
               </button>
             )}
+            {selected.patch_test_pending && <p className="guarantee" role="status">{selected.patch_test_alert || "Patch test pending. Record the completed test before checking this treatment in."}</p>}
             {selected.status === "checked_in" && (
               <p>
                 <button
@@ -3834,6 +3864,7 @@ export default function App() {
                 appointment={selected}
               />
             )}
+            {selected.patch_test_pending && <p className="guarantee" role="status">{selected.patch_test_alert || "Patch test pending. Record the completed test before checking this treatment in."}</p>}
             {selected.status === "checked_in" && (
               <AppointmentCheckout
                 key={`checkout-${selected.id}`}

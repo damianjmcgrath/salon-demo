@@ -987,6 +987,7 @@ export default function StaffWorkspace({
                   initiallyRecord={
                     patchPrompt && client.id === initialAppointment?.client_id
                   }
+                  initialTreatmentIds={patchPrompt && client.id === initialAppointment?.client_id ? initialAppointment?.patch_target_ids ?? undefined : undefined}
                   initialTreatmentId={
                     patchPrompt && client.id === initialAppointment?.client_id
                       ? (initialAppointment?.patch_for_treatment_id ??

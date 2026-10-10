@@ -21,6 +21,10 @@ export type Staff = {
   photo_url?: string | null;
 };
 export type Appointment = {
+  scheduled_patch_id?: string | null;
+  patch_target_ids?: number[] | null;
+  patch_test_pending?: boolean;
+  patch_test_alert?: string | null;
   id: string;
   visit_id?: string | null;
   visit_order?: number | null;

@@ -1767,3 +1767,45 @@ test('multi-treatment visits reserve sequential slots atomically and retain per-
  const cardVisit=(await one(call,guaranteed)).data;assert(cardVisit.appointments.every(a=>a.guarantee_required));
  const policy=(await one('select client_appointment_policy($1) data',[cardVisit.appointments[1].id])).data;assert.equal(policy.fee_cents,2000);
 });
+
+test('patch-first booking atomically saves one test and ordered treatments, enforces 24h and maintains pending links',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/048_patch_test_treatment_flow.sql',import.meta.url),'utf8'));
+ await pg.query('update clients set requires_deposit=false where id=$1',[clientId]);
+ const patchId=(await one('select treatment_id from patch_booking_settings')).treatment_id;
+ await pg.query('update treatments set price=0,guarantee_required=false where id=$1',[patchId]);
+ await pg.exec("insert into treatments(id,name,category,price,price_type,duration,patch_required,guarantee_required) values(95001,'Patch Lash','Test',40,'Fixed',30,true,true),(95002,'Patch Brow','Test',20,'Fixed',15,true,true),(95003,'No Patch Nail','Test',30,'Fixed',30,false,true)");
+ for(const id of [patchId,95001,95002,95003])await pg.query('insert into staff_treatments(staff_id,treatment_id) values(1,$1) on conflict do nothing',[id]);
+ await pg.exec("insert into staff_day_shifts(staff_id,shift_date,start_minute,end_minute) values(1,'2092-02-20',540,1020),(1,'2092-02-21',540,1020),(1,'2092-02-22',540,1020)");
+ const expected=(await pg.query('select id,revision,price,duration from treatments where id=any($1) order by id',[[95001,95002,95003]])).rows;
+ await as(clientUser);const plan=(await one('select get_booking_flow_plan($1,null) data',[[95001,95002,95003]])).data;assert.deepEqual(plan.needed,[95001,95002]);
+ const before=(await one('select count(*)::integer n from appointments')).n;
+ const slots=(await pg.query("select * from get_booking_flow_slots($1,null,'2092-02-21',1,'2092-02-20',600,false)",[[95001,95002,95003]])).rows;
+ assert(!slots.some(x=>x.start_minute<600));assert(slots.some(x=>x.start_minute===600));
+ const request='40000000-0000-0000-0000-000000000048';
+ const args=[[95001,95002,95003],JSON.stringify(expected),request,'Client Test','0800000000','client@example.com'];
+ const sql="select book_booking_flow($1,$2,$3,1,'2092-02-21',600,$4,$5,true,$6,null,false,false,null,null,'2092-02-20',600,1) data";
+ await assert.rejects(pg.query(sql.replace("'2092-02-21',600","'2092-02-21',570"),args),/24 hours/);
+ assert.equal((await one('select count(*)::integer n from appointments')).n,before);
+ const result=(await one(sql,args)).data;assert.equal(result.appointments.length,4);
+ const [patch,...treatments]=result.appointments;assert.deepEqual(patch.patch_target_ids,[95001,95002]);assert.deepEqual(treatments.map(a=>a.start_minute),[600,630,645]);assert.deepEqual(treatments.map(a=>a.patch_test_pending),[true,true,false]);
+ const retry=(await one(sql,args)).data;assert.deepEqual(retry.appointments.map(x=>x.id),result.appointments.map(x=>x.id));assert.equal((await one('select count(*)::integer n from appointments')).n,before+4);
+ await as(staffA);
+ await assert.rejects(pg.query("select * from amend_appointment($1,$2,1,'2092-02-20',660,0,'Later test')",[patch.id,patchId]),/at least 24 hours/);
+ await assert.rejects(pg.query("select update_appointment_status($1,'checked_in',null,0,null)",[treatments[0].id]),/recorded patch test/);
+ await pg.exec('reset role');
+ await pg.query("update appointments set status='cancelled' where id=$1",[patch.id]);assert.match((await one('select patch_test_alert from appointments where id=$1',[treatments[0].id])).patch_test_alert,/staff review/);
+ await pg.query("insert into client_patch_tests(client_id,performed_by,staff_name,recorded_by,recorded_at,treatments_covered) values($1,1,'Aoife',$2,'2092-02-20 09:00:00+00',$3)",[clientId,staffA,JSON.stringify([{id:95001,name:'Patch Lash'},{id:95002,name:'Patch Brow'}])]);
+ assert.equal((await one('select patch_test_pending from appointments where id=$1',[treatments[0].id])).patch_test_pending,false);
+ // A single treatment for a new attendee still saves nothing if its payer has no valid guarantee.
+ await as(clientUser);const singleExpected=expected.filter(t=>t.id===95001);
+ const proxyArgs=[[95001],JSON.stringify(singleExpected),'40000000-0000-0000-0000-000000000049','New Guest','0800000099','newpatchguest@example.com'];
+ const proxySql="select book_booking_flow($1,$2,$3,1,'2092-02-22',600,$4,$5,false,$6,null,false,false,null,null,'2092-02-21',570,1) data";
+ const count=(await one('select count(*)::integer n from appointments')).n;
+ await assert.rejects(pg.query(proxySql,proxyArgs),/Agree to the booking guarantee/);
+ assert.equal((await one('select count(*)::integer n from appointments')).n,count);
+ const voucher=(await one("select purchase_demo_voucher('100',null,true,'','','saved_demo',true,gen_random_uuid()) data")).data;
+ const paid=(await one(proxySql.replace("false,null,null,'2092-02-21'","false,'voucher',$7,'2092-02-21'"),[...proxyArgs,voucher.id])).data;
+ assert.equal(paid.appointments.length,2);assert.equal(paid.appointments[1].prepaid_method,'voucher');assert.equal(paid.appointments[1].patch_test_pending,true);assert.equal(paid.appointments[0].client_id,paid.appointments[1].client_id);
+ await assert.rejects(pg.query("select * from flow_book_visit($1,$2,gen_random_uuid(),1,'2092-02-22',700,$3,$4,true,$5,null,false,false)",[[95001],JSON.stringify(singleExpected),'Client','0800000000','client@example.com']),/permission denied/);
+
+});
