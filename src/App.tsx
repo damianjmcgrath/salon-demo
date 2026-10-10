@@ -2772,32 +2772,29 @@ export default function App() {
                     )?.name,
                   });
                   return (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        justifyContent: "center",
-                        gap: 12,
-                        margin: "20px 0",
-                      }}
-                    >
-                      <a
-                        className="secondary"
-                        style={{ padding: 14 }}
-                        href={calendar.google}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Add to Google Calendar
-                      </a>
-                      <a
-                        className="secondary"
-                        style={{ padding: 14 }}
-                        href={`data:text/calendar;charset=utf-8;base64,${calendar.base64}`}
-                        download="sculpted-appointment.ics"
-                      >
-                        Add to Apple / Outlook Calendar
-                      </a>
+                    <div className="booking-calendar">
+                      <p className="booking-calendar-heading">Add to Calendar:</p>
+                      <div className="booking-calendar-actions">
+                        <a className="booking-calendar-button" href={calendar.google} target="_blank" rel="noopener noreferrer">
+                          <svg className="booking-calendar-icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+                            <rect x="4" y="5" width="32" height="30" rx="4" fill="#4285f4" />
+                            <path d="M4 24h12v11H8a4 4 0 0 1-4-4z" fill="#34a853" />
+                            <path d="M26 15h10v16a4 4 0 0 1-4 4h-6z" fill="#fbbc04" />
+                            <path d="M26 35V25h10z" fill="#ea4335" />
+                            <rect x="10" y="12" width="20" height="17" rx="1" fill="white" />
+                            <text x="20" y="25" textAnchor="middle" fontFamily="Arial, sans-serif" fontWeight="700" fontSize="14" fill="#4285f4">31</text>
+                          </svg>
+                          <span>Google Calendar</span>
+                        </a>
+                        <a className="booking-calendar-button" href={`data:text/calendar;charset=utf-8;base64,${calendar.base64}`} download="sculpted-appointment.ics">
+                          <svg className="booking-calendar-icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+                            <rect x="5" y="8" width="30" height="27" rx="5" fill="none" stroke="currentColor" strokeWidth="2.5" />
+                            <path d="M5 16h30M13 5v7M27 5v7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                            <path d="m13 25 5 5 10-10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <span>Apple / Outlook Calendar</span>
+                        </a>
+                      </div>
                     </div>
                   );
                 })()}

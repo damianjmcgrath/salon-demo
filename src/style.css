@@ -1866,3 +1866,16 @@ nav .logout-link {
   text-align: center;
   overflow-wrap: anywhere;
 }
+
+/* Calendar shortcuts on the booking confirmation. */
+.booking-calendar { margin: 24px auto; max-width: 620px; }
+.booking-calendar-heading { margin: 0 0 12px; font-size: 16px; font-weight: 600; color: #292925; }
+.booking-calendar-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.booking-calendar-button,
+.booking-calendar-button:visited { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 64px; padding: 12px 16px; box-sizing: border-box; border: 2px solid #dedbd4; border-radius: 18px; background: transparent; color: #292925; text-decoration: none; font-size: 16px; font-weight: 600; line-height: 1.35; }
+.booking-calendar-button:hover { background: #f3eee5; border-color: #a39380; }
+.booking-calendar-button:focus-visible { outline: 3px solid #88715a; outline-offset: 3px; }
+.booking-calendar-icon { width: 36px; height: 36px; flex: 0 0 36px; }
+@media (max-width: 600px) {
+  .booking-calendar-actions { grid-template-columns: 1fr; gap: 10px; }
+}
