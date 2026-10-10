@@ -331,7 +331,7 @@ export default function MyVouchers({
           />
         </>
       )}
-      {!loading && (
+      {!loading && (creditNotes.some(n => Number(n.balance) > 0) || creditUses.length > 0) && (
         <>
           <h1>My Credit Notes</h1>
           <h2>Active Credit Notes</h2>
