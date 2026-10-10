@@ -1688,3 +1688,13 @@ test('one-off reset clears bookings and all value/payment dependencies while ret
  const after=await one('select (select count(*) from staff)::integer staff,(select count(*) from clients)::integer clients,(select count(*) from treatments)::integer treatments,(select count(*) from booking_guarantee_cards)::integer cards');assert.deepEqual(after,before);
  assert.equal((await one("select count(*)::integer n from audit_events where action='testing_bookings_and_values_reset'")).n,1);
 });
+
+test('accepted booking and voucher emails create deduplicated SYSTEM communication history',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/045_system_email_communications.sql',import.meta.url),'utf8'));
+ const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status) values($1,$2,1,90999,'Communication test','Client','123456789',20,'2089-02-20',600,60,'booked') returning *",[clientUser,clientId]);
+ const job=await one('select id from booking_email_queue where appointment_id=$1',[a.id]);await pg.query("update booking_email_queue set status='accepted',resend_id='booking-test' where id=$1",[job.id]);await pg.query("update booking_email_queue set status=status where id=$1",[job.id]);
+ assert.equal((await one("select count(*)::integer n from client_communications where email_source_key=$1",['booking-email:'+job.id])).n,1);
+ await as(clientUser);const v=(await one("select purchase_demo_voucher('50',null,true,'','','saved_demo',true,gen_random_uuid()) data")).data;await pg.exec('reset role');
+ for(const n of [1,2]){const r=await one("insert into voucher_email_requests(id,created_by,voucher_id,requested_email,snapshot) values(gen_random_uuid(),$1,$2,'client@example.com',$3) returning *",[clientUser,v.id,v]);await pg.query("select finish_staff_voucher_email($1,'accepted',$2,null)",[r.id,'voucher-test-'+n]);await pg.query("update voucher_email_requests set status=status where id=$1",[r.id]);const row=await one('select * from client_communications where email_source_key=$1',['voucher-email:'+r.id]);assert.equal(row.client_id,clientId);assert.equal(row.staff_name,'SYSTEM');assert(row.note.startsWith(n===1?'Voucher purchase email':'Voucher email re-send'));assert.equal((await one('select count(*)::integer n from client_communications where email_source_key=$1',['voucher-email:'+r.id])).n,1);}
+ await as(clientUser);await assert.rejects(pg.query("select record_system_email_communication($1,$2,'forged','Forged',now())",[clientId,clientUser]),/permission denied/);
+});
