@@ -1813,3 +1813,8 @@ nav .logout-link {
 
 .client-appointment-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
 .client-appointment-actions .primary { margin: 0; }
+
+/* Blend the existing black-on-white logo into the voucher's background. */
+.voucher-salon-heading { text-align: center; margin-bottom: 24px; isolation: isolate; }
+.voucher-salon-logo { display: block; width: 280px; max-width: 100%; height: auto; margin: 0 auto 18px; mix-blend-mode: multiply; }
+.voucher-salon-heading .voucher-salon-contact { margin: 8px 0; font-size: 11px; letter-spacing: 1px; line-height: 1.6; }

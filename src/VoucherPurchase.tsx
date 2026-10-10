@@ -225,7 +225,11 @@ export default function VoucherPurchase({
         <section className="panel voucher-confirmation">
           <p>This is a demo purchase. No payment was taken.</p>
           <div className="voucher-print-area">
-            <p className="eyebrow">SCULPTED BY AOIFE CLAIRE</p>
+            <div className="voucher-salon-heading">
+              <img className="voucher-salon-logo" src={`${import.meta.env.BASE_URL}images/salon-logo.png`} alt="Sculpted by Aoife Clare" />
+              <p className="eyebrow voucher-salon-contact">Williams St., Mulladrillen, Ardee, Co. Louth A92 HW30</p>
+              <p className="eyebrow voucher-salon-contact">087 1815137</p>
+            </div>
             <h2>Gift Voucher</h2>
             <h3>{euro(voucher.original_amount)}</h3>
             {voucher.treatment_name && (
