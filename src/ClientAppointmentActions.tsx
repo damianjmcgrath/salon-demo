@@ -111,7 +111,7 @@ export default function ClientAppointmentActions({
         </div>
       )}
       {mode && !cancelled && (
-        <section className="panel" aria-label="Change appointment">
+        <section className="panel client-appointment-change" aria-label="Change appointment">
           <p>
             {mode === "amend"
               ? "You can amend your appointment time for free if you are keeping the same date but just amending the time, or if your original booking is more than 3 days away. Click Continue to select a new appointment time, or alternatively you can contact the salon on"
@@ -134,6 +134,7 @@ export default function ClientAppointmentActions({
           {mode === "cancel" && !policy.cancel_free && (
             <p>Cancellation fee: €{(policy.fee_cents / 100).toFixed(2)}</p>
           )}
+          <div className="client-appointment-change-buttons">
           <button
             className="primary"
             disabled={busy}
@@ -149,9 +150,10 @@ export default function ClientAppointmentActions({
                 ? "Yes"
                 : "Confirm"}
           </button>
-          <button disabled={busy} onClick={() => setMode(null)}>
+          <button type="button" className="secondary" disabled={busy} onClick={() => {setMode(null); setError("");}}>
             {mode === "cancel" && policy.cancel_free ? "No" : "Cancel"}
           </button>
+          </div>
         </section>
       )}
       {cancelled && (

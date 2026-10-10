@@ -1818,3 +1818,12 @@ nav .logout-link {
 .voucher-salon-heading { text-align: center; margin-bottom: 24px; isolation: isolate; }
 .voucher-salon-logo { display: block; width: 280px; max-width: 100%; height: auto; margin: 0 auto 18px; mix-blend-mode: multiply; }
 .voucher-salon-heading .voucher-salon-contact { margin: 8px 0; font-size: 11px; letter-spacing: 1px; line-height: 1.6; }
+
+.appointment-section .appointment-actions { flex-shrink: 1; min-width: 0; max-width: 100%; }
+.client-appointment-change { width: 520px; max-width: 100%; box-sizing: border-box; text-align: left; overflow-wrap: anywhere; }
+.client-appointment-change-buttons { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 20px; }
+.client-appointment-change-buttons button { margin: 0; min-height: 48px; }
+@media (max-width: 1100px) {
+  .appointment-section .history-card:has(.client-appointment-change) { flex-wrap: wrap; }
+  .appointment-section .appointment-actions:has(.client-appointment-change) { width: 100%; text-align: left; }
+}
