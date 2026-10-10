@@ -402,6 +402,8 @@ export default function App() {
   const [period, setPeriod] = useState("");
   const [card, setCard] = useState("");
   function startBooking() {
+    setAmending(null);setClientDateLocked(false);setChangeReason("");setStaffClient(null);setConfirmation(null);
+    setFlowPlan(null);setPatchChoice(null);setChoosingPatch(false);setError("");
     setStep(0);
     setView("book");
     setTreatment(null); setVisitItems([]); setVisitPrompt(false); setVisitConfirmed([]);
@@ -1225,7 +1227,7 @@ export default function App() {
     if (!treatment) return;
     if (live && db && session) {
       db.rpc(
-        flowBooking ? "get_booking_flow_slots" : multiVisit ? "get_visit_slots" : patchPlan && activeRole === "client"
+        amending ? "get_booking_slots" : flowBooking ? "get_booking_flow_slots" : multiVisit ? "get_visit_slots" : patchPlan && activeRole === "client"
           ? forSelf
             ? "get_self_booking_slots"
             : "get_proxy_booking_slots"
@@ -1233,7 +1235,7 @@ export default function App() {
             ? "get_booking_slots"
             : "get_available_slots",
         {
-          ...(flowBooking ? {p_treatments:visitItems.map(t=>t.id),p_email:forSelf?null:email.trim(),p_select_patch:choosingPatch,p_patch_date:patchChoice?.date??null,p_patch_start:patchChoice?.slot.start_minute??null} : multiVisit ? { p_treatments: visitItems.map(t=>t.id) } : patchPlan && activeRole === "client"
+          ...(amending ? {p_treatment_id:treatment.id} : flowBooking ? {p_treatments:visitItems.map(t=>t.id),p_email:forSelf?null:email.trim(),p_select_patch:choosingPatch,p_patch_date:patchChoice?.date??null,p_patch_start:patchChoice?.slot.start_minute??null} : multiVisit ? { p_treatments: visitItems.map(t=>t.id) } : patchPlan && activeRole === "client"
             ? {
                 p_requested_treatment: patchPlan.requested_treatment_id,
                 ...(!forSelf ? { p_attendee_email: email.trim() } : {}),

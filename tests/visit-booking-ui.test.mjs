@@ -24,7 +24,9 @@ for (const requiresPatch of [false,true]) test(requiresPatch ? 'client selects a
    if(['get_self_booking_slots','get_available_slots','get_visit_slots','get_booking_flow_slots'].includes(name))data=[{start_minute:600,staff_id:1}];
    if(['booking_requires_guarantee','visit_requires_guarantee'].includes(name))data=false;
    if(['get_booking_value_options','get_visit_value_options'].includes(name))data={vouchers:[],credit_notes:[]};
+   if(name==='client_appointment_policy')data={can_manage:true,can_amend_anytime:false,same_date_only:true};
    if(name==='get_my_appointments')data=appointments;
+   if(name==='get_booking_slots')data=[{start_minute:600,staff_id:1}];
    if(name==='book_booking_flow'){let start=args.p_start;appointments=items.map((t,i)=>{const a={id:'appointment-'+i,visit_id:'visit',visit_order:i+1,treatment_id:t.id,treatment_name:t.name,price:t.price,duration:t.duration,start_minute:start,staff_id:1,appointment_date:args.p_date,status:'booked',client_name:client.name,user_id:'user',client_id:client.id};start+=t.duration;return a;});if(requiresPatch)appointments.unshift({...patch,id:'patch-appointment',treatment_id:patch.id,treatment_name:patch.name,patch_target_ids:[92001,92002],appointment_date:args.p_patch_date,start_minute:args.p_patch_start,staff_id:args.p_patch_staff,client_name:client.name,status:'booked'});data={appointments,visit_id:'visit'};}
    return {data,error:null};
   }
@@ -42,6 +44,7 @@ for (const requiresPatch of [false,true]) test(requiresPatch ? 'client selects a
   if(requiresPatch){await screen.findByRole('heading',{name:'Choose your patch-test time'});fireEvent.click(screen.getByRole('button',{name:/Morning/}));fireEvent.click(await screen.findByRole('button',{name:/10:00/}));fireEvent.click(screen.getAllByRole('button',{name:/Continue/})[0]);}
   await screen.findByRole('heading',{name:'Find your perfect time'});
   const therapist=screen.getByLabelText('Who would you like to see?');assert(!within(therapist).queryByRole('option',{name:'Leah'}));
+  fireEvent.change(screen.getByLabelText('Appointment date'),{target:{value:'2095-01-10'}});
   fireEvent.click(screen.getByRole('button',{name:/Morning/}));fireEvent.click(await screen.findByRole('button',{name:/10:00/}));
   fireEvent.click(screen.getAllByRole('button',{name:/Continue/})[0]);
   await screen.findByText(/No card guarantee is required/);
@@ -49,5 +52,20 @@ for (const requiresPatch of [false,true]) test(requiresPatch ? 'client selects a
   await screen.findByRole('heading',{name:'See you soon, Client.'});assert.equal(appointments.length,requiresPatch?4:3);
   const booking=calls.find(([name])=>name==='book_booking_flow');assert.deepEqual(booking[1].p_treatments,[92001,92002,92003]);assert.equal(booking[1].p_start,600);if(requiresPatch){assert.equal(booking[1].p_patch_start,600);assert.equal(booking[1].p_patch_staff,1);assert(booking[1].p_patch_date<booking[1].p_date);assert(screen.getByText('Treatment Booked: '+patch.name,{selector:'strong'}));}
   assert(screen.getByText('Treatment Booked: Visit B',{selector:'strong'}));assert(calls.some(([name,args])=>name==='get_booking_flow_slots'&&args.p_treatments.length===3));
+  fireEvent.click(screen.getByRole('button',{name:'View my appointments'}));
+  fireEvent.click((await screen.findAllByRole('button',{name:'Amend Appointment'}))[0]);
+  const change=await screen.findByRole('region',{name:'Change appointment'});
+  fireEvent.click(within(change).getByRole('button',{name:'Continue'}));
+  await screen.findByRole('heading',{name:'Find your perfect time'});
+  assert.equal(screen.getByLabelText('Appointment date').disabled,true);
+  fireEvent.click(screen.getByRole('button',{name:'Book a treatment',exact:true}));
+  fireEvent.click(await screen.findByRole('button',{name:'Yourself',exact:true}));
+  fireEvent.click(await screen.findByRole('button',{name:name=>name.includes('Visit A')&&!name.includes('Patch Test')&&/Choose treatment|Rebook Treatment/.test(name)}));
+  const again=await screen.findByRole('dialog',{name:'Add another treatment'});
+  fireEvent.click(within(again).getByRole('button',{name:'Choose a Date/Time'}));
+  await screen.findByRole('heading',{name:requiresPatch?'Choose your patch-test time':'Find your perfect time'});
+  assert.equal(screen.getByLabelText('Appointment date').disabled,false);
+  assert(!calls.some(([name,args])=>['get_self_booking_slots','get_proxy_booking_slots'].includes(name)&&'p_exclude_id' in args));
+
  }finally{cleanup();dom.window.close();await rm(dir,{recursive:true,force:true});delete globalThis.__visitDb;}
 });
