@@ -22,7 +22,7 @@ export default function VisitSelection({ items, prompt, onAdd, onProceed, onRemo
       <h2>{items[items.length - 1].name} selected.</h2>
       <p>Do you want to choose an available time for {items.length === 1 ? "that treatment" : "those treatments"} or add more treatments?</p>
       <p>{items.length} treatment{items.length===1?'':'s'} selected - total time: {items.reduce((n,t)=>n+t.duration,0)} minutes</p>
-      <div className="record-actions"><button ref={button} type="button" className="secondary" disabled={items.length>=12} onClick={onAdd}>Add Another Treatment</button><button type="button" className="primary" onClick={onProceed}>Choose a Date/Time</button></div>
+      <div className="record-actions"><button ref={button} type="button" className="secondary" disabled={items.length>=12} onClick={onAdd}>Add Another Treatment</button><button type="button" className="primary" onClick={onProceed}>Choose a Date/Time</button><button type="button" className="secondary" onClick={() => onRemove(items.length - 1)}>Cancel</button></div>
     </section></div>}
   </>;
 }
