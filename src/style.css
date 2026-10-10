@@ -1827,3 +1827,35 @@ nav .logout-link {
   .appointment-section .history-card:has(.client-appointment-change) { flex-wrap: wrap; }
   .appointment-section .appointment-actions:has(.client-appointment-change) { width: 100%; text-align: left; }
 }
+
+/* Consistent sizing for form actions, including Save/Cancel and Confirm/Cancel. */
+.primary,
+.secondary {
+  box-sizing: border-box;
+  min-height: 60px;
+  padding: 12px 20px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.record-actions,
+.client-appointment-actions,
+.client-appointment-change-buttons {
+  align-items: stretch;
+}
+.record-actions > button,
+.client-appointment-actions > button,
+.client-appointment-change-buttons > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: 1 1 160px;
+  min-width: 0;
+  min-height: 60px;
+  margin: 0;
+  padding: 12px 20px;
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
