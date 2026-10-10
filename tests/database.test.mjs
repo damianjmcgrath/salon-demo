@@ -1680,3 +1680,11 @@ test('staff transfers preserve preference, original allocation and booked detail
  const report=(await one("select get_staff_preference_report('2086-02-20','2086-02-20') data")).data;assert.equal(Number(report.rows.find(x=>x.treatment_name==='Transfer snapshot').selected[1]),1);
  await pg.exec('reset role');assert.equal((await one("select count(*)::integer n from audit_events where appointment_id=$1 and action='appointment_transferred'",[a.id])).n,1);assert.equal((await one("select count(*)::integer n from booking_email_queue where appointment_id=$1 and event_kind='amended'",[a.id])).n,1);
 });
+
+test('one-off reset clears bookings and all value/payment dependencies while retaining clients and staff',async()=>{
+ await pg.exec('reset role');const before=await one('select (select count(*) from staff)::integer staff,(select count(*) from clients)::integer clients,(select count(*) from treatments)::integer treatments,(select count(*) from booking_guarantee_cards)::integer cards');
+ await pg.exec(await readFile(new URL('../supabase/reset_bookings_and_values.sql',import.meta.url),'utf8'));
+ for(const table of ['appointments','vouchers','client_credit_notes','appointment_payments','client_value_redemptions','appointment_discounts','no_show_fees','booking_email_queue','appointment_reminder_requests','voucher_email_requests','prepaid_cancellation_adjustments','demo_voucher_orders','voucher_transactions'])assert.equal((await one(`select count(*)::integer n from ${table}`)).n,0,table);
+ const after=await one('select (select count(*) from staff)::integer staff,(select count(*) from clients)::integer clients,(select count(*) from treatments)::integer treatments,(select count(*) from booking_guarantee_cards)::integer cards');assert.deepEqual(after,before);
+ assert.equal((await one("select count(*)::integer n from audit_events where action='testing_bookings_and_values_reset'")).n,1);
+});
