@@ -2413,11 +2413,6 @@ export default function App() {
                             {money(t.price)}
                           </strong>
                         </div>
-                        {t.description?.trim() && (
-                          <p className="treatment-description">
-                            {t.description}
-                          </p>
-                        )}
                         <span className="choose">
                           {forSelf && !staffClient && previousIds.includes(t.id)
                             ? "Rebook Treatment ↗"
