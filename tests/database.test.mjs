@@ -1698,3 +1698,27 @@ test('accepted booking and voucher emails create deduplicated SYSTEM communicati
  for(const n of [1,2]){const r=await one("insert into voucher_email_requests(id,created_by,voucher_id,requested_email,snapshot) values(gen_random_uuid(),$1,$2,'client@example.com',$3) returning *",[clientUser,v.id,v]);await pg.query("select finish_staff_voucher_email($1,'accepted',$2,null)",[r.id,'voucher-test-'+n]);await pg.query("update voucher_email_requests set status=status where id=$1",[r.id]);const row=await one('select * from client_communications where email_source_key=$1',['voucher-email:'+r.id]);assert.equal(row.client_id,clientId);assert.equal(row.staff_name,'SYSTEM');assert(row.note.startsWith(n===1?'Voucher purchase email':'Voucher email re-send'));assert.equal((await one('select count(*)::integer n from client_communications where email_source_key=$1',['voucher-email:'+r.id])).n,1);}
  await as(clientUser);await assert.rejects(pg.query("select record_system_email_communication($1,$2,'forged','Forged',now())",[clientId,clientUser]),/permission denied/);
 });
+
+test('bulk treatment imports are atomic, permission-checked, audited and preserve appointment finances',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/046_bulk_treatment_csv.sql',import.meta.url),'utf8'));
+ const originals=(await pg.query('select * from treatments where active order by id limit 2')).rows;
+ const rows=originals.map(t=>({id:t.id,revision:t.revision,category:t.category,name:t.name+' renamed',description:'CSV description',duration:45,price:19.99,rebook_window:'2 weeks',guarantee_required:true,patch_required:false}));
+ const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status) values($1,$2,1,$3,$4,'Client','123456789',80,'2090-02-20',600,60,'booked') returning *",[clientUser,clientId,originals[0].id,originals[0].name]);
+ const patchId=(await one('select treatment_id from patch_booking_settings')).treatment_id;
+ const p=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,treatment_name,patch_for_treatment_id,patch_for_treatment_name,client_name,phone,price,appointment_date,start_minute,duration,status) values($1,$2,1,$3,$4,$5,$6,'Client','123456789',0,'2090-02-20',700,15,'booked') returning *",[clientUser,clientId,patchId,'Patch Test for '+originals[0].name,originals[0].id,originals[0].name]);
+ await as(clientUser);await assert.rejects(pg.query('select bulk_update_treatments($1)',[JSON.stringify(rows)]),/Permission denied/);
+ await as(staffA);
+ for(const invalid of [[rows[0],{...rows[1],price:-1}],[rows[0],{...rows[1],revision:9999}],[rows[0],rows[0]],[rows[0],{...rows[1],id:99999999}],[rows[0],{...rows[1],patch_required:null}]]){
+   await assert.rejects(pg.query('select bulk_update_treatments($1)',[JSON.stringify(invalid)]));
+   assert.equal((await one('select name from treatments where id=$1',[rows[0].id])).name,originals[0].name);
+ }
+ const result=(await one('select bulk_update_treatments($1) data',[JSON.stringify(rows)])).data;
+ assert.equal(result.changed,2);assert.equal(result.treatments[0].price,19.99);
+ await pg.exec('reset role');
+ const after=await one('select * from appointments where id=$1',[a.id]);assert.equal(after.treatment_name,rows[0].name);assert.equal(Number(after.price),80);assert.equal(after.duration,60);assert.equal(after.revision,a.revision+1);
+ const patch=await one('select * from appointments where id=$1',[p.id]);assert.equal(patch.treatment_name,'Patch Test for '+rows[0].name);assert.equal(patch.patch_for_treatment_name,rows[0].name);assert.equal(Number(patch.price),0);
+ assert.equal((await one("select count(*)::integer n from audit_events where action='treatment_bulk_updated' and details->>'batch_id'=$1",[result.batch_id])).n,2);
+ assert.equal((await one("select count(*)::integer n from booking_email_queue where appointment_id=$1 and event_kind='amended'",[a.id])).n,0);
+ await as(staffA);await assert.rejects(pg.query('select bulk_update_treatments($1)',[JSON.stringify(rows)]),/changed since the preview/);
+ const unchanged=result.treatments.map(t=>({...t,revision:t.revision}));assert.equal((await one('select bulk_update_treatments($1) data',[JSON.stringify(unchanged)])).data.changed,0);
+});

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import BulkTreatmentImport from "./BulkTreatmentImport";
+import { exportTreatmentCsv } from "./treatment-csv.mjs";
 export type ManagedTreatment = {
   id: number;
   name: string;
@@ -24,6 +26,7 @@ export default function TreatmentManagement({
 }) {
   const [treatments, setTreatments] = useState<ManagedTreatment[]>([]),
     [categoryFilter, setCategoryFilter] = useState(""),
+    [importOpen, setImportOpen] = useState(false),
     [draft, setDraft] = useState<ManagedTreatment | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -46,6 +49,13 @@ export default function TreatmentManagement({
       active = false;
     };
   }, [db]);
+  function download() {
+    const url = URL.createObjectURL(new Blob([exportTreatmentCsv(treatments)], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url; link.download = "Sculpted_Treatments.csv";
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!db || !draft || busy) return;
@@ -88,12 +98,22 @@ export default function TreatmentManagement({
         </p>
       )}
       {message && <p role="status">{message}</p>}
-      {!draft && <label style={{ maxWidth: 420, marginBottom: 20 }}>Treatment category
+      {!draft && <div className="treatment-management-toolbar"><label>Treatment category
         <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
           <option value="">All categories</option>
           {[...new Set(treatments.map(t => t.category))].map(category => <option key={category} value={category}>{category}</option>)}
         </select>
-      </label>}
+      </label><div className="record-actions">
+        <button className="primary" disabled={!db || !treatments.length} onClick={download}>Download Treatments CSV</button>
+        <button className="primary" disabled={!db || busy} onClick={() => { setImportOpen(true); setError(""); setMessage(""); }}>Upload CSV to Bulk Amend Treatments</button>
+      </div></div>}
+      {importOpen && db && <BulkTreatmentImport db={db} onClose={() => setImportOpen(false)} onImported={(updated, changed) => {
+        const imported = new Map(updated.map(t => [t.id, t]));
+        setTreatments(current => current.map(t => imported.get(t.id) ?? t).sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)));
+        setCategoryFilter(""); setImportOpen(false);
+        setMessage(`${changed} treatments updated. Existing booking prices and durations were preserved.`);
+        onChanged();
+      }} />}
       {!db && <p>Connect to Supabase to manage treatments.</p>}
       {draft ? (
         <form className="panel" onSubmit={(e) => void save(e)}>

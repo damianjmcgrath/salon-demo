@@ -80,6 +80,32 @@ before(async () => {
   ).default;
 });
 afterEach(() => cleanup());
+test('bulk CSV upload previews before saving, uses a single RPC and Cancel makes no changes',async()=>{
+ const row={id:1,name:'Original',category:'Brows',description:'',duration:30,price:20,patch_required:true,guarantee_required:true,revision:2};
+ const q={select(){return this;},eq(){return this;},order(){return this;},then(fn){return Promise.resolve({data:[row],error:null}).then(fn);}};
+ const calls=[];let changed=0;
+ const db={from:()=>q,rpc:async(name,args)=>{calls.push([name,args]);return {data:{changed:1,treatments:[{...args.p_rows[0],revision:3}]},error:null};}};
+ render(React.createElement(Treatment,{db,onHome(){},onChanged(){changed++;}}));
+ fireEvent.click(await screen.findByRole('button',{name:'Upload CSV to Bulk Amend Treatments'}));
+ const csv='Treatment ID,Category,Treatment Name,Treatment Description,Length in minutes,Price,Rebook Window,Booking guarantee required?,Patch test Required?\n1,Brows,Renamed,,45,25,2 weeks,,\n';
+ fireEvent.change(screen.getByLabelText('Select CSV file (Browse)'),{target:{files:[{size:csv.length,text:async()=>csv}]}});
+ fireEvent.click(screen.getByRole('button',{name:'Upload'}));
+ await screen.findByText('Preview changes');assert.equal(calls.length,0);
+ fireEvent.click(screen.getByRole('button',{name:'Cancel'}));assert.equal(screen.queryByRole('dialog'),null);assert.equal(calls.length,0);
+ fireEvent.click(screen.getByRole('button',{name:'Upload CSV to Bulk Amend Treatments'}));
+ fireEvent.change(screen.getByLabelText('Select CSV file (Browse)'),{target:{files:[{size:csv.length,text:async()=>csv}]}});
+ fireEvent.click(screen.getByRole('button',{name:'Upload'}));
+ fireEvent.click(await screen.findByRole('button',{name:'Confirm Changes'}));
+ await waitFor(()=>assert.equal(changed,1));assert.equal(calls.length,1);assert.equal(calls[0][0],'bulk_update_treatments');assert.equal(calls[0][1].p_rows[0].id,1);assert.equal(calls[0][1].p_rows[0].patch_required,true);assert.equal(calls[0][1].p_rows[0].revision,2);
+ assert.equal(screen.queryByRole('dialog'),null);
+});
+test('invalid CSV has no Confirm Changes action and never calls the database import',async()=>{
+ const q={select(){return this;},eq(){return this;},order(){return this;},then(fn){return Promise.resolve({data:[],error:null}).then(fn);}};
+ let called=false;render(React.createElement(Treatment,{db:{from:()=>q,rpc:async()=>{called=true;}},onHome(){},onChanged(){}}));
+ fireEvent.click(await screen.findByRole('button',{name:'Upload CSV to Bulk Amend Treatments'}));
+ fireEvent.change(screen.getByLabelText('Select CSV file (Browse)'),{target:{files:[{size:20,text:async()=> 'ID;Name\n1;Wrong headers'}]}});
+ fireEvent.click(screen.getByRole('button',{name:'Upload'}));await screen.findByText('Nothing will be imported');assert.equal(screen.queryByRole('button',{name:'Confirm Changes'}),null);assert.equal(called,false);
+});
 after(async () => {
   dom.window.close();
   await rm(dir, { recursive: true, force: true });
