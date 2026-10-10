@@ -1722,3 +1722,48 @@ test('bulk treatment imports are atomic, permission-checked, audited and preserv
  await as(staffA);await assert.rejects(pg.query('select bulk_update_treatments($1)',[JSON.stringify(rows)]),/changed since the preview/);
  const unchanged=result.treatments.map(t=>({...t,revision:t.revision}));assert.equal((await one('select bulk_update_treatments($1) data',[JSON.stringify(unchanged)])).data.changed,0);
 });
+
+test('multi-treatment visits reserve sequential slots atomically and retain per-treatment fees and cancellation',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/047_multi_treatment_visits.sql',import.meta.url),'utf8'));
+ await pg.exec("insert into treatments(id,name,category,price,price_type,duration,guarantee_required) values(92001,'Visit A','Test',30,'Fixed',15,false),(92002,'Visit B','Test',40,'Fixed',30,false),(92003,'Visit C','Test',50,'Fixed',45,false);insert into staff_treatments(staff_id,treatment_id) values(1,92001),(1,92002),(1,92003),(2,92001);insert into staff_day_shifts(staff_id,shift_date,start_minute,end_minute) values(1,'2091-02-20',540,1020),(2,'2091-02-20',540,1020);");
+ const ids=[92001,92002,92003],expected=ids.map((id,i)=>({id,revision:0,price:[30,40,50][i],duration:[15,30,45][i]}));
+ await as(clientUser);let slots=(await pg.query("select * from get_visit_slots($1,'2091-02-20',null)",[ids])).rows;assert(slots.some(s=>s.staff_id===1&&s.start_minute===600));assert(!slots.some(s=>s.staff_id===2));
+ assert(!slots.some(s=>s.start_minute===735),'full visit must not cross lunch');
+ await pg.exec('reset role');const block=await one("insert into staff_calendar_entries(staff_id,appointment_date,start_minute,duration,show_as,description,created_by) values(1,'2091-02-20',650,15,'busy','Block',$1) returning id",[staffA]);
+ await as(clientUser);assert(!(await pg.query("select * from get_visit_slots($1,'2091-02-20',1)",[ids])).rows.some(s=>s.start_minute===600));await pg.exec('reset role');await pg.query('delete from staff_calendar_entries where id=$1',[block.id]);await as(clientUser);
+ const request='22222222-0000-0000-0000-000000000001';
+ const args=[ids,JSON.stringify(expected),request,1,'2091-02-20',600,'Client','123456789',true,'client@example.com',null,false,false,null,null];
+ await assert.rejects(pg.query('select visit_book_one(92001,1,$1,600,\'Client\',\'123456789\',true,true,\'client@example.com\',\'saved_demo\')',['2091-02-20']),/permission denied/);
+ const call='select book_treatment_visit($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) data';
+ const result=(await one(call,args)).data;assert.equal(result.appointments.length,3);assert.deepEqual(result.appointments.map(a=>a.start_minute),[600,615,645]);assert.deepEqual(result.appointments.map(a=>a.guarantee_fee_cents),[1500,2000,2500]);assert(result.appointments.every(a=>a.staff_id===1));
+ assert.equal((await one(call,args)).data.visit_id,result.visit_id);
+ await pg.exec('reset role');assert.equal((await one('select count(*)::integer n from appointments where visit_id=$1',[result.visit_id])).n,3);
+ await as(clientUser);slots=(await pg.query("select * from get_visit_slots($1,'2091-02-20',1)",[ids])).rows;assert(!slots.some(s=>s.start_minute===600));
+ const free=await one('select client_cancel_appointment($1,0) data',[result.appointments[1].id]);assert(free.data);
+ await pg.exec('reset role');assert.equal((await one('select status from appointments where id=$1',[result.appointments[0].id])).status,'booked');
+ // A later member failing its card requirement must roll back earlier inserts.
+ await pg.exec('update treatments set guarantee_required=true where id=92003');await pg.query('update clients set requires_deposit=true where id=$1',[clientId]);await as(clientUser);
+ const failure=[...args];failure[2]='22222222-0000-0000-0000-000000000002';failure[5]=870;
+ await assert.rejects(pg.query(call,failure),/guarantee/);
+ await pg.exec('reset role');assert.equal((await one('select count(*)::integer n from booking_visits where request_id=$1',[failure[2]])).n,0);
+ assert.equal((await one("select count(*)::integer n from appointments where appointment_date='2091-02-20' and start_minute>=870")).n,0);
+ await as(clientUser);
+ const small=(await one("select purchase_demo_voucher('50',null,true,'','','saved_demo',true,gen_random_uuid()) data")).data;
+ const payment=[...failure];payment[2]='22222222-0000-0000-0000-000000000003';payment[13]='voucher';payment[14]=small.id;
+ await assert.rejects(pg.query(call,payment),/balance/);
+ await pg.exec('reset role');assert.equal((await one('select count(*)::integer n from client_value_redemptions where voucher_id=$1',[small.id])).n,0);
+ await as(clientUser);const large=(await one("select purchase_demo_voucher('150',null,true,'','','saved_demo',true,gen_random_uuid()) data")).data;
+ const options=(await one('select get_visit_value_options($1) data',[ids])).data;assert(options.vouchers.some(v=>v.id===large.id));assert(!options.vouchers.some(v=>v.id===small.id));
+ payment[2]='22222222-0000-0000-0000-000000000004';payment[14]=large.id;
+ const prepaid=(await one(call,payment)).data;assert(prepaid.appointments.every(a=>a.prepaid_method==='voucher'));
+ await pg.exec('reset role');assert.equal(Number((await one('select sum(amount) total from client_value_redemptions where voucher_id=$1',[large.id])).total),120);
+ await as(clientUser);await one(call,payment);await pg.exec('reset role');assert.equal(Number((await one('select sum(amount) total from client_value_redemptions where voucher_id=$1',[large.id])).total),120);
+ await pg.query('update clients set can_cancel_free=false where id=$1',[clientId]);await as(clientUser);
+ const cancelled=await one('select client_cancel_appointment($1,0) data',[prepaid.appointments[1].id]);assert.equal(Number(cancelled.data.refund_amount),20);
+ await pg.exec('reset role');assert.equal((await one('select status from appointments where id=$1',[prepaid.appointments[0].id])).status,'booked');
+ await pg.exec("insert into staff_day_shifts(staff_id,shift_date,start_minute,end_minute) values(1,'2091-02-21',540,1020)");
+ const card=await one("insert into booking_guarantee_cards(client_id,created_by,setup_order_id,verified_at) values($1,$2,'visit-card',now()) returning id",[clientId,clientUser]);
+ await as(clientUser);const guaranteed=[...args];guaranteed[2]='22222222-0000-0000-0000-000000000005';guaranteed[4]='2091-02-21';guaranteed[10]=card.id;guaranteed[11]=true;
+ const cardVisit=(await one(call,guaranteed)).data;assert(cardVisit.appointments.every(a=>a.guarantee_required));
+ const policy=(await one('select client_appointment_policy($1) data',[cardVisit.appointments[1].id])).data;assert.equal(policy.fee_cents,2000);
+});

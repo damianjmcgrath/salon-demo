@@ -18,6 +18,7 @@ import AppointmentTransfer from "./AppointmentTransfer";
 import PermissionManagement from "./PermissionManagement";
 import TreatmentManagement from "./TreatmentManagement";
 import TreatmentDescriptionDialog from "./TreatmentDescriptionDialog";
+import VisitSelection from "./VisitSelection";
 import { defaultPermissions, type Permissions } from "./permissions";
 import MyVouchers from "./MyVouchers";
 import ClientProfile from "./ClientProfile";
@@ -181,6 +182,17 @@ export default function App() {
     [amending, setAmending] = useState<Appointment | null>(null),
     [changeReason, setChangeReason] = useState("");
   const [initialPatchRecord, setInitialPatchRecord] = useState(false);
+  const [visitItems, setVisitItems] = useState<Treatment[]>([]);
+  const [visitPrompt, setVisitPrompt] = useState(false);
+  const [visitConfirmed, setVisitConfirmed] = useState<Appointment[]>([]);
+  const visitRequest = useRef(crypto.randomUUID());
+  function proceedVisit() {
+    if (!visitItems.length) return;
+    const first = visitItems[0];
+    setTreatment(visitItems.length === 1 ? first : { ...first, name: visitItems.map(t => t.name).join(" + "), duration: visitItems.reduce((n,t) => n+t.duration,0), price: visitItems.reduce((n,t) => n+Number(t.price),0), price_type: visitItems.some(t=>t.price_type==="From") ? "From" : "Fixed" });
+    if (visitItems.length > 1) setPatchPlan(null); setVisitPrompt(false); setSlot(null); setPeriod(""); setStaffChoice(0); setStep(2);
+  }
+
   const [treatmentInfo, setTreatmentInfo] = useState<{ name: string; description: string } | null>(null);
   const [initialStaffAppointment, setInitialStaffAppointment] =
     useNavigationState<Appointment | null>(
@@ -383,7 +395,7 @@ export default function App() {
   function startBooking() {
     setStep(0);
     setView("book");
-    setTreatment(null);
+    setTreatment(null); setVisitItems([]); setVisitPrompt(false); setVisitConfirmed([]);
     setPatchPlan(null);
     patchSelection.current++;
     setPatchChecking(false);
@@ -1193,6 +1205,9 @@ export default function App() {
     setView("login");
     setBusy(false);
   }
+  const multiVisit = !amending && !staffClient && activeRole === "client" && visitItems.length > 1;
+  useEffect(() => { setVisitItems([]); setVisitPrompt(false); setVisitConfirmed([]); }, [session?.user.id, forSelf, staffClient?.id, amending?.id]);
+  useEffect(() => { visitRequest.current = crypto.randomUUID(); }, [visitItems, date, slot?.start_minute, slot?.staff_id]);
   useEffect(() => {
     let cancelled = false;
     setSlot(null);
@@ -1200,7 +1215,7 @@ export default function App() {
     if (!treatment) return;
     if (live && db && session) {
       db.rpc(
-        patchPlan && activeRole === "client"
+        multiVisit ? "get_visit_slots" : patchPlan && activeRole === "client"
           ? forSelf
             ? "get_self_booking_slots"
             : "get_proxy_booking_slots"
@@ -1208,7 +1223,7 @@ export default function App() {
             ? "get_booking_slots"
             : "get_available_slots",
         {
-          ...(patchPlan && activeRole === "client"
+          ...(multiVisit ? { p_treatments: visitItems.map(t=>t.id) } : patchPlan && activeRole === "client"
             ? {
                 p_requested_treatment: patchPlan.requested_treatment_id,
                 ...(!forSelf ? { p_attendee_email: email.trim() } : {}),
@@ -1225,7 +1240,7 @@ export default function App() {
           setSlots(
             (data || []).filter(
               (s: Slot) =>
-                s.start_minute % startInterval(treatment.duration) === 0,
+                s.start_minute % startInterval(multiVisit ? visitItems[0].duration : treatment.duration) === 0,
             ),
           );
       });
@@ -1276,6 +1291,8 @@ export default function App() {
     };
   }, [
     treatment,
+    visitItems,
+    multiVisit,
     date,
     staffChoice,
     live,
@@ -1304,10 +1321,9 @@ export default function App() {
     }
     if (!db || !session) return;
     void db
-      .rpc("booking_requires_guarantee", {
+      .rpc(multiVisit ? "visit_requires_guarantee" : "booking_requires_guarantee", {
+        ...(multiVisit ? { p_treatments: visitItems.map(t=>t.id) } : { p_client_id: staffClient?.id ?? null, p_treatment_id: treatment?.id ?? null }),
         p_attendee_email: forSelf ? null : email.trim(),
-        p_client_id: staffClient?.id ?? null,
-        p_treatment_id: treatment?.id ?? null,
       })
       .then(({ data, error }) => {
         if (!active) return;
@@ -1324,10 +1340,12 @@ export default function App() {
     session?.user.id,
     staffClient?.id,
     treatment?.id,
+    multiVisit,
+    visitItems,
     forSelf,
     email,
   ]);
-  async function chooseTreatment(t: Treatment, self = forSelf) {
+  async function chooseTreatment(t: Treatment, self = forSelf, allowAdditional = true) {
     const selection = ++patchSelection.current;
     const identity = identityVersion.current;
     setPatchPlan(null);
@@ -1365,7 +1383,10 @@ export default function App() {
           }).format(new Date(plan.earliest_treatment_at));
           if (earliestDay > today()) setDate(earliestDay);
         }
-        setStep(2);
+        if (allowAdditional && !plan.patch_needed && !amending && !staffClient) {
+          if (visitItems.length >= 12) throw Error("You can select up to 12 treatments for one visit.");
+          setVisitItems(items => [...items, plan.treatment]); setVisitPrompt(true); setStep(1);
+        } else { setVisitItems([]); setStep(2); }
       } catch (e) {
         if (
           selection === patchSelection.current &&
@@ -1391,7 +1412,7 @@ export default function App() {
   const eligibleStaff = staff.filter(
     (s) =>
       !treatment ||
-      (live
+      (multiVisit ? visitItems.every(t => staffSkills.some(k => k.staff_id === s.id && k.treatment_id === t.id)) : (live
         ? staffSkills.some(
             (k) => k.staff_id === s.id && k.treatment_id === treatment.id,
           ) &&
@@ -1403,7 +1424,7 @@ export default function App() {
             ))
         : records
             .find((r) => r.id === s.id)
-            ?.treatment_ids?.includes(treatment.id)),
+            ?.treatment_ids?.includes(treatment.id))),
   );
   const awaitingPaymentChoice =
     live &&
@@ -1431,7 +1452,16 @@ export default function App() {
       let a: Appointment;
       if (live) {
         if (!session || !db) throw Error("Please sign in first.");
-        const r = amending
+        const r = multiVisit
+          ? await db.rpc("book_treatment_visit", {
+              p_treatments: visitItems.map(t=>t.id),
+              p_expected: visitItems.map(t=>({id:t.id,revision:t.revision ?? 0,price:Number(t.price),duration:t.duration})),
+              p_request: visitRequest.current, p_staff: slot.staff_id, p_date: date, p_start: slot.start_minute,
+              p_name: name.trim(), p_phone: phone.trim(), p_self: forSelf, p_email: email.trim(),
+              p_card: !prepayment && guaranteeNeeded ? card || null : null, p_consent: consent,
+              p_staff_selected: staffChoice !== 0, p_value_method: prepayment?.method ?? null, p_value_id: prepayment?.id ?? null,
+            })
+          : amending
           ? await db.rpc(
               activeRole === "client"
                 ? "client_amend_appointment"
@@ -1475,7 +1505,8 @@ export default function App() {
             );
         if (r.error) throw r.error;
         if (operation !== identityVersion.current) return;
-        a = r.data;
+        if (multiVisit) { setVisitConfirmed(r.data.appointments); a = r.data.appointments[0]; } else { setVisitConfirmed([]); a = r.data; }
+        if (multiVisit) { setConfirmation(a); setStep(4); }
         await refresh();
       } else {
         if (!name.trim()) throw Error("Please enter a name.");
@@ -2341,6 +2372,7 @@ export default function App() {
                   {patchChecking && (
                     <p role="status">Checking patch test requirements…</p>
                   )}
+                  {live && activeRole === "client" && !amending && !staffClient && <VisitSelection items={visitItems} prompt={visitPrompt} onAdd={() => {setVisitPrompt(false); setTreatmentInfo(null);}} onProceed={proceedVisit} onRemove={index => {setVisitItems(items=>items.filter((_,i)=>i!==index));setVisitPrompt(false);setSlot(null);}} />}
                   <div className="treatment-grid">
                     {filtered.map((t) => (
                       <div className="treatment-tile" key={t.id}>
@@ -2536,6 +2568,7 @@ export default function App() {
                 </section>
                 <Summary
                   treatment={treatment}
+                  items={multiVisit ? visitItems : undefined}
                   slot={slot}
                   date={date}
                   staff={staff}
@@ -2567,6 +2600,7 @@ export default function App() {
                   <p>
                     Booking for <strong>{name}</strong> · {email}
                   </p>
+                  {multiVisit && <p className="guarantee"><strong>Visit total: {money(Number(treatment.price))} · {treatment.duration} minutes.</strong> {guaranteeNeeded === true && !prepayment && <>The booking guarantee is 50% of the total treatment cost ({money(Number(treatment.price) / 2)}). Each treatment can be cancelled individually, with a fee of 50% of that treatment's price where applicable.</>}</p>}
                   {!amending &&
                     live &&
                     db &&
@@ -2575,6 +2609,7 @@ export default function App() {
                       <BookingValueOptions
                         db={db}
                         treatmentId={treatment.id}
+                        treatmentIds={multiVisit ? visitItems.map(t=>t.id) : undefined}
                         requiresGuarantee={guaranteeNeeded}
                         choice={prepayment}
                         onChange={setPrepayment}
@@ -2714,6 +2749,7 @@ export default function App() {
                 </section>
                 <Summary
                   treatment={treatment}
+                  items={multiVisit ? visitItems : undefined}
                   slot={slot}
                   date={date}
                   staff={staff}
@@ -2736,7 +2772,7 @@ export default function App() {
                 </p>
                 <p>
                   <strong>Treatment Booked:</strong>{" "}
-                  {confirmation.treatment_name}
+                  {visitConfirmed.length > 1 ? "Multiple treatments" : confirmation.treatment_name}
                 </p>
                 <p>
                   <strong>Date and Time:</strong>{" "}
@@ -2769,10 +2805,12 @@ export default function App() {
                     . No further payment is required.
                   </p>
                 )}
+                {visitConfirmed.length > 1 && <div className="visit-confirmed"><h3>Your treatments</h3><ol>{visitConfirmed.map(a=><li key={a.id}><strong>{a.treatment_name}</strong> · {time(a.start_minute)}–{time(a.start_minute+a.duration)} · {money(Number(a.price))}</li>)}</ol><p><strong>Total: {money(visitConfirmed.reduce((n,a)=>n+Number(a.price),0))}</strong></p><p>Each treatment is a separate appointment in My Appointments.</p></div>}
                 <p className="small">Your booking is saved.</p>
                 {amending ? <p className="small">If you have added your original appointment to your Google, Apple or Outlook calendar, please manually update this for the new date and time.</p> : (() => {
                   const calendar = bookingCalendar({
                     ...confirmation,
+                    ...(visitConfirmed.length > 1 ? {treatment_name:visitConfirmed.map(a=>a.treatment_name).join(" + "),duration:visitConfirmed.reduce((n,a)=>n+a.duration,0)} : {}),
                     staff_name: staff.find(
                       (s) => s.id === confirmation.staff_id,
                     )?.name,
@@ -2825,6 +2863,7 @@ export default function App() {
                       return;
                     }
                     setStep(1);
+                    setVisitItems([]); setVisitConfirmed([]);
                     setConfirmation(null);
                     setStep(0);
                     setPeriod("");
@@ -3222,6 +3261,7 @@ export default function App() {
                                 void chooseTreatment(
                                   currentTreatment,
                                   a.booked_for_self !== false,
+                                  false,
                                 );
                               }}
                             >
@@ -4061,7 +4101,9 @@ function Summary({
   date,
   staff,
   onContinue,
+  items,
 }: {
+  items?: Treatment[];
   treatment: Treatment;
   slot: Slot | null;
   date: string;
@@ -4071,7 +4113,7 @@ function Summary({
   return (
     <aside className="summary">
       <p className="eyebrow">YOUR APPOINTMENT</p>
-      <h2>{treatment.name}</h2>
+      {items ? <><h2>Your treatments</h2><ol>{items.map((t,i)=><li key={i}>{t.name} · {t.duration} minutes · {money(Number(t.price))}</li>)}</ol></> : <h2>{treatment.name}</h2>}
       <p>{treatment.duration} minutes · provisional duration</p>
       <h3>
         {treatment.price_type === "From" ? "From " : ""}

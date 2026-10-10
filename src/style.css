@@ -1889,3 +1889,8 @@ nav .logout-link {
 .treatment-description-dialog { box-sizing: border-box; }
 .treatment-description-dialog h2 { padding-right: 32px; font-size: 26px; overflow-wrap: anywhere; }
 .treatment-description-content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.visit-selection { margin-top: 24px; }
+.visit-selection li, .visit-confirmed li, .summary ol li { margin: 12px 0; line-height: 1.5; overflow-wrap: anywhere; }
+.visit-selection .back { margin-left: 12px; text-decoration: underline; }
+.visit-confirmed { text-align: left; padding: 16px; margin: 20px 0; background: #f3eee5; border-radius: 8px; }
+.visit-selection h2 { font-size: 26px; }

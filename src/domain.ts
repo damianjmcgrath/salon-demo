@@ -22,6 +22,8 @@ export type Staff = {
 };
 export type Appointment = {
   id: string;
+  visit_id?: string | null;
+  visit_order?: number | null;
   user_id?: string | null;
   client_id?: string | null;
   treatment_id?: number;
