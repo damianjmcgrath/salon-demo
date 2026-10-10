@@ -114,6 +114,7 @@ export default function TreatmentManagement({
         setMessage(`${changed} treatments updated. Existing booking prices and durations were preserved.`);
         onChanged();
       }} />}
+      {!draft && <p>Click Download CSV above to download an excel file of the entire treatment catalogue. You can then make changes, save the CSV, and upload it to make amendments in bulk. Alternatively, you can amend a treatment individually using the list below:</p>}
       {!db && <p>Connect to Supabase to manage treatments.</p>}
       {draft ? (
         <form className="panel" onSubmit={(e) => void save(e)}>
