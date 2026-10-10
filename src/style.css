@@ -1810,3 +1810,6 @@ nav .logout-link {
 }
 
 .appointment-transfer { margin-left: 1rem; font-weight: 600; }
+
+.client-appointment-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .75rem; }
+.client-appointment-actions .primary { margin: 0; }

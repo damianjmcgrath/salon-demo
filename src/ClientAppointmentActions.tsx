@@ -101,14 +101,14 @@ export default function ClientAppointmentActions({
   return (
     <div>
       {!mode && !cancelled && (
-        <>
-          <button disabled={busy} onClick={() => void open("amend")}>
+        <div className="client-appointment-actions">
+          <button className="primary" disabled={busy} onClick={() => void open("amend")}>
             Amend Appointment
           </button>
-          <button disabled={busy} onClick={() => void open("cancel")}>
+          <button className="primary" disabled={busy} onClick={() => void open("cancel")}>
             Cancel Appointment
           </button>
-        </>
+        </div>
       )}
       {mode && !cancelled && (
         <section className="panel" aria-label="Change appointment">
