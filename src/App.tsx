@@ -1758,7 +1758,7 @@ export default function App() {
         >
           <img
             className="salon-logo"
-            src={`${env.BASE_URL}images/salon-logo.png`}
+            src={`${env.BASE_URL}images/salon-logo.png?v=transparent-1`}
             alt="Sculpted by Aoife Claire"
           />
         </a>
