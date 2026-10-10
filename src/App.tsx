@@ -17,6 +17,7 @@ import AppointmentReminder from "./AppointmentReminder";
 import AppointmentTransfer from "./AppointmentTransfer";
 import PermissionManagement from "./PermissionManagement";
 import TreatmentManagement from "./TreatmentManagement";
+import TreatmentDescriptionDialog from "./TreatmentDescriptionDialog";
 import { defaultPermissions, type Permissions } from "./permissions";
 import MyVouchers from "./MyVouchers";
 import ClientProfile from "./ClientProfile";
@@ -180,6 +181,7 @@ export default function App() {
     [amending, setAmending] = useState<Appointment | null>(null),
     [changeReason, setChangeReason] = useState("");
   const [initialPatchRecord, setInitialPatchRecord] = useState(false);
+  const [treatmentInfo, setTreatmentInfo] = useState<{ name: string; description: string } | null>(null);
   const [initialStaffAppointment, setInitialStaffAppointment] =
     useNavigationState<Appointment | null>(
       "app.workspaceAppointment",
@@ -2341,6 +2343,7 @@ export default function App() {
                   )}
                   <div className="treatment-grid">
                     {filtered.map((t) => (
+                      <div className="treatment-tile" key={t.id}>
                       <button
                         className="treatment"
                         key={t.id}
@@ -2384,8 +2387,11 @@ export default function App() {
                             </span>
                           )}
                       </button>
+                      {t.description?.trim() && <button type="button" className="treatment-info-button" aria-label={`Information about ${t.name}`} onClick={() => setTreatmentInfo({ name: t.name, description: t.description! })}><span aria-hidden="true">i</span></button>}
+                      </div>
                     ))}
                   </div>
+                  {treatmentInfo && <TreatmentDescriptionDialog {...treatmentInfo} onClose={() => setTreatmentInfo(null)} />}
                   {!filtered.length && (
                     <p>
                       {category === "Previous Bookings"
@@ -2764,7 +2770,7 @@ export default function App() {
                   </p>
                 )}
                 <p className="small">Your booking is saved.</p>
-                {(() => {
+                {amending ? <p className="small">If you have added your original appointment to your Google, Apple or Outlook calendar, please manually update this for the new date and time.</p> : (() => {
                   const calendar = bookingCalendar({
                     ...confirmation,
                     staff_name: staff.find(
