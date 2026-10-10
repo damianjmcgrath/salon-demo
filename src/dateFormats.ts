@@ -22,3 +22,10 @@ export function displayHistoryValue(_key: string, value: unknown): unknown {
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return displayDateTime(value);
   return value;
 }
+
+export function appointmentDate(value: string): string {
+  const d = new Date(`${value}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return "—";
+  const parts = new Intl.DateTimeFormat("en-GB", {timeZone: "Europe/Dublin", day: "2-digit", month: "long", year: "numeric"}).formatToParts(d);
+  return ["day", "month", "year"].map(type => parts.find(p => p.type === type)?.value || "").join("-");
+}

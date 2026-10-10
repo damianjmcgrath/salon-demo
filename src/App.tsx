@@ -6,7 +6,7 @@ import {
 import ClientAppointmentActions from "./ClientAppointmentActions";
 import { bookingCalendar } from "../supabase/functions/send-booking-confirmations/calendar";
 import { isConnectionError, requestErrorMessage } from "./requestErrors";
-import { displayDate } from "./dateFormats";
+import { displayDate, appointmentDate } from "./dateFormats";
 import BookingValueOptions, {
   type BookingValueChoice,
 } from "./BookingValueOptions";
@@ -3138,9 +3138,7 @@ export default function App() {
                             </p>
                           )}
                           <p>
-                            {displayDate(a.appointment_date)} ·{" "}
-                            {time(a.start_minute)} ·{" "}
-                            {staff.find((s) => s.id === a.staff_id)?.name}
+                            on {appointmentDate(a.appointment_date)} at {time(a.start_minute)} with {staff.find((s) => s.id === a.staff_id)?.name}
                           </p>
                         </div>
                         <div className="appointment-actions">
@@ -3193,7 +3191,12 @@ export default function App() {
                             />
                           )}
                           <p className="status">
-                            {a.status.replaceAll("_", " ")}
+                            {index === 0
+                              ? a.prepaid_method === "voucher" ? "fully paid using voucher"
+                                : a.prepaid_method === "credit" ? "fully paid using credit note"
+                                : Number(a.price) === 0 ? "no payment required"
+                                : "to be paid in-salon after treatment"
+                              : a.status.replaceAll("_", " ")}
                           </p>
                           {index !== 0 && (
                             <button
