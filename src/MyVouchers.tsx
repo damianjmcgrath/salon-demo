@@ -219,8 +219,11 @@ export default function MyVouchers({
         </p>
       )}
       {message && <p role="status">{message}</p>}
+      <div className="record-actions" style={{alignItems:"center"}}>
+      <button className="primary" style={{margin:0}} onClick={onBuy}>Buy a Voucher</button>
       <button
         className="secondary"
+        style={{margin:0}}
         onClick={() => {
           setAdding(true);
           setError("");
@@ -228,6 +231,7 @@ export default function MyVouchers({
       >
         Add a Voucher
       </button>
+      </div>
       {adding && (
         <form onSubmit={(e) => void claim(e)}>
           <label>
@@ -359,11 +363,7 @@ export default function MyVouchers({
           />
         </>
       )}
-      <div className="record-actions">
-        <button className="primary" onClick={onBuy}>
-          Buy a Voucher
-        </button>
-      </div>
+
       {printed && (
         <div className="voucher-print-area" style={{ marginTop: 24 }}>
           <h2>Gift Voucher</h2>
