@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lastBookedLabel } from '../src/bookingRecency.js';
+import { lastBookedLabel, appointmentBookedLabel, salonDate } from '../src/bookingRecency.js';
 const today='2026-10-07';
 function booking(days, extra={}) { const date=new Date(today+'T00:00:00Z');date.setUTCDate(date.getUTCDate()-days);return {status:'completed',treatment_id:1,appointment_date:date.toISOString().slice(0,10),...extra}; }
 test('last-booked labels follow each requested boundary',()=>{
@@ -10,4 +10,10 @@ test('last-booked labels follow each requested boundary',()=>{
 test('last booking selects latest attended self appointment, excluding other people, future and cancelled bookings',()=>{
  assert.equal(lastBookedLabel([booking(50),booking(21),booking(2,{booked_for_self:false}),booking(1,{status:'cancelled'}),booking(-1),booking(0,{treatment_id:2})],1,today),'Last Booked: 3 weeks ago');
  assert.equal(lastBookedLabel([booking(1,{status:'no_show'})],1,today),null);
+});
+
+test('appointment labels use the individual date and salon date uses explicit parts', () => {
+ assert.equal(appointmentBookedLabel(booking(45), today), 'Last Booked: 6 weeks ago');
+ assert.equal(appointmentBookedLabel(booking(60), today), 'Last Booked: 2 months ago');
+ assert.equal(salonDate(new Date('2026-10-07T23:30:00Z')), '2026-10-08');
 });

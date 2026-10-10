@@ -12,7 +12,7 @@ import BookingValueOptions, {
 } from "./BookingValueOptions";
 import { diaryEntryLayout } from "./diaryLayout.js";
 import { useCalendarEntries } from "./CalendarEntries";
-import { lastBookedLabel } from "./bookingRecency.js";
+import { lastBookedLabel, appointmentBookedLabel, salonDate } from "./bookingRecency.js";
 import AppointmentReminder from "./AppointmentReminder";
 import AppointmentTransfer from "./AppointmentTransfer";
 import PermissionManagement from "./PermissionManagement";
@@ -107,13 +107,7 @@ const time = (n: number) =>
   `${Math.floor(n / 60)
     .toString()
     .padStart(2, "0")}:${(n % 60).toString().padStart(2, "0")}`;
-const today = () =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Dublin",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+const today = () => salonDate();
 const demoDate = () => {
   let d = new Date();
   if (d.getDay() === 0) d.setDate(d.getDate() + 1);
@@ -3174,6 +3168,7 @@ export default function App() {
                       <article className="history-card" key={a.id}>
                         <div>
                           <h3>{a.treatment_name}</h3>
+                          {index === 1 && <p className="last-booked">{appointmentBookedLabel(a, currentDay)}</p>}
                           {a.booked_for_self === false && (
                             <p className="booking-recipient-label">
                               Booked by you, for {a.client_name}
