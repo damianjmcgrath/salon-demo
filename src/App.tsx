@@ -1901,7 +1901,7 @@ export default function App() {
               }
               onClick={() => staffHome()}
             >
-              Staff Home
+              Home
             </button>
           )}
           {staffAccess &&
@@ -1934,16 +1934,16 @@ export default function App() {
                 action: () => setView("treatment-management"),
               },
               {
+                label: "Staff",
+                permission: "view.staff",
+                view: "staff-admin",
+                action: () => setView("staff-admin"),
+              },
+              {
                 label: "Vouchers",
                 permission: "view.vouchers",
                 screen: "vouchers",
                 action: () => staffHome("vouchers"),
-              },
-              {
-                label: "Permissions",
-                permission: "view.permissions",
-                view: "permission-management",
-                action: () => setView("permission-management"),
               },
             ]
               .filter((item) => allowed(item.permission))
@@ -1971,6 +1971,14 @@ export default function App() {
               onClick={() => setView("reporting-placeholder")}
             >
               Reports
+            </button>
+          )}
+          {staffAccess && allowed("view.permissions") && (
+            <button
+              className={view === "permission-management" ? "active" : ""}
+              onClick={() => setView("permission-management")}
+            >
+              Permissions
             </button>
           )}
           {activeRole === "admin" && (
