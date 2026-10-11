@@ -91,13 +91,12 @@ export function localShift(
     (s) => s.staff_id === staffId && s.shift_date === date,
   );
   if (saved) return saved;
-  const weekday = new Date(date + "T12:00:00Z").getUTCDay();
   const existing = staffId <= 2 && records.some((s) => s.id === staffId);
   return {
     staff_id: staffId,
     shift_date: date,
-    start_minute: existing && weekday !== 0 ? 540 : null,
-    end_minute: existing && weekday !== 0 ? 1020 : null,
+    start_minute: existing ? 540 : null,
+    end_minute: existing ? 1200 : null,
     revision: 0,
   };
 }

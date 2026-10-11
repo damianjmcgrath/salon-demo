@@ -1062,7 +1062,7 @@ export default function StaffAdministration({
                                 ? {
                                     ...x,
                                     start_minute: e.target.checked ? 540 : null,
-                                    end_minute: e.target.checked ? 1020 : null,
+                                    end_minute: e.target.checked ? 1200 : null,
                                   }
                                 : x,
                             ),
@@ -1100,7 +1100,7 @@ export default function StaffAdministration({
                           <input
                             type="time"
                             disabled={busy || draft.active === false}
-                            value={hhmm(s.end_minute ?? 1020)}
+                            value={hhmm(s.end_minute ?? 1200)}
                             onChange={(e) =>
                               setDays((d) =>
                                 d.map((x, j) =>

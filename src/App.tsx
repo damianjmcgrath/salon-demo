@@ -2548,7 +2548,7 @@ export default function App() {
                       amending &&
                       clientDateLocked &&
                       "Your appointment is within three days, so only its time can be changed. "}
-                    Demo opening hours: Monday–Saturday, 09:00–17:00. Lunch:
+                    Opening hours: Every day, 09:00–20:00. Lunch:
                     13:00–13:30.
                   </p>
                   <fieldset className="period-choice">
