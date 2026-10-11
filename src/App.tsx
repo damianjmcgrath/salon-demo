@@ -2873,13 +2873,19 @@ export default function App() {
                           </svg>
                           <span>Google Calendar</span>
                         </a>
-                        <a className="booking-calendar-button" href={`data:text/calendar;charset=utf-8;base64,${calendar.base64}`} download="sculpted-appointment.ics">
+                        <details>
+                          <summary className="booking-calendar-button">Apple Calendar</summary>
+                          <p className="small">On iPhone or iPad, open your booking confirmation email in Apple Mail, tap the sculpted-appointment.ics attachment, then choose Add or Add All if prompted.</p>
+                          <p className="small">If you use Google Calendar or Outlook in Apple Calendar, you can use the matching button here instead.</p>
+                          <a href={`data:text/calendar;charset=utf-8;base64,${calendar.base64}`} download="sculpted-appointment.ics">Download calendar file (for Mac or manual import)</a>
+                        </details>
+                        <a className="booking-calendar-button" href={calendar.outlook} target="_blank" rel="noopener noreferrer">
                           <svg className="booking-calendar-icon" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
                             <rect x="5" y="8" width="30" height="27" rx="5" fill="none" stroke="currentColor" strokeWidth="2.5" />
                             <path d="M5 16h30M13 5v7M27 5v7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                             <path d="m13 25 5 5 10-10" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
-                          <span>Apple / Outlook Calendar</span>
+                          <span>Outlook Calendar</span>
                         </a>
                       </div>
                     </div>
