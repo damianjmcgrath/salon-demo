@@ -23,6 +23,7 @@ function Flag({ uk }: { uk: boolean }) {
 export default function PhoneInput({ value, onChange, required = false, id }: {
   value: string; onChange: (value: string) => void; required?: boolean; id?: string;
 }) {
+  const fieldStyle = { height: 62, minHeight: 62, margin: 0, boxSizing: "border-box" as const };
   const menu = useRef<HTMLDetailsElement>(null);
   const parsed = splitPhone(value);
   const [country, setCountry] = useState(parsed.prefix);
@@ -38,7 +39,7 @@ export default function PhoneInput({ value, onChange, required = false, id }: {
     <details className="phone-country" ref={menu}
       onKeyDown={e => { if(e.key === "Escape") { menu.current!.open = false; menu.current!.querySelector("summary")?.focus(); } }}
       onBlur={e => { if(!e.currentTarget.contains(e.relatedTarget as Node)) menu.current!.open = false; }}>
-      <summary aria-label="Phone country code">
+      <summary aria-label="Phone country code" style={fieldStyle}>
         <Flag uk={prefix === "44"} /><span>{prefix === "44" ? "UK (+44)" : "Ireland (+353)"}</span><span aria-hidden="true">⌄</span>
       </summary>
       <span className="phone-country-options">
@@ -49,7 +50,7 @@ export default function PhoneInput({ value, onChange, required = false, id }: {
           }}><Flag uk={c.code === "44"} />{c.name}</button>)}
       </span>
     </details>
-    <input id={id} type="tel" inputMode="tel" autoComplete="tel-national" aria-label="Phone number"
+    <input style={fieldStyle} id={id} type="tel" inputMode="tel" autoComplete="tel-national" aria-label="Phone number"
       required={required} pattern="[0-9]{7,12}" title="Enter a phone number containing 7 to 12 digits. The leading zero is removed automatically."
       placeholder="Phone number" value={parsed.number} onChange={e => change(e.target.value)} onBlur={() => change(parsed.number)} />
   </span>;
