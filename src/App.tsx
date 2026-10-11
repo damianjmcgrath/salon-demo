@@ -1,3 +1,4 @@
+import DiaryAppointmentChanges from "./DiaryAppointmentChanges";
 import PhoneInput from "./PhoneInput";
 import {
   useNavigationState,
@@ -3821,12 +3822,7 @@ export default function App() {
             )}
             <p className="eyebrow">APPOINTMENT DETAILS</p>
             <h2>{selected.client_name}</h2>
-            <h3>{selected.treatment_name}</h3>
-            <p>
-              {displayDate(selected.appointment_date)} ·{" "}
-              {time(selected.start_minute)}–
-              {time(selected.start_minute + selected.duration)}
-            </p>
+            <DiaryAppointmentChanges key={selected.id} appointment={selected} treatments={treatments} db={live?db:null} enabled={selected.status==='booked'&&(allowed("view.diary")||allowed("view.appointments"))} onChanged={async a=>{setSelected(a);if(live)await refresh();else setLocal(rows=>rows.map(row=>row.id===a.id?a:row));}} />
             <p>
               {staff.find((s) => s.id === selected.staff_id)?.name}
               {(allowed("view.diary") || allowed("view.appointments")) && <AppointmentTransfer db={db} appointment={selected} onTransferred={async appointment => {setSelected(appointment); await refresh();}} />}
@@ -3851,15 +3847,6 @@ export default function App() {
               </button>
             )}
             <hr />
-            {selected.status === "booked" && (
-              <button
-                className="secondary appointment-action"
-                disabled={busy}
-                onClick={() => void amendFromDiary(selected)}
-              >
-                Amend appointment
-              </button>
-            )}
             {selected.status === "booked" && (
               <AppointmentReminder
                 key={`reminder-${selected.id}`}
