@@ -7,6 +7,7 @@ export function confirmationPayload(
 ) {
   if (snapshot.event_kind === "amended" || snapshot.event_kind === "cancelled")
     return changePayload(snapshot, from);
+  if (Array.isArray(snapshot.appointments) && snapshot.appointments.length > 1) return groupedPayload(snapshot, from);
   const s = snapshot;
   const calendar = Number(s.duration) > 0 ? bookingCalendar(s as any) : null;
   const escape = (v: unknown) =>
@@ -207,5 +208,25 @@ function changePayload(s: Record<string, any>, from: string) {
         }
       : {}),
     html: `<!doctype html><html lang="en"><body style="margin:0;background:#f3f1eb;color:#292822;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%"><tr><td style="padding:24px 12px" align="center"><table role="presentation" style="max-width:600px;width:100%;background:#fffdf8;border:1px solid #e4e0d6"><tr><td style="padding:28px;text-align:center;background:white"><img src="https://damianjmcgrath.github.io/salon-demo/images/salon-logo.png" width="300" alt="Sculpted by Aoife Clare" style="width:100%;max-width:300px;height:auto"></td></tr><tr><td style="padding:28px"><h1 style="font-family:Georgia,serif;font-weight:normal">${title}</h1><p>${message}</p><table role="presentation" style="width:100%;background:#f2f0e8">${details.map(([label, value]) => `<tr><td style="padding:12px"><strong>${escape(label)}</strong></td><td style="padding:12px">${escape(value)}</td></tr>`).join("")}</table><p>Williams St., Mulladrillen, Ardee, Co. Louth A92 HW30</p><p><a href="tel:0871815137">087 1815137</a> · <a href="mailto:sculptedbyac@gmail.com">sculptedbyac@gmail.com</a></p><p><a href="https://damianjmcgrath.github.io/salon-demo/" style="display:inline-block;padding:16px;background:#292822;color:white;text-decoration:none">View my appointments</a></p></td></tr></table></td></tr></table></body></html>`,
+  };
+}
+
+function groupedPayload(snapshot: Record<string, any>, from: string) {
+  const items = snapshot.appointments as Record<string, any>[];
+  const messages = items.map(item => confirmationPayload({...item, appointments: undefined, event_kind: 'booked'}, from));
+  const escape = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+  const total = items.reduce((n, a) => n + Number(a.price), 0);
+  const blocks = messages.map((m, i) => {
+    const start = m.html.indexOf('<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f2f0e8');
+    const end = m.html.indexOf('</table>', start) + 8;
+    const guarantee = m.text.split('\n\n')[8];
+    const cal = Number(items[i].duration)>0 ? bookingCalendar(items[i] as any) : null;
+    return `<section style="margin:24px 0">${m.html.slice(start,end)}<p style="font-size:13px;line-height:1.7">${escape(guarantee)}</p>${cal ? `<p><a href="${escape(cal.google)}">Google Calendar</a> · <a href="${escape(cal.outlook)}">Outlook Calendar</a></p>` : ''}</section>`;
+  }).join('');
+  return {
+    from, to: [testRecipient], subject: '[TEST] Sculpted — Booking confirmation',
+    text: messages.map(m=>m.text).join('\n\n---\n\n') + `\n\nTotal: €${total.toFixed(2)}\nEach treatment remains a separate appointment for amendments and cancellations.`,
+    attachments: messages.flatMap((m,i)=>(m.attachments || []).map(a=>({...a,filename:`sculpted-appointment-${i+1}.ics`}))),
+    html: `<!doctype html><html lang="en"><body style="margin:0;background:#f3f1eb;color:#292822;font-family:Arial,Helvetica,sans-serif"><table role="presentation" width="100%"><tr><td align="center" style="padding:24px 12px"><table role="presentation" style="width:100%;max-width:600px;background:#fffdf8;border:1px solid #e4e0d6"><tr><td style="padding:28px;text-align:center;background:white"><img src="https://damianjmcgrath.github.io/salon-demo/images/salon-logo.png" width="300" alt="Sculpted by Aoife Clare" style="width:100%;max-width:300px;height:auto"></td></tr><tr><td style="padding:24px"><h1 style="font-family:Georgia,serif;font-weight:normal">See you soon, ${escape(String(items[0].client_name).split(/\s+/)[0])}.</h1><p>Your appointments are confirmed.</p><p>Williams St., Mulladrillen, Ardee, Co. Louth A92 HW30</p>${blocks}<p><strong>Total: €${total.toFixed(2)}</strong></p><p>Each treatment remains a separate appointment for amendments and cancellations.</p><p>Apple Calendar: open this email in Apple Mail and tap the relevant calendar attachment, then choose Add or Add All if prompted.</p><p><a href="https://damianjmcgrath.github.io/salon-demo/">View my appointments</a></p><p style="font-size:11px">TEST EMAIL · Sent to Damian during salon testing.</p></td></tr></table></td></tr></table></body></html>`
   };
 }
