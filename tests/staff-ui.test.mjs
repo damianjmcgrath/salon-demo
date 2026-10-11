@@ -70,9 +70,9 @@ async function login(name = /Leah/) {
     target: { value: "1234" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Open demo workspace" }));
-  if (screen.queryByRole("button", {name:"Staff Home",exact:true})) {
+  if (screen.queryByRole("button", {name:"Home",exact:true})) {
     assert(screen.getByRole("button", {name:"Block Out Time"}));
-    fireEvent.click(screen.getByRole("button", {name:"Staff Home",exact:true}));
+    fireEvent.click(screen.getByRole("button", {name:"Home",exact:true}));
   }
   await screen.findByRole("heading", { name: "Your salon workspace." });
 }
@@ -296,7 +296,7 @@ test("UI: admin has nine tiles, accountant only Reporting, and clocks remain pro
   await login(/Aoife/);
   assert.equal(document.querySelectorAll(".workspace-card").length, 9);
   const nav = document.getElementById("account-navigation");
-  assert.deepEqual([...nav.querySelectorAll(":scope > button")].map(b=>b.textContent),["Staff Home","Diary","Clients","Appointments","Treatments","Vouchers","Permissions","Reports","Emails"]);
+  assert.deepEqual([...nav.querySelectorAll(":scope > button")].map(b=>b.textContent),["Home","Diary","Clients","Appointments","Treatments","Staff","Vouchers","Reports","Permissions","Emails"]);
   fireEvent.click(screen.getByRole("button", {name:/Email Management Manage/}));
   assert(screen.getByRole("heading",{name:"Email Management",exact:true}));
   assert(screen.getByText(/available here in the next step/));
@@ -531,7 +531,7 @@ test("UI: newly created staff appears in login and uses its saved demo PIN", asy
   });
   fireEvent.click(screen.getByRole("button", { name: "Open demo workspace" }));
   assert(screen.getByRole("button", {name:"Block Out Time"}));
-  fireEvent.click(screen.getByRole("button", {name:"Staff Home",exact:true}));
+  fireEvent.click(screen.getByRole("button", {name:"Home",exact:true}));
   assert(await screen.findByRole("heading", { name: "Your salon workspace." }));
   assert.equal(
     screen.queryByRole("button", { name: /Staff Management Staff/ }),
@@ -588,7 +588,7 @@ test("UI: admin can add and amend missed clock entries with a retained audit tra
   assert.equal(row.cells[1].textContent, "09:15");
   assert.equal(row.cells[2].textContent, "17:00");
   assert(table.textContent.includes("07:45"));
-  assert(table.textContent.includes("00:00"));
+  assert.equal(row.cells[4].textContent, "11:00");
   assert(screen.getByRole("columnheader", { name: "Scheduled Hours" }));
   const log = d.activity.filter((a) => a.action === "staff_clock_corrected");
   assert.equal(log.length, 2);
