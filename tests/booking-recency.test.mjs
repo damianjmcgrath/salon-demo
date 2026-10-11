@@ -7,8 +7,8 @@ test('last-booked labels follow each requested boundary',()=>{
  const cases=[[0,'Today'],[1,'1 day ago'],[5,'5 days ago'],[6,'1 week ago'],[8,'1 week ago'],[9,'9 days ago'],[12,'12 days ago'],[13,'2 weeks ago'],[15,'2 weeks ago'],[16,'16 days ago'],[19,'19 days ago'],[20,'3 weeks ago'],[22,'3 weeks ago'],[23,'23 days ago'],[26,'26 days ago'],[27,'1 month ago'],[33,'1 month ago'],[34,'5 weeks ago'],[39,'5 weeks ago'],[40,'6 weeks ago'],[47,'6 weeks ago'],[48,'7 weeks ago'],[53,'7 weeks ago'],[54,'2 months ago'],[75,'2 months ago'],[76,'3 months ago'],[105,'3 months ago'],[106,'Longer than 3 months ago']];
  for(const [days,label] of cases)assert.equal(lastBookedLabel([booking(days)],1,today),'Last Booked: '+label);
 });
-test('last booking selects latest attended self appointment, excluding other people, future and cancelled bookings',()=>{
- assert.equal(lastBookedLabel([booking(50),booking(21),booking(2,{booked_for_self:false}),booking(1,{status:'cancelled'}),booking(-1),booking(0,{treatment_id:2})],1,today),'Last Booked: 3 weeks ago');
+test('last booking selects latest attended self appointment, excluding other people and cancelled bookings',()=>{
+ assert.equal(lastBookedLabel([booking(50),booking(21),booking(2,{booked_for_self:false}),booking(1,{status:'cancelled'}),booking(0,{treatment_id:2})],1,today),'Last Booked: 3 weeks ago');
  assert.equal(lastBookedLabel([booking(1,{status:'no_show'})],1,today),null);
 });
 
@@ -16,4 +16,11 @@ test('appointment labels use the individual date and salon date uses explicit pa
  assert.equal(appointmentBookedLabel(booking(45), today), 'Last Booked: 6 weeks ago');
  assert.equal(appointmentBookedLabel(booking(60), today), 'Last Booked: 2 months ago');
  assert.equal(salonDate(new Date('2026-10-07T23:30:00Z')), '2026-10-08');
+});
+
+test('early completion of a future appointment shows attendance age in both places', () => {
+ const a={status:'completed',treatment_id:1,appointment_date:'2026-10-13',completed_at:'2026-10-06T10:00:00Z'};
+ assert.equal(lastBookedLabel([a],1,today),'Last Booked: 1 day ago');
+ assert.equal(appointmentBookedLabel(a,today),'Last Booked: 1 day ago');
+ assert.equal(appointmentBookedLabel({...a,completed_at:null},today),'Last Booked: 13/10/2026');
 });

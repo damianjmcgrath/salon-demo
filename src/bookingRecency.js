@@ -4,17 +4,29 @@ export function salonDate(now = new Date()) {
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
-// Compare salon calendar dates rather than elapsed hours (including DST changes).
+// Completed treatments use their actual attendance date, including early test checkouts.
+function historyDate(appointment) {
+  if (appointment.status === 'completed' && appointment.completed_at) {
+    const completed = new Date(appointment.completed_at);
+    if (!Number.isNaN(completed.getTime())) return salonDate(completed);
+  }
+  return /^\d{4}-\d{2}-\d{2}$/.test(appointment.appointment_date || '') ? appointment.appointment_date : null;
+}
+
 export function lastBookedLabel(bookings, treatmentId, today) {
-  const dates = bookings.filter(a => a.status === 'completed' && a.booked_for_self !== false && a.treatment_id === treatmentId && /^\d{4}-\d{2}-\d{2}$/.test(a.appointment_date || '') && a.appointment_date <= today).map(a => a.appointment_date).sort();
-  if (!dates.length) return null;
-  const days = Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(dates.at(-1) + 'T00:00:00Z')) / 86400000);
-  return appointmentAgeLabel(days);
+  const dates = bookings.filter(a => a.status === 'completed' && a.booked_for_self !== false && a.treatment_id === treatmentId).map(historyDate).filter(Boolean).sort();
+  return dateLabel(dates.at(-1), today);
 }
 
 export function appointmentBookedLabel(appointment, today) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(appointment.appointment_date || "") || appointment.appointment_date > today) return null;
-  const days = Math.round((Date.parse(today + "T00:00:00Z") - Date.parse(appointment.appointment_date + "T00:00:00Z")) / 86400000);
+  return dateLabel(historyDate(appointment), today);
+}
+
+function dateLabel(date, today) {
+  if (!date) return null;
+  // Legacy/demo records without a completion timestamp retain their real scheduled date.
+  if (date > today) return `Last Booked: ${date.slice(8,10)}/${date.slice(5,7)}/${date.slice(0,4)}`;
+  const days = Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(date + 'T00:00:00Z')) / 86400000);
   return appointmentAgeLabel(days);
 }
 
