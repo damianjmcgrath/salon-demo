@@ -150,6 +150,8 @@ const sample: Appointment[] = [
   },
 ];
 export default function App() {
+  const rebookRequest = useRef(new URLSearchParams(window.location.search).get("rebook"));
+  const [catalogReadyFor, setCatalogReadyFor] = useState<string | null>(null);
   const [live] = useState(!offlineTest),
     [view, setView] = useNavigationState("app.view", "login"),
     [treatments, setTreatments] = useState<Treatment[]>(catalog),
@@ -940,6 +942,7 @@ export default function App() {
         return;
       }
       setTreatments(ts.data);
+      setCatalogReadyFor(session?.user.id || "signed-out");
       setStaff(ss.data);
       if (!ps.error)
         setPortalProfiles(
@@ -1395,6 +1398,7 @@ export default function App() {
             setVisitItems([t]);
             const f=await db.rpc("get_booking_flow_plan",{p_treatments:[t.id],p_email:self?null:email.trim()});
             if(f.error)throw f.error;
+            if(selection !== patchSelection.current || identity !== identityVersion.current) return;
             setFlowPlan(f.data);setChoosingPatch(!!f.data.patch);setTreatment(f.data.patch??t);setStep(2);
           }
         } else {setPatchPlan(plan);setTreatment(plan.treatment);setVisitItems([]);setStep(2);}
@@ -1420,6 +1424,22 @@ export default function App() {
       setStep(2);
     }
   }
+  useEffect(() => {
+    if (!rebookRequest.current || !live || !session || roleLoading || activeRole !== "client" ||
+        requiresPasswordChange || view === "recovery" || staffPortal || accountantPortal ||
+        catalogReadyFor !== session.user.id || !ownClient || ownClient.auth_user_id !== session.user.id) return;
+    const id = Number(rebookRequest.current);
+    rebookRequest.current = null;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("rebook");
+    window.history.replaceState(window.history.state, "", url);
+    const selected = treatments.find(t => t.id === id && t.active !== false);
+    startBooking();
+    chooseRecipient(true);
+    setDate(today());
+    if (!selected) { setStep(1); setError("This treatment is no longer available. Please choose another treatment."); return; }
+    void chooseTreatment(selected, true, false);
+  }, [live, session?.user.id, roleLoading, activeRole, requiresPasswordChange, catalogReadyFor, ownClient, treatments, view]);
   function continueTime() {
     if(choosingPatch && slot){
       setPatchChoice({date,slot});setChoosingPatch(false);

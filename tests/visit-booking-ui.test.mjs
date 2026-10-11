@@ -6,8 +6,10 @@ import { pathToFileURL } from 'node:url';
 import { JSDOM } from 'jsdom';
 import React from 'react';
 
-for (const requiresPatch of [false,true]) test(requiresPatch ? 'client selects a patch test first and confirms it with the complete treatment visit' : 'connected client selects ordered treatments, reserves one total slot and receives all appointments',async()=>{
- const dom=new JSDOM('<html><body></body></html>',{url:'https://salon.example/'});
+for (const mode of [false,true,'rebook','rebook-patch']) test(typeof mode==='string' ? `reminder link selects treatment and opens ${mode==='rebook-patch'?'patch':'treatment'} availability` : mode ? 'client selects a patch test first and confirms it with the complete treatment visit' : 'connected client selects ordered treatments, reserves one total slot and receives all appointments',async()=>{
+ const requiresPatch=mode===true||mode==='rebook-patch';
+ const deepRebook=typeof mode==='string';
+ const dom=new JSDOM('<html><body></body></html>',{url:deepRebook?'https://salon.example/?rebook=92001':'https://salon.example/'});
  Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,sessionStorage:dom.window.sessionStorage,IS_REACT_ACT_ENVIRONMENT:true});
  const {render,fireEvent,within,cleanup}=await import('@testing-library/react');
  const screen=within(document.body);
@@ -35,7 +37,9 @@ for (const requiresPatch of [false,true]) test(requiresPatch ? 'client selects a
  try{
   await build({entryPoints:[new URL('../src/App.tsx',import.meta.url).pathname],outfile:dir+'/app.mjs',bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',define:{'import.meta.env':'{"MODE":"production","VITE_SUPABASE_URL":"https://test.supabase.co","VITE_SUPABASE_PUBLISHABLE_KEY":"test","BASE_URL":"/"}'},plugins:[{name:'mock-db',setup(b){b.onResolve({filter:/^@supabase\/supabase-js$/},()=>({path:'mock',namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:'export const createClient = () => globalThis.__visitDb;'}));}}]});
   const App=(await import(pathToFileURL(dir+'/app.mjs'))).default;
-  render(React.createElement(App));fireEvent.click(await screen.findByRole('button',{name:'Yourself',exact:true}));
+  render(React.createElement(App));
+  if(deepRebook){await screen.findByRole('heading',{name:requiresPatch?'Choose your patch-test time':'Find your perfect time'});assert.equal(window.location.search,'');assert(calls.some(([name,args])=>name==='get_booking_flow_plan'&&args.p_treatments.length===1&&args.p_treatments[0]===92001));assert.equal(screen.queryByRole('dialog',{name:'Add another treatment'}),null);return;}
+  fireEvent.click(await screen.findByRole('button',{name:'Yourself',exact:true}));
   for(let i=0;i<3;i++){
    fireEvent.click(await screen.findByRole('button',{name:name=>name.includes('Visit '+String.fromCharCode(65+i)) && !name.includes('Patch Test') && name.includes('Choose treatment')}));
    const dialog=await screen.findByRole('dialog',{name:'Add another treatment'});

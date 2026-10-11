@@ -1809,3 +1809,42 @@ test('patch-first booking atomically saves one test and ordered treatments, enfo
  await assert.rejects(pg.query("select * from flow_book_visit($1,$2,gen_random_uuid(),1,'2092-02-22',700,$3,$4,true,$5,null,false,false)",[[95001],JSON.stringify(singleExpected),'Client','0800000000','client@example.com']),/permission denied/);
 
 });
+
+test('rebook reminders use latest attended treatment, future-booking suppression, cycle deduplication and SYSTEM history',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/049_rebook_reminders.sql',import.meta.url),'utf8'));
+ await pg.exec("insert into treatments(id,name,category,price,price_type,duration,rebook_window) values(96001,'Reminder Treatment','Test',30,'Fixed',15,'3 months'),(96002,'No Reminder','Test',30,'Fixed',15,null)");
+ const attendee=(await one("insert into clients(name,email,phone) values('Reminder Guest','reminder@example.com','123') returning id")).id;
+ const insert=async(treatment,day,status='completed')=>(await one("insert into appointments(user_id,client_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,1,$3,$4,540,15,'Reminder Guest','123','Reminder Treatment',30,$5) returning id",[clientUser,attendee,treatment,day,status])).id;
+ const old=await insert(96001,'2000-01-01');await insert(96002,'2000-01-02');
+ await as(clientUser);await assert.rejects(pg.query('select scan_rebook_reminders()'),/permission denied/);await assert.rejects(pg.query('select * from rebook_email_queue'),/permission denied/);
+ await as(null,'service_role');assert.equal((await one('select scan_rebook_reminders() n')).n,1);assert.equal((await one('select scan_rebook_reminders() n')).n,0);
+ await pg.exec('reset role');const q=await one('select * from rebook_email_queue where client_id=$1',[attendee]);assert.equal(q.appointment_id,old);
+ const future=await insert(96001,'2099-01-01','booked');await as(null,'service_role');assert.equal((await pg.query('select * from claim_rebook_emails()')).rows.length,0);
+ await pg.exec('reset role');assert.equal((await one('select status from rebook_email_queue where id=$1',[q.id])).status,'cancelled');
+ await pg.query("update appointments set status='cancelled' where id=$1",[future]);await as(null,'service_role');const jobs=(await pg.query('select * from claim_rebook_emails()')).rows;assert.equal(jobs.length,1);assert.equal((await pg.query('select * from claim_rebook_emails()')).rows.length,0);
+ await pg.query("update rebook_email_queue set status='accepted',resend_id='rebook-provider-id' where id=$1",[q.id]);
+ await pg.exec('reset role');const log=await one('select * from client_communications where email_source_key=$1',['rebook-email:'+q.id]);assert.equal(log.client_id,attendee);assert.equal(log.staff_name,'SYSTEM');assert.match(log.note,/Rebook reminder/);
+ await pg.query("update rebook_email_queue set status='accepted' where id=$1",[q.id]);assert.equal((await one('select count(*)::integer n from client_communications where email_source_key=$1',['rebook-email:'+q.id])).n,1);
+ await pg.exec('update rebook_scan_state set last_scan=null');await as(null,'service_role');assert.equal((await one('select scan_rebook_reminders() n')).n,0);
+ await pg.exec('reset role');const newer=await insert(96001,'2001-01-01');await pg.exec('update rebook_scan_state set last_scan=null');await as(null,'service_role');assert.equal((await one('select scan_rebook_reminders() n')).n,1);
+ assert.equal((await pg.query('select * from claim_rebook_emails()')).rows[0].appointment_id,newer);
+ await pg.exec('reset role');await pg.query("update rebook_email_queue set first_attempt_at=now()-interval '24 hours',locked_until=now()-interval '1 minute' where appointment_id=$1",[newer]);await as(null,'service_role');await pg.query('select * from claim_rebook_emails()');await pg.exec('reset role');assert.equal((await one('select status from rebook_email_queue where appointment_id=$1',[newer])).status,'review');
+});
+
+test('rebook eligibility handles every week/month window and uses appointment recipient rather than purchaser',async()=>{
+ await pg.exec('reset role');await pg.exec("insert into staff(id,name) values(960,'Reminder Boundary Tester')");
+ const windows=['1 week','2 weeks','4 weeks','2 months','3 months','6 months','12 months'];
+ for(let i=0;i<windows.length;i++){
+  const id=96100+i;await pg.query("insert into treatments(id,name,category,price,price_type,duration,rebook_window) values($1,'Boundary','Test',10,'Fixed',15,$2)",[id,windows[i]]);
+  for(const [offset,due] of [[-1,true],[1,false]]){
+   const client=(await one("insert into clients(name,email,phone) values('Boundary Guest',$1,'123') returning id",[`boundary-${i}-${offset}@example.com`])).id;
+   const a=await one("insert into appointments(user_id,client_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,960,$3,((now() at time zone 'Europe/Dublin')-$4::interval)::date+$5::integer,600+$6::integer,15,'Boundary Guest','123','Boundary',10,'completed') returning id",[clientUser,client,id,windows[i],offset,i*20]);
+   assert.equal((await one('select count(*)::integer n from rebook_due_clients where appointment_id=$1',[a.id])).n,due?1:0);
+   assert.equal((await one('select client_id from appointments where id=$1',[a.id])).client_id,client);
+  }
+ }
+ // Most recent attendance wins even if an older completion has a more recent payment timestamp.
+ const latest=(await one('select client_id,treatment_id from rebook_due_clients where treatment_id=96100')).client_id;
+ await pg.query("insert into appointments(user_id,client_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,960,96100,(now() at time zone 'Europe/Dublin')::date,700,15,'Boundary Guest','123','Boundary',10,'completed')",[clientUser,latest]);
+ assert.equal((await one('select count(*)::integer n from rebook_due_clients where client_id=$1 and treatment_id=96100',[latest])).n,0);
+});
