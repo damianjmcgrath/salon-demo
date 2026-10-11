@@ -1898,3 +1898,13 @@ nav .logout-link {
 .phone-input { display: grid; grid-template-columns: minmax(145px, 0.9fr) minmax(0, 1.4fr); gap: 10px; width: 100%; }
 .phone-input select, .phone-input input { min-width: 0; width: 100%; }
 @media (max-width: 380px) { .phone-input { grid-template-columns: 140px minmax(0, 1fr); gap: 6px; } }
+
+.phone-country { position: relative; min-width: 0; }
+.phone-country summary { display: flex; align-items: center; gap: 8px; padding: 16px 12px; border: 1px solid #d8d4cb; border-radius: 5px; background: white; cursor: pointer; list-style: none; font: inherit; min-height: 54px; box-sizing: border-box; }
+.phone-country summary::-webkit-details-marker { display: none; }
+.phone-country summary > span:last-child { margin-left: auto; }
+.phone-country summary:focus-visible { outline: 2px solid #282922; outline-offset: 2px; }
+.phone-flag { width: 24px; height: 12px; flex-shrink: 0; border: 1px solid #ddd; }
+.phone-country-options { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; min-width: 100%; background: white; border: 1px solid #d8d4cb; border-radius: 6px; padding: 4px; box-shadow: 0 6px 18px #0002; }
+.phone-country-options button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 8px; border: 0; border-radius: 3px; background: white; color: #282922; white-space: nowrap; font: inherit; text-align: left; }
+.phone-country-options button:hover, .phone-country-options button[aria-pressed="true"] { background: #efeee8; }

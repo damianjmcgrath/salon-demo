@@ -106,9 +106,9 @@ export default function AuthPanel({
                   onChange={(e) => setName(e.target.value)}
                 />
               </label>
-              <label>
+              <label htmlFor="account-phone">
                 Mobile number
-                <PhoneInput required value={phone} onChange={setPhone} />
+                <PhoneInput id="account-phone" required value={phone} onChange={setPhone} />
               </label>
             </>
           )}

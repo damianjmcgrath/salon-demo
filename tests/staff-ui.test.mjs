@@ -850,7 +850,7 @@ test("UI: client login has a separate create account button and removes obsolete
   assert.equal(screen.queryByText(/SCULPTED · YOUR WORKSPACE/), null);
   fireEvent.click(screen.getByRole("button", { name: "New Client? Create an Account" }));
   assert(screen.getByLabelText("Full name"));
-  assert(screen.getByLabelText("Mobile number"));
+  assert(screen.getByRole("textbox", { name: "Phone number", exact: true }));
   fireEvent.click(screen.getByRole("button", { name: "Already registered? Sign in" }));
   assert(screen.getByRole("heading", { name: "Welcome back." }));
 });
