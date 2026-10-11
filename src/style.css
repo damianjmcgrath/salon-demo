@@ -1908,3 +1908,11 @@ nav .logout-link {
 .phone-country-options { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; min-width: 100%; background: white; border: 1px solid #d8d4cb; border-radius: 6px; padding: 4px; box-shadow: 0 6px 18px #0002; }
 .phone-country-options button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 12px 8px; border: 0; border-radius: 3px; background: white; color: #282922; white-space: nowrap; font: inherit; text-align: left; }
 .phone-country-options button:hover, .phone-country-options button[aria-pressed="true"] { background: #efeee8; }
+
+.phone-input { align-items: start; margin-top: 8px; }
+.phone-input > input[type="tel"], .phone-country summary {
+  height: 62px;
+  min-height: 62px;
+  box-sizing: border-box;
+  margin: 0;
+}
