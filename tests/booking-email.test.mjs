@@ -43,3 +43,12 @@ test('amendment emails show original/new times and cancellation emails show refu
  const amended=confirmationPayload({...base,event_kind:'amended'},'Test <test@example.com>');assert.match(amended.subject,/amended/);assert.match(amended.text,/Original appointment/);assert.match(amended.html,/Lash &lt;Lift&gt;/);assert.deepEqual(amended.to,['damianjmcgrath@gmail.com']);
  const cancelled=confirmationPayload({...base,event_kind:'cancelled',prepaid_method:'voucher',refund_amount:25,retained_fee:25},'Test <test@example.com>');assert.match(cancelled.subject,/cancelled/);assert.match(cancelled.text,/Cancellation fee retained: €25.00/);assert.equal(cancelled.attachments,undefined);
 });
+
+test('combined confirmation lists every treatment and patch test with separate calendar attachments',()=>{
+ const base={client_name:'Jacqui',staff_name:'Aoife',duration:30,guarantee_required:true,guarantee_fee_cents:2500};
+ const appointments=[{...base,id:'patch',treatment_name:'Patch Test for Lash <Lift>',appointment_date:'2026-10-13',start_minute:600,price:0,guarantee_required:false,duration:15},{...base,id:'one',treatment_name:'Lash <Lift>',appointment_date:'2026-10-15',start_minute:600,price:50},{...base,id:'two',treatment_name:'Brows',appointment_date:'2026-10-15',start_minute:630,price:40,guarantee_fee_cents:2000}];
+ const payload=confirmationPayload({...appointments[0],appointments},'Test <test@example.com>');
+ assert.deepEqual(payload.to,['damianjmcgrath@gmail.com']);assert.match(payload.html,/Lash &lt;Lift&gt;/);assert.match(payload.html,/Brows/);assert.match(payload.html,/Total: €90.00/);assert.match(payload.html,/€25.00/);assert.match(payload.html,/€20.00/);assert.equal(payload.attachments.length,3);
+ for(let i=0;i<3;i++) assert.match(Buffer.from(payload.attachments[i].content,'base64').toString(),new RegExp('UID:'+appointments[i].id+'@'));
+ const amended=confirmationPayload({...appointments[1],appointments,event_kind:'amended',original_date:'2026-10-14',original_start:600},'Test');assert.match(amended.subject,/amended/);assert.doesNotMatch(amended.html,/Brows/);
+});
