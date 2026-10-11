@@ -1848,3 +1848,22 @@ test('rebook eligibility handles every week/month window and uses appointment re
  await pg.query("insert into appointments(user_id,client_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status) values($1,$2,960,96100,(now() at time zone 'Europe/Dublin')::date,700,15,'Boundary Guest','123','Boundary',10,'completed')",[clientUser,latest]);
  assert.equal((await one('select count(*)::integer n from rebook_due_clients where client_id=$1 and treatment_id=96100',[latest])).n,0);
 });
+
+test('booking flow queues one immutable combined confirmation and logs all treatments once',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/051_grouped_booking_confirmations.sql',import.meta.url),'utf8'));
+ await pg.query('update clients set requires_deposit=false where id=$1',[clientId]);
+ await pg.exec("insert into staff_treatments(staff_id,treatment_id) values(1,96002) on conflict do nothing; insert into staff_day_shifts(staff_id,shift_date,start_minute,end_minute) values(1,'2093-02-20',540,1020)");
+ const expected=(await pg.query('select id,revision,price,duration from treatments where id=any($1) order by id',[[95003,96002]])).rows;
+ await as(clientUser);
+ const sql="select book_booking_flow($1,$2,$3,1,'2093-02-20',600,'Client Test','0800000000',true,'client@example.com',null,false,false) data";
+ const args=[[95003,96002],JSON.stringify(expected),'40000000-0000-0000-0000-000000000051'];
+ const result=(await one(sql,args)).data;const ids=result.appointments.map(a=>a.id);
+ await pg.exec('reset role');
+ const jobs=(await pg.query("select * from booking_email_queue where appointment_id=any($1) and event_kind='booked' order by created_at,id",[ids])).rows;
+ assert.equal(jobs.filter(j=>j.status==='pending').length,1);assert.equal(jobs.filter(j=>j.status==='cancelled').length,1);
+ const job=jobs.find(j=>j.status==='pending');assert.deepEqual(job.snapshot.appointments.map(a=>a.id),ids);assert.equal(job.snapshot.appointments[1].staff_name,'Aoife');
+ await as(clientUser);await one(sql,args);await pg.exec('reset role');
+ assert.equal((await one("select count(*)::integer n from booking_email_queue where appointment_id=any($1) and event_kind='booked'",[ids])).n,2);
+ await pg.query("update booking_email_queue set status='accepted',resend_id='group-test' where id=$1",[job.id]);
+ const history=await one('select note from client_communications where email_source_key=$1',['booking-email:'+job.id]);assert.match(history.note,/No Patch Nail/);assert.match(history.note,/No Reminder/);
+});
