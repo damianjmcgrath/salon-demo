@@ -2307,6 +2307,12 @@ export default function App() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
+                    const signedInEmail = (session?.user.email || (!live ? "client@example.com" : "")).trim().toLowerCase();
+                    if (!staffClient && activeRole === "client" && signedInEmail && email.trim().toLowerCase() === signedInEmail) {
+                      chooseRecipient(true);
+                      setName(name.trim());
+                      setPhone(phone.trim());
+                    }
                     setStep(1);
                   }}
                 >
@@ -3225,7 +3231,7 @@ export default function App() {
                           <h3>{a.treatment_name}</h3>
                           {a.patch_test_pending && <p role="status">{a.patch_test_alert || "Patch test pending — please attend your patch-test appointment first."}</p>}
                           {index === 1 && <p className="last-booked">{appointmentBookedLabel(a, currentDay)}</p>}
-                          {a.booked_for_self === false && (
+                          {a.booked_for_self === false && !(a.client_id && a.client_id === ownClient?.id) && !(a.attendee_email && a.attendee_email.trim().toLowerCase() === session?.user.email?.trim().toLowerCase()) && (
                             <p className="booking-recipient-label">
                               Booked by you, for {a.client_name}
                             </p>
