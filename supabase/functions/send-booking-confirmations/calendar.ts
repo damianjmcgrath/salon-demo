@@ -30,5 +30,7 @@ export function bookingCalendar(b: CalendarBooking) {
   const params = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: `${start}/${end}`, details: description, location: address, ctz: 'Europe/Dublin' });
   const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Sculpted//Salon Booking//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT', `UID:${escape(b.id)}@sculpted-salon`, `DTSTAMP:${start}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${escape(title)}`, `DESCRIPTION:${escape(description)}`, `LOCATION:${escape(address)}`, 'END:VEVENT', 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
   const base64 = btoa(Array.from(new TextEncoder().encode(ics), byte => String.fromCharCode(byte)).join(''));
-  return { google: `https://calendar.google.com/calendar/render?${params}`, ics, base64, download: `https://damianjmcgrath.github.io/salon-demo/calendar.html#${encodeURIComponent(base64)}` };
+  const iso = (value: string) => value.replace(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/, '$1-$2-$3T$4:$5:$6Z');
+  const outlookParams = new URLSearchParams({ subject: title, startdt: iso(start), enddt: iso(end), body: description, location: address, path: '/calendar/action/compose', rru: 'addevent' });
+  return { outlook: `https://outlook.live.com/calendar/0/deeplink/compose?${outlookParams}`, google: `https://calendar.google.com/calendar/render?${params}`, ics, base64, download: `https://damianjmcgrath.github.io/salon-demo/calendar.html#${encodeURIComponent(base64)}` };
 }
