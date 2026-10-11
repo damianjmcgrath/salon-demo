@@ -1867,3 +1867,13 @@ test('booking flow queues one immutable combined confirmation and logs all treat
  await pg.query("update booking_email_queue set status='accepted',resend_id='group-test' where id=$1",[job.id]);
  const history=await one('select note from client_communications where email_source_key=$1',['booking-email:'+job.id]);assert.match(history.note,/No Patch Nail/);assert.match(history.note,/No Reminder/);
 });
+
+test('diary treatment changes keep or adopt duration and reject conflicts',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/052_diary_inline_changes.sql',import.meta.url),'utf8'));
+ const a=await one("select * from appointments where appointment_date='2093-02-20' order by start_minute limit 1");
+ await as(staffA);
+ const updatedResult=await one("select to_jsonb(diary_change_appointment($1,96002,1,'2093-02-20',600,$2,'Keep duration',true)) data",[a.id,a.revision]);const updated=updatedResult.data;
+ assert.equal(updated.duration,a.duration);assert.equal(updated.treatment_id,96002);
+ const shortResult=await one("select to_jsonb(diary_change_appointment($1,96002,1,'2093-02-20',600,$2,'Use duration',false)) data",[a.id,updated.revision]);const short=shortResult.data;assert.equal(short.duration,15);
+ await assert.rejects(pg.query("select to_jsonb(diary_change_appointment($1,96002,1,'2093-02-20',630,$2,'Conflict',true))",[a.id,short.revision]),/no longer available/);
+});
