@@ -888,3 +888,15 @@ test('client page Back returns from vouchers to appointments without logging out
 test('Back after switching profiles does not restore the previous staff identity',async()=>{
  await login(/Leah/);fireEvent.click(screen.getByRole('button',{name:'Log Out',exact:true}));await screen.findByRole('heading',{name:'Select a Staff Profile'});await login(/Aoife/);await waitFor(()=>assert(window.history.state?.salonNavigation));window.history.back();await waitFor(()=>assert(screen.getByText(/Signed in as Aoife/)));assert.equal(screen.queryByText(/Signed in as Leah/),null);assert(!JSON.stringify(window.history.state).includes('1234'));
 });
+
+test('UI: entering own email through Someone Else switches to self booking',async()=>{
+ try {
+  await clientScreen('rebooking');
+  fireEvent.click(screen.getByRole('button',{name:'Someone Else',exact:true}));
+  fireEvent.change(screen.getByLabelText('Their Full Name'),{target:{value:'Demo Client'}});
+  fireEvent.change(screen.getByLabelText('Their Email'),{target:{value:'  CLIENT@EXAMPLE.COM  '}});
+  fireEvent.change(screen.getByRole('textbox',{name:'Phone number',exact:true}),{target:{value:'0879942716'}});
+  fireEvent.click(screen.getByRole('button',{name:/Continue to treatments/}));
+  assert(await screen.findByRole('button',{name:/Previous Bookings/}));
+ } finally {cleanup();window.history.replaceState({},'', '?portal=staff');}
+});
