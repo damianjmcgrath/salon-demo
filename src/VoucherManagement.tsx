@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { displayDate, voucherDate } from "./dateFormats";
 import {
   useRef,
@@ -18,7 +19,7 @@ const today = () =>
     day: "2-digit",
   }).format(new Date());
 const euro = (n: number) =>
-  new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(
+  new Intl.NumberFormat("en-IE", { style: "currency", currency: getCurrency() }).format(
     n,
   );
 const blankQuery = { name: "", email: "", phone: "" };
@@ -429,8 +430,7 @@ export default function VoucherManagement({
           <h2>Create a New Voucher</h2>
           <form onSubmit={(e) => void create(e)}>
             <label>
-              Voucher amount (€)
-              <input
+              {"Voucher amount (€)\n              ".replaceAll("€",currencySymbol())}<input
                 type="number"
                 min="0.01"
                 max="999999.99"

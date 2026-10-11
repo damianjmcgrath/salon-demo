@@ -296,7 +296,7 @@ test("UI: admin has nine tiles, accountant only Reporting, and clocks remain pro
   await login(/Aoife/);
   assert.equal(document.querySelectorAll(".workspace-card").length, 9);
   const nav = document.getElementById("account-navigation");
-  assert.deepEqual([...nav.querySelectorAll(":scope > button")].map(b=>b.textContent),["Home","Diary","Clients","Appointments","Treatments","Staff","Vouchers","Reports","Permissions","Emails"]);
+  assert.deepEqual([...nav.querySelectorAll(":scope > button")].map(b=>b.textContent),["Home","Diary","Clients","Appointments","Treatments","Staff","Vouchers","Reports","Settings","Emails"]);
   fireEvent.click(screen.getByRole("button", {name:/Email Management Manage/}));
   assert(screen.getByRole("heading",{name:"Email Management",exact:true}));
   assert(screen.getByText(/available here in the next step/));

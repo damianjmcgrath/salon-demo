@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 export type BookingValueChoice = { method: "voucher" | "credit"; id: string };
@@ -20,7 +21,7 @@ export default function BookingValueOptions({ db, treatmentId, treatmentIds, req
     });
     return () => { active = false; };
   }, [db, treatmentId, visitKey, onChange, onRouteChange]);
-  const money = (n: number) => new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(n);
+  const money = (n: number) => new Intl.NumberFormat("en-IE", { style: "currency", currency: getCurrency() }).format(n);
   if (loading) return <p className="small">Checking your vouchers and credit notes…</p>;
   if (error) return <p role="alert" className="auth-error">Unable to check voucher and credit note balances: {error}</p>;
   const vouchers = options.vouchers, credits = options.credit_notes;

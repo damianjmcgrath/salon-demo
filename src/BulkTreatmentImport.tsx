@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { useEffect, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ManagedTreatment } from "./TreatmentManagement";
@@ -56,7 +57,7 @@ export default function BulkTreatmentImport({ db, onClose, onImported }: {
     <p>The CSV must only contain the following fields, in this exact order:</p>
     <ol>{treatmentHeaders.map(h => <li key={h}>{h}</li>)}</ol>
     <p>It must be a comma-separated CSV file. Keep existing Treatment IDs unchanged. Treatments omitted from the file are left unchanged; new treatments cannot be created through this import.</p>
-    <p>Rebook Window: 1 week, 2 weeks, 4 weeks, 2 months, 3 months, 6 months or 12 months. Blank means not set. Guarantee and patch-test fields: Yes or No; blank keeps the current setting. Prices must be numerical, without € symbols.</p>
+    <p>{"Rebook Window: 1 week, 2 weeks, 4 weeks, 2 months, 3 months, 6 months or 12 months. Blank means not set. Guarantee and patch-test fields: Yes or No; blank keeps the current setting. Prices must be numerical, without € symbols.".replaceAll("€",currencySymbol())}</p>
     <label>Select CSV file (Browse)<input type="file" accept=".csv,text/csv" disabled={busy} onChange={e => { setFile(e.target.files?.[0] ?? null); setPreview(null); setError(""); }} /></label>
     {error && <p role="alert" className="auth-error">{error}</p>}
     {preview && (preview.errors.length ? <div role="alert"><h3>Nothing will be imported</h3><ul>{preview.errors.map((s, i) => <li key={i}>{s}</li>)}</ul></div> : <div aria-live="polite">

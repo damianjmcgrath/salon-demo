@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { useEffect, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Appointment } from "./domain";
@@ -16,7 +17,7 @@ type Options = {
   found_voucher?: Value | null;
 };
 const money = (n: number) =>
-  new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(
+  new Intl.NumberFormat("en-IE", { style: "currency", currency: getCurrency() }).format(
     n,
   );
 const cents = (n: number) => Math.round(Number(n) * 100);

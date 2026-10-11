@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import StaffPreferenceReport from "./StaffPreferenceReport";
 import DiscountsReport from "./DiscountsReport";
 import DailyActivityReport from "./DailyActivityReport";
@@ -38,7 +39,7 @@ const today = () =>
     day: "2-digit",
   }).format(new Date());
 const money = (n: number) =>
-  new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(
+  new Intl.NumberFormat("en-IE", { style: "currency", currency: getCurrency() }).format(
     n,
   );
 export default function Reporting({

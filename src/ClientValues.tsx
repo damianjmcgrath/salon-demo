@@ -1,9 +1,10 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { displayDate, displayDateTime } from "./dateFormats";
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 type Row = Record<string, any>;
 const money = (n: number) =>
-  new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(
+  new Intl.NumberFormat("en-IE", { style: "currency", currency: getCurrency() }).format(
     Number(n),
   );
 const when = (v: string) =>
@@ -192,8 +193,7 @@ export default function ClientValues({
           {creating && (
             <form onSubmit={save}>
               <label>
-                Amount (€)
-                <input
+                {"Amount (€)\n                ".replaceAll("€",currencySymbol())}<input
                   required
                   type="number"
                   min="0.01"

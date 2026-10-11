@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import BulkTreatmentImport from "./BulkTreatmentImport";
@@ -114,6 +115,7 @@ export default function TreatmentManagement({
         setMessage(`${changed} treatments updated. Existing booking prices and durations were preserved.`);
         onChanged();
       }} />}
+      {!db && <p>Connect to Supabase to manage treatments.</p>}
       {!draft && <p>Click Download CSV above to download an excel file of the entire treatment catalogue. You can then make changes, save the CSV, and upload it to make amendments in bulk. Alternatively, you can amend a treatment individually using the list below:</p>}
       {!db && <p>Connect to Supabase to manage treatments.</p>}
       {draft ? (
@@ -156,8 +158,7 @@ export default function TreatmentManagement({
             />
           </label>
           <label>
-            Price (€)
-            <input
+            {"Price (€)\n            ".replaceAll("€",currencySymbol())}<input
               required
               type="number"
               min={0}
@@ -243,7 +244,7 @@ export default function TreatmentManagement({
                   >
                     <strong>{t.name}</strong>
                     <span>
-                      {t.duration} mins · €{Number(t.price).toFixed(2)} · Patch
+                      {t.duration} {"mins · €".replaceAll("€",currencySymbol())}{Number(t.price).toFixed(2)} · Patch
                       test: {t.patch_required ? "Yes" : "No"}
                     </span>
                     <strong style={{ color: "#292822", textDecoration: "underline", fontSize: 16 }}>Edit →</strong>

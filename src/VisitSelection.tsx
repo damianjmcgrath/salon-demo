@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { useEffect, useRef } from "react";
 type Item = { id: number; name: string; duration: number; price: number };
 export default function VisitSelection({ items, prompt, onAdd, onProceed, onRemove }: {
@@ -12,7 +13,7 @@ export default function VisitSelection({ items, prompt, onAdd, onProceed, onRemo
     return () => { document.body.style.overflow = overflow; previous?.focus(); };
   }, [prompt, items.length]);
   if (!items.length) return null;
-  const money = (n: number) => new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(n);
+  const money = (n: number) => new Intl.NumberFormat("en-IE", { style: "currency", currency: getCurrency() }).format(n);
   const summary = <><h2>Your treatments</h2><ol>{items.map((t, i) => <li key={i}>{t.name} · {t.duration} minutes · {money(Number(t.price))} <button className="back" type="button" aria-label={`Remove ${t.name}`} onClick={() => onRemove(i)}>Remove</button></li>)}</ol>
     <p><strong>Total: {items.reduce((n,t) => n+t.duration,0)} minutes · {money(items.reduce((n,t) => n+Number(t.price),0))}</strong></p>
     <p className="small">Treatments run in the order selected, with one staff member. Each treatment can be amended or cancelled individually afterwards.</p></>;

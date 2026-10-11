@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 type Row = { row_id: string; appointment_date: string; start_minute: number; client_name: string; client_email: string; treatment_name: string; staff_name: string; method: string; revolut_id: string; voucher_code: string; amount: number };
@@ -5,7 +6,7 @@ const methods = { card: "Card", cash: "Cash", voucher: "Vouchers", credit: "Cred
 const keys = Object.keys(methods);
 const headings = ["Date/Time", "Client Name", "Email Address", "Treatment Name", "Staff Name", "Payment Method", "Revolut Transaction ID", "Voucher ID", "Payment Amount"];
 const timestamp = (r: Row) => `${r.appointment_date.slice(8,10)}/${r.appointment_date.slice(5,7)}/${r.appointment_date.slice(0,4)} ${String(Math.floor(r.start_minute/60)).padStart(2,"0")}:${String(r.start_minute%60).padStart(2,"0")}`;
-const money = (n: number) => new Intl.NumberFormat("en-IE",{style:"currency",currency:"EUR"}).format(n);
+const money = (n: number) => new Intl.NumberFormat("en-IE",{style:"currency",currency:getCurrency()}).format(n);
 const cells = (r: Row) => [timestamp(r), r.client_name, r.client_email, r.treatment_name, r.staff_name, methods[r.method as keyof typeof methods] || "No payment required", r.revolut_id, r.voucher_code];
 export default function DailyActivityReport({db,onBack}:{db:SupabaseClient|null;onBack:()=>void}) {
  const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Dublin",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());

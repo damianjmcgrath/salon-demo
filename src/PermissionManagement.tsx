@@ -1,3 +1,4 @@
+import SystemSettingsForm from "./SystemSettingsForm";
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -80,7 +81,10 @@ export default function PermissionManagement({
       <button className="back" onClick={onHome}>
         ← Staff Home
       </button>
-      <h1>Permission Management</h1>
+      <h1>Settings and Permissions</h1>
+      <SystemSettingsForm db={db} onChanged={onChanged} />
+      <hr />
+      <h2>Permissions</h2>
       {error && (
         <p role="alert" className="auth-error">
           {error}

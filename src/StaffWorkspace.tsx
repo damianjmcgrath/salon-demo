@@ -562,7 +562,7 @@ export default function StaffWorkspace({
       "Staff Management": "view.staff",
       Reporting: "view.reporting",
       "Treatment Management": "view.treatments",
-      "Permission Management": "view.permissions",
+      "Settings and Permissions": "view.permissions",
     };
     if (key[title] && !grants[key[title]]) return null;
     return (
@@ -660,7 +660,7 @@ export default function StaffWorkspace({
               onTreatments ?? (() => {}),
             )}
             {tile(
-              "Permission Management",
+              "Settings and Permissions",
               "Choose which pages and actions staff can access.",
               onPermissions ?? (() => {}),
             )}

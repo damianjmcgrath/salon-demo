@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { isConnectionError, requestErrorMessage } from "./requestErrors";
 import { useEffect, useRef, useState } from "react";
 import RevolutCheckout from "@revolut/checkout";
@@ -165,7 +166,7 @@ export default function BookingGuarantee({
     <div className="guarantee">
       <p>
         No payment will be taken now. Pay for your treatment in the salon. Your
-        saved card may be charged 50% of the treatment cost ({new Intl.NumberFormat("en-IE", {style:"currency",currency:"EUR"}).format(Math.round(treatmentPrice * 50) / 100)}) for a no-show or late cancellation.
+        saved card may be charged 50% of the treatment cost ({new Intl.NumberFormat("en-IE", {style:"currency",currency:getCurrency()}).format(Math.round(treatmentPrice * 50) / 100)}) for a no-show or late cancellation.
       </p>
       <p className="small">
         <strong>Revolut Sandbox:</strong> use test cards only. No real money

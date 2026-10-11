@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Appointment } from "./domain";
@@ -86,7 +87,7 @@ export default function ClientAppointmentActions({
       setCancelled(true);
       setResult(
         r.data.prepaid_method
-          ? `Appointment cancelled. €${Number(r.data.refund_amount).toFixed(2)} returned to your ${r.data.prepaid_method === "voucher" ? "voucher" : "credit note"}. ${r.data.amount_cents ? `€${(r.data.amount_cents / 100).toFixed(2)} retained as the cancellation fee.` : "No cancellation fee charged."}`
+          ? (`Appointment cancelled. €${Number(r.data.refund_amount).toFixed(2)} returned to your ${r.data.prepaid_method === "voucher" ? "voucher" : "credit note"}. ${r.data.amount_cents ? `€${(r.data.amount_cents / 100).toFixed(2)} retained as the cancellation fee.` : "No cancellation fee charged."}`).replaceAll("€",currencySymbol())
           : r.data.fee_required
             ? "Appointment cancelled. Submitting cancellation payment…"
             : "Appointment cancelled without a fee.",
@@ -132,7 +133,7 @@ export default function ClientAppointmentActions({
             </p>
           )}
           {mode === "cancel" && !policy.cancel_free && (
-            <p>Cancellation fee: €{(policy.fee_cents / 100).toFixed(2)}</p>
+            <p>{"Cancellation fee: €".replaceAll("€",currencySymbol())}{(policy.fee_cents / 100).toFixed(2)}</p>
           )}
           <div className="client-appointment-change-buttons">
           <button

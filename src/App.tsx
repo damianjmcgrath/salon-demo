@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol,applySystemSettings,getSystemSettings} from "./systemSettings";
 import DiaryAppointmentChanges from "./DiaryAppointmentChanges";
 import PhoneInput from "./PhoneInput";
 import {
@@ -102,7 +103,7 @@ const fallbackProfiles = [
   { id: 3, name: "Jacqui", role: "accountant" as Role, staffId: null },
 ];
 const money = (n: number) =>
-  new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(
+  new Intl.NumberFormat("en-IE", { style: "currency", currency: getCurrency() }).format(
     n,
   );
 const time = (n: number) =>
@@ -303,8 +304,11 @@ export default function App() {
   const authUser = useRef<string | null>(null);
   const activeRole = live ? role : localRole;
   const staffAccess = ["staff", "admin"].includes(activeRole || "");
-  const [permissionGrants, setPermissionGrants] = useState<Permissions>({});
   const [permissionVersion, setPermissionVersion] = useState(0);
+  const [systemSettings,setSystemSettings]=useState(getSystemSettings);
+  useEffect(()=>{const changed=()=>setSystemSettings({...getSystemSettings()});window.addEventListener('salon-settings-changed',changed);return()=>window.removeEventListener('salon-settings-changed',changed);},[]);
+  useEffect(()=>{if(!db)return;let active=true;db.rpc('get_system_settings').then(({data})=>{if(active&&data&&typeof data.staff_timeout_seconds==='number')applySystemSettings(data);});return()=>{active=false;};},[db,permissionVersion]);
+  const [permissionGrants, setPermissionGrants] = useState<Permissions>({});
   const permissions = live
     ? permissionGrants
     : defaultPermissions(activeRole || "");
@@ -1128,7 +1132,7 @@ export default function App() {
         () => {
           void signOut();
         },
-        5 * 60 * 1000,
+        systemSettings.staff_timeout_seconds * 1000,
       );
     };
     const events = ["pointerdown", "keydown", "touchstart"];
@@ -1138,7 +1142,7 @@ export default function App() {
       clearTimeout(timer);
       events.forEach((e) => window.removeEventListener(e, reset));
     };
-  }, [staffAccess, session?.user.id, localStaffId]);
+  }, [staffAccess, session?.user.id, localStaffId, systemSettings.staff_timeout_seconds]);
   const pinLoginInFlight = useRef(false);
   async function loginWithPin(enteredPin = pin) {
     if (!db || pinLoginInFlight.current || !/^[0-9]{4}$/.test(enteredPin))
@@ -1980,7 +1984,7 @@ export default function App() {
               className={view === "permission-management" ? "active" : ""}
               onClick={() => setView("permission-management")}
             >
-              Permissions
+              Settings
             </button>
           )}
           {activeRole === "admin" && (
@@ -2253,12 +2257,12 @@ export default function App() {
                   >
                     Yourself
                   </button>
-                  <button
+{systemSettings.allow_booking_for_others && (                  <button
                     className="secondary"
                     onClick={() => chooseRecipient(false)}
                   >
                     Someone Else
-                  </button>
+                  </button>)}
 
                   <button
                     className="secondary"
@@ -3974,7 +3978,7 @@ export default function App() {
                   Sandbox payment:{" "}
                   <strong>
                     {feeInfo?.state === "completed"
-                      ? `${new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Number(feeInfo?.amount_cents ?? selected.guarantee_fee_cents ?? 1000) / 100)} paid`
+                      ? `${new Intl.NumberFormat("en-IE", { style: "currency", currency: getCurrency() }).format(Number(feeInfo?.amount_cents ?? selected.guarantee_fee_cents ?? 1000) / 100)} paid`
                       : feeInfo?.state === "waived"
                         ? "Waived — no payment taken"
                         : feeInfo?.state === "failed"
@@ -4064,7 +4068,7 @@ export default function App() {
                   <p>
                     {selected.guarantee_required === false
                       ? "This appointment has no card guarantee. Record the no-show without a card charge."
-                      : `Do you want to apply the ${new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format((selected.guarantee_fee_cents ?? 1000) / 100)} no-show fee? This is a Revolut Sandbox charge. Either choice marks the appointment as a no-show.`}
+                      : `Do you want to apply the ${new Intl.NumberFormat("en-IE", { style: "currency", currency: getCurrency() }).format((selected.guarantee_fee_cents ?? 1000) / 100)} no-show fee? This is a Revolut Sandbox charge. Either choice marks the appointment as a no-show.`}
                   </p>
                 )}
                 <label>
@@ -4090,7 +4094,7 @@ export default function App() {
                         Yes — apply{" "}
                         {new Intl.NumberFormat("en-IE", {
                           style: "currency",
-                          currency: "EUR",
+                          currency: getCurrency(),
                         }).format(
                           (selected.guarantee_fee_cents ?? 1000) / 100,
                         )}{" "}

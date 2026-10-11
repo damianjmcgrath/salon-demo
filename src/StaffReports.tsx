@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 export const staffReportNames = {
@@ -16,7 +17,7 @@ const money = (v: Row[string]) =>
     ? "Not configured"
     : new Intl.NumberFormat("en-IE", {
         style: "currency",
-        currency: "EUR",
+        currency: getCurrency(),
       }).format(Number(v));
 const clock = (v: Row[string]) =>
   v == null

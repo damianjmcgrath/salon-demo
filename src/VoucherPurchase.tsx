@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import { voucherDate } from "./dateFormats";
 import {
   useRef,
@@ -61,7 +62,7 @@ export default function VoucherPurchase({
     setError("");
     try {
       if (option === "custom" && (!/^\d+(\.\d{1,2})?$/.test(customAmount) || amount < 5 || amount > 500))
-        throw Error("Enter an amount between €5.00 and €500.00, with up to two decimal places.");
+        throw Error(("Enter an amount between €5.00 and €500.00, with up to two decimal places.").replaceAll("€",currencySymbol()));
       if (!amount || !card || !ack)
         throw Error(
           "Choose a value, a demo card and confirm this is a demo purchase.",
@@ -225,11 +226,7 @@ export default function VoucherPurchase({
         <section className="panel voucher-confirmation">
           <p>This is a demo purchase. No payment was taken.</p>
           <div className="voucher-print-area">
-            <div className="voucher-salon-heading">
-              <img className="voucher-salon-logo" src={`${(import.meta as unknown as { env: { BASE_URL: string } }).env.BASE_URL}images/salon-logo.png?v=transparent-1`} alt="Sculpted by Aoife Clare" />
-              <p className="eyebrow voucher-salon-contact">Williams St., Mulladrillen, Ardee, Co. Louth A92 HW30</p>
-              <p className="eyebrow voucher-salon-contact">087 1815137</p>
-            </div>
+            <p className="eyebrow">SCULPTED BY AOIFE CLAIRE</p>
             <h2>Gift Voucher</h2>
             <h3>{euro(voucher.original_amount)}</h3>
             {voucher.treatment_name && (
@@ -288,9 +285,9 @@ export default function VoucherPurchase({
               ))}
             </fieldset>
             {option === "custom" && (
-              <div><label htmlFor="custom-voucher-amount">Voucher amount (€)</label>
+              <div><label htmlFor="custom-voucher-amount">{"Voucher amount (€)".replaceAll("€",currencySymbol())}</label>
                 <input id="custom-voucher-amount" type="text" inputMode="decimal" required pattern="[0-9]+([.][0-9]{1,2})?" value={customAmount} aria-describedby="voucher-amount-help" onChange={(e) => { if (/^\d*(\.\d{0,2})?$/.test(e.target.value)) setCustomAmount(e.target.value); }} />
-                <span id="voucher-amount-help" className="small">Minimum €5.00 · Maximum €500.00. Use up to two decimal places.</span>
+                <span id="voucher-amount-help" className="small">{"Minimum €5.00 · Maximum €500.00. Use up to two decimal places.".replaceAll("€",currencySymbol())}</span>
               </div>
             )}
             {option === "treatment" && (

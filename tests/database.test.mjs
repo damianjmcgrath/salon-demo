@@ -1877,3 +1877,16 @@ test('diary treatment changes keep or adopt duration and reject conflicts',async
  const shortResult=await one("select to_jsonb(diary_change_appointment($1,96002,1,'2093-02-20',600,$2,'Use duration',false)) data",[a.id,updated.revision]);const short=shortResult.data;assert.equal(short.duration,15);
  await assert.rejects(pg.query("select to_jsonb(diary_change_appointment($1,96002,1,'2093-02-20',630,$2,'Conflict',true))",[a.id,short.revision]),/no longer available/);
 });
+
+test('system settings are public-readable but permission-guarded, revision-checked and enforced for proxy clients',async()=>{
+ await pg.exec('reset role');await pg.exec(await readFile(new URL('../supabase/053_system_settings.sql',import.meta.url),'utf8'));
+ await as(clientUser);const defaults=(await one('select get_system_settings() data')).data;assert.equal(defaults.staff_timeout_seconds,300);assert.equal(defaults.currency,'EUR');assert.equal(defaults.allow_booking_for_others,true);
+ await assert.rejects(pg.query('select save_system_settings($1,0)',[JSON.stringify(defaults)]),/permission|access/i);
+ await as(staffA);const settings={...defaults,staff_timeout_seconds:600,currency:'GBP',allow_booking_for_others:false,confirmation_delivery:'email_whatsapp'};
+ const saved=(await one('select save_system_settings($1,0) data',[JSON.stringify(settings)])).data;assert.equal(saved.revision,1);assert.equal(saved.currency,'GBP');
+ await assert.rejects(pg.query('select save_system_settings($1,0)',[JSON.stringify(settings)]),/Settings changed/);
+ await assert.rejects(pg.query('select save_system_settings($1,1)',[JSON.stringify({...settings,staff_timeout_seconds:-1})]),/check constraint/);
+ await as(clientUser);await pg.exec('reset role');
+ await assert.rejects(pg.query("insert into appointments(user_id,staff_id,treatment_id,appointment_date,start_minute,duration,client_name,phone,treatment_name,price,status,booked_for_self,attendee_email) values($1,1,96002,'2099-01-01',600,15,'Guest','123','Test',30,'booked',false,'guest@example.com')",[clientUser]),/bookings for someone else are disabled/);
+ await as(staffA);await one('select save_system_settings($1,1) data',[JSON.stringify({...defaults,revision:1})]);
+});

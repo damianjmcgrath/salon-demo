@@ -1,9 +1,10 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import {useEffect,useState} from 'react';
 import type {SupabaseClient} from '@supabase/supabase-js';
 type Row={id:string;recorded_at:string;client_name:string;client_email:string;treatment_name:string;original_price:number;discounted_price:number;discount_percentage:number;staff_name:string};
 const headings=['Date/Time','Client Name','Client Email','Treatment Name','Original Price','Discounted Price','Discount %','Staff Name'];
 const date=(s:string)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Dublin',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(s)).replace(',','');
-const money=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR'}).format(n);
+const money=(n:number)=>new Intl.NumberFormat('en-IE',{style:'currency',currency:getCurrency()}).format(n);
 export default function DiscountsReport({db,onBack}:{db:SupabaseClient|null;onBack:()=>void}){
  const [rows,setRows]=useState<Row[]>([]),[staff,setStaff]=useState<{id:number;name:string}[]>([]),[from,setFrom]=useState(''),[to,setTo]=useState(''),[person,setPerson]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[latest,setLatest]=useState(true);
  async function load(initial=false){if(!db){setError('Connect to Supabase to generate this report.');return;}if(!initial&&(!from||!to||from>to)){setError('Choose a valid From and To date.');return;}setBusy(true);setError('');try{const r=await db.rpc('get_discounts_report',{p_from:initial?null:from,p_to:initial?null:to,p_staff:person?Number(person):null});if(r.error)throw r.error;setRows(r.data||[]);setLatest(initial);}catch(e){setError((e as Error).message);setRows([]);}finally{setBusy(false);}}

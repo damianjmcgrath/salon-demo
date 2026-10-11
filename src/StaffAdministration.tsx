@@ -1,3 +1,4 @@
+import {getCurrency,currencySymbol} from "./systemSettings";
 import PhoneInput from "./PhoneInput";
 import { displayDate } from "./dateFormats";
 import {
@@ -909,9 +910,9 @@ export default function StaffAdministration({
                       .map((k) => (
                         <label key={k}>
                           {k === "salary"
-                            ? "Current Salary (€ per year)"
+                            ? ("Current Salary (€ per year)").replaceAll("€",currencySymbol())
                             : k === "hourly_rate"
-                              ? "Current Hourly Rate (€)"
+                              ? ("Current Hourly Rate (€)").replaceAll("€",currencySymbol())
                               : "Current Commission Rate (%)"}
                           <input
                             type="number"
