@@ -1779,7 +1779,7 @@ export default function App() {
     ...calendar.entries.map((e) => Math.floor(e.start_minute / 60) * 60),
   );
   const diaryEnd = Math.max(
-    1080,
+    1200,
     ...calendar.entries.map(
       (e) => Math.ceil((e.start_minute + e.duration) / 60) * 60,
     ),
