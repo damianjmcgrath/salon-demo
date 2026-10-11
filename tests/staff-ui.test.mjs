@@ -868,7 +868,7 @@ test('UI: checked-in diary offers checkout and reversal, restoring a single remi
  assert(modal.getByRole('button',{name:'Check Client Out'}));assert.equal(modal.queryByRole('button',{name:'Send Reminder'}),null);assert.equal(modal.queryByRole('button',{name:'Amend appointment'}),null);assert.equal(modal.queryByRole('button',{name:'Cancel appointment'}),null);
  fireEvent.click(modal.getByRole('button',{name:'Cancel Check In'}));
  await waitFor(()=>assert(screen.getByRole('button',{name:'Check client in'})));
- modal=within(screen.getByRole('dialog',{name:'Appointment details'}));assert.equal(modal.getAllByRole('button',{name:'Send Reminder'}).length,1);assert(modal.getByRole('button',{name:'Amend appointment'}));assert(modal.getByRole('button',{name:'Cancel appointment'}));
+ modal=within(screen.getByRole('dialog',{name:'Appointment details'}));assert.equal(modal.getAllByRole('button',{name:'Send Reminder'}).length,1);assert.equal(modal.getAllByRole('button',{name:'Change',exact:true}).length,2);assert(modal.getByRole('button',{name:'Cancel appointment'}));
 });
 
  test('browser Back/Forward restores client search and record without changing signed-in staff',async()=>{
