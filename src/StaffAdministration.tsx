@@ -1,3 +1,4 @@
+import PhoneInput from "./PhoneInput";
 import { displayDate } from "./dateFormats";
 import {
   useEffect,
@@ -834,16 +835,14 @@ export default function StaffAdministration({
                             date_hired: "Date Hired",
                           }[k]
                         }
-                        <input
+                        {k === "phone" ? <PhoneInput value={draft[k] || ""} onChange={(phone) => update(k, phone)} /> : (<input
                           lang="en-GB"
                           type={
                             k === "date_of_birth" || k === "date_hired"
                               ? "date"
                               : k === "email"
                                 ? "email"
-                                : k === "phone"
-                                  ? "tel"
-                                  : "text"
+                                : "text"
                           }
                           required={k === "first_name"}
                           max={
@@ -853,7 +852,7 @@ export default function StaffAdministration({
                           onChange={(e) =>
                             update(k, e.target.value || (null as any))
                           }
-                        />
+                        />)} 
                       </label>
                     ))}
                     <label>

@@ -1,3 +1,4 @@
+import PhoneInput from "./PhoneInput";
 import { useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 export default function AuthPanel({
@@ -107,13 +108,7 @@ export default function AuthPanel({
               </label>
               <label>
                 Mobile number
-                <input
-                  autoComplete="tel"
-                  type="tel"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
+                <PhoneInput required value={phone} onChange={setPhone} />
               </label>
             </>
           )}

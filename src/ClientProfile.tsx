@@ -1,3 +1,4 @@
+import PhoneInput from "./PhoneInput";
 import { voucherDate } from "./dateFormats";
 import {
   useEffect,
@@ -157,14 +158,7 @@ export default function ClientProfile({
               </label>
               <label>
                 Phone number
-                <input
-                  type="tel"
-                  required
-                  value={profile.phone}
-                  onChange={(e) =>
-                    setProfile({ ...profile, phone: e.target.value })
-                  }
-                />
+                <PhoneInput required value={profile.phone} onChange={(phone) => setProfile({ ...profile, phone })} />
               </label>
               <label>
                 Email address

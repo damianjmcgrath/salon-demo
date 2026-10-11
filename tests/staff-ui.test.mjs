@@ -163,7 +163,7 @@ test("UI: new-client booking reuses treatment/time/guarantee flow and sidebar Co
   fireEvent.change(screen.getByLabelText("Email address"), {
     target: { value: "new@example.com" },
   });
-  fireEvent.change(screen.getByLabelText("Phone number"), {
+  fireEvent.change(screen.getByRole("textbox", { name: "Phone number", exact: true }), {
     target: { value: "0800000009" },
   });
   fireEvent.click(
@@ -620,7 +620,7 @@ test("UI: client profile, voucher purchase, print and simulated email work toget
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Updated Demo Client" },
     });
-    fireEvent.change(screen.getByLabelText("Phone number"), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Phone number", exact: true }), {
       target: { value: "0800000099" },
     });
     fireEvent.click(
@@ -681,7 +681,7 @@ test("UI: client profile, voucher purchase, print and simulated email work toget
     assert(c.marketing_email);
     assert(c.marketing_whatsapp);
     assert(!c.marketing_sms);
-    assert.equal(c.phone, "0800000099");
+    assert.equal(c.phone, "+353 800000099");
     assert.equal(d.vouchers[0].original_amount, 50);
     assert.equal(d.vouchers[0].card_number, undefined);
   } finally {
@@ -777,7 +777,7 @@ test("UI: attended self bookings default to Previous Bookings and say Rebook Tre
     fireEvent.change(screen.getByLabelText("Their Email"), {
       target: { value: "other@example.com" },
     });
-    fireEvent.change(screen.getByLabelText("Their Phone Number"), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Phone number", exact: true }), {
       target: { value: "0800000000" },
     });
     fireEvent.click(

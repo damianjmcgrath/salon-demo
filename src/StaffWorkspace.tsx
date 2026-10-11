@@ -1,3 +1,4 @@
+import PhoneInput from "./PhoneInput";
 import { useNavigationState } from "./navigation";
 import {
   displayDate,
@@ -742,14 +743,14 @@ export default function StaffWorkspace({
                   : k === "email"
                     ? "Email address"
                     : "Phone number"}
-                <input
+                {k === "phone" ? <PhoneInput value={draft[k] || ""} required onChange={(phone) => setDraft({ ...draft, [k]: phone })} /> : (<input
                   type={
-                    k === "email" ? "email" : k === "phone" ? "tel" : "text"
+                    k === "email" ? "email" : "text"
                   }
                   required
                   value={draft[k]}
                   onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
-                />
+                />)} 
               </label>
             ))}
             <label>
@@ -827,20 +828,18 @@ export default function StaffWorkspace({
                           : k === "email"
                             ? "Contact email"
                             : "Phone"}
-                        <input
+                        {k === "phone" ? <PhoneInput value={draft[k] || ""} required onChange={(phone) => setDraft({ ...draft, [k]: phone })} /> : (<input
                           type={
                             k === "email"
                               ? "email"
-                              : k === "phone"
-                                ? "tel"
-                                : "text"
+                              : "text"
                           }
                           required
                           value={draft[k]}
                           onChange={(e) =>
                             setDraft({ ...draft, [k]: e.target.value })
                           }
-                        />
+                        />)} 
                       </label>
                     ))}
                     <label>

@@ -1,3 +1,4 @@
+import PhoneInput from "./PhoneInput";
 import {
   useNavigationState,
   resetNavigationScope,
@@ -2329,12 +2330,7 @@ export default function App() {
                   </label>
                   <label>
                     {forSelf ? "Phone number" : "Their Phone Number"}
-                    <input
-                      type="tel"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
+                    <PhoneInput required value={phone} onChange={setPhone} />
                   </label>
                   <button
                     className="primary"
